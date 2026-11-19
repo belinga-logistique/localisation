@@ -1,0 +1,20 @@
+{
+  "name": "Belinga Localisation — Chauffeurs",
+  "short_name": "Belinga Loc",
+  "description": "Pointage de position et de statut des chauffeurs de Fortescue Belinga, avec fonctionnement hors ligne.",
+  "lang": "fr",
+  "dir": "ltr",
+  "id": "./chauffeur.html",
+  "start_url": "./chauffeur.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F2F7F4",
+  "theme_color": "#00703C",
+  "categories": ["business", "productivity", "navigation"],
+  "icons": [
+    { "src": "icones/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icones/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icones/icone-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

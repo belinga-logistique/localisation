@@ -1,0 +1,1600 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#00703C">
+<title>Belinga Localisation — Logistique</title>
+<link rel="icon" href="icones/icone-192.png">
+<!-- Carte : Leaflet + OpenStreetMap (gratuit, sans clé) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<!-- Supabase (connexion sécurisée e-mail + mot de passe) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<!-- Configuration Supabase (URL + clé publishable) : uniquement dans config.js -->
+<script src="config.js"></script>
+<style>
+/* =========================================================================
+   STYLES — interface PC sobre et lisible (utilisable aussi sur tablette)
+   ========================================================================= */
+:root {
+  --fond: #F2F7F4; --carte: #fff; --texte: #0F172A; --doux: #475569; --bord: #CBD5E1;
+  --primaire: #00703C; --primaire-clair: #DCF2E5; --succes: #166534; --succes-fond: #DCFCE7;
+  --alerte: #92400E; --alerte-fond: #FEF3C7; --danger: #B91C1C; --danger-fond: #FEE2E2;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--fond); color: var(--texte); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+a { color: var(--primaire); }
+
+/* --- Barre du haut --- */
+.barre { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--primaire); color: #fff; flex-wrap: wrap; }
+.barre h1 { font-size: 18px; margin: 0; white-space: nowrap; }
+.barre .rech { position: relative; flex: 1; min-width: 220px; max-width: 520px; }
+.barre .rech input { width: 100%; padding: 9px 12px; border-radius: 8px; border: 0; }
+.barre .infos { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 13px; flex-wrap: wrap; }
+.barre .btn { padding: 6px 12px; min-height: 34px; }
+.resultats { position: absolute; top: 42px; left: 0; right: 0; z-index: 1200; background: #fff; color: var(--texte); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.25); max-height: 70vh; overflow: auto; }
+.resultat { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--bord); }
+.resultat:last-child { border-bottom: 0; }
+.resultat .q { flex: 1; min-width: 0; }
+
+/* --- Onglets --- */
+.onglets { display: flex; gap: 2px; background: #fff; border-bottom: 1px solid var(--bord); padding: 0 8px; overflow-x: auto; }
+.onglets button { border: 0; background: none; padding: 12px 14px; font-weight: 600; color: var(--doux); white-space: nowrap; border-bottom: 3px solid transparent; }
+.onglets button[aria-selected=true] { color: var(--primaire); border-bottom-color: var(--primaire); }
+.badge { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--danger); color: #fff; font-size: 12px; text-align: center; }
+.badge.zero { background: #94A3B8; }
+
+/* --- Mise en page --- */
+.vue { padding: 12px 16px; }
+.split { display: grid; grid-template-columns: 380px 1fr; gap: 12px; height: calc(100vh - 128px); min-height: 480px; }
+.panneau { background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; overflow: auto; padding: 12px; }
+.carte-map { border: 1px solid var(--bord); border-radius: 12px; min-height: 420px; height: 100%; }
+@media (max-width: 900px) {
+  .split { grid-template-columns: 1fr; height: auto; }
+  .carte-map { height: 60vh; }
+  .panneau { max-height: none; }
+}
+.bloc { background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; padding: 14px; margin-bottom: 12px; overflow-x: auto; }
+.bloc h2 { font-size: 16px; margin: 0 0 10px; }
+.grille2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+h3 { font-size: 14px; margin: 14px 0 6px; color: var(--doux); text-transform: uppercase; letter-spacing: .03em; }
+
+/* --- Formulaires et boutons --- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; min-height: 38px; border-radius: 8px; border: 1px solid var(--primaire); background: var(--primaire); color: #fff; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.btn.sec { background: #fff; color: var(--primaire); }
+.btn.danger { background: var(--danger); border-color: var(--danger); }
+.btn.petit { padding: 4px 9px; min-height: 30px; font-size: 13px; }
+.btn.appel { background: var(--succes); border-color: var(--succes); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+input[type=text], input[type=email], input[type=password], input[type=number], input[type=time], input[type=search], select, textarea {
+  padding: 7px 9px; border: 1px solid var(--bord); border-radius: 8px; background: #fff; min-height: 36px; }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 3px solid #F59E0B; outline-offset: 1px; }
+label.champ { display: block; font-weight: 600; margin: 10px 0 4px; }
+.champ-l { width: 100%; }
+.ligne { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.puces { display: flex; flex-wrap: wrap; gap: 6px; }
+.puce { border: 2px solid var(--c, var(--bord)); background: #fff; border-radius: 999px; padding: 3px 10px; font-size: 13px; font-weight: 600; }
+.puce[aria-pressed=true] { background: var(--c, var(--primaire)); color: #fff; }
+
+/* --- Tableaux --- */
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--bord); vertical-align: top; }
+th { background: #F8FAFC; position: sticky; top: 0; z-index: 1; font-size: 13px; color: var(--doux); }
+tr.inactif td { opacity: .55; }
+td.num, th.num { text-align: right; }
+.tab-edit input[type=text] { width: 100%; min-width: 90px; }
+.tab-edit input[type=number] { width: 90px; }
+
+/* --- Éléments --- */
+.point { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.etiq { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: #E2E8F0; color: var(--doux); }
+.etiq.ok { background: var(--succes-fond); color: var(--succes); }
+.etiq.att { background: var(--alerte-fond); color: var(--alerte); }
+.etiq.ko { background: var(--danger-fond); color: var(--danger); }
+.doux { color: var(--doux); font-size: 13px; }
+.carte-ch { border: 1px solid var(--bord); border-radius: 10px; padding: 9px 10px; margin-bottom: 8px; cursor: pointer; background: #fff; }
+.carte-ch:hover { border-color: var(--primaire); }
+.carte-ch .t { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.groupe { margin-bottom: 10px; }
+.groupe summary { font-weight: 700; cursor: pointer; padding: 6px 0; }
+.message { padding: 10px 12px; border-radius: 8px; font-weight: 600; margin: 8px 0; }
+.message.ok { background: var(--succes-fond); color: var(--succes); }
+.message.ko { background: var(--danger-fond); color: var(--danger); }
+.message.att { background: var(--alerte-fond); color: var(--alerte); }
+.vide { color: var(--doux); font-style: italic; padding: 8px 0; }
+.mode-carte { cursor: crosshair !important; }
+.leaflet-container { font: inherit; }
+.leaflet-popup-content { margin: 10px 12px; min-width: 220px; }
+.leaflet-popup-content .btn { margin-top: 6px; }
+/* Leaflet colore tous les liens en bleu : on rétablit la couleur des boutons */
+.leaflet-container a.btn { color: #fff; }
+.leaflet-container a.btn.sec { color: var(--primaire); }
+.marqueur-ancien { opacity: .55; }
+
+/* --- Connexion --- */
+.connexion { max-width: 420px; margin: 8vh auto; background: #fff; border: 1px solid var(--bord); border-radius: 14px; padding: 24px; }
+.connexion h1 { font-size: 22px; margin: 0 0 4px; color: var(--primaire); }
+.connexion input { width: 100%; }
+.connexion .btn { width: 100%; margin-top: 16px; min-height: 44px; }
+
+/* --- Fenêtre modale --- */
+.voile { position: fixed; inset: 0; background: rgba(15,23,42,.55); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.fenetre { background: #fff; border-radius: 14px; width: 100%; max-width: 620px; max-height: 90vh; overflow: auto; padding: 20px; }
+.fenetre h2 { margin: 0 0 12px; font-size: 19px; }
+.fenetre .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 3000; background: #1E293B; color: #fff; padding: 12px 18px; border-radius: 10px; font-weight: 600; max-width: 90vw; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.toast.ok { background: var(--succes); } .toast.ko { background: var(--danger); }
+
+/* --- Impression / PDF : seule la zone #impression est imprimée --- */
+#impression { display: none; }
+@media print {
+  body > *:not(#impression) { display: none !important; }
+  #impression { display: block; font-size: 11px; }
+  #impression h1 { font-size: 16px; } #impression h2 { font-size: 13px; margin: 12px 0 4px; }
+  #impression table { font-size: 10px; } #impression th { position: static; }
+  @page { size: A4 landscape; margin: 12mm; }
+}
+</style>
+</head>
+<body>
+
+<!-- =======================================================================
+     ÉCRAN DE CONNEXION
+     ======================================================================= -->
+<section id="e-connexion" hidden>
+  <form class="connexion" id="f-connexion" novalidate>
+    <h1>Belinga Localisation</h1>
+    <p class="doux">Espace logistique — accès réservé</p>
+    <label class="champ" for="l-email">E-mail</label>
+    <input id="l-email" type="email" autocomplete="username" required>
+    <label class="champ" for="l-mdp">Mot de passe</label>
+    <input id="l-mdp" type="password" autocomplete="current-password" required>
+    <div id="l-msg" class="message ko" role="alert" hidden></div>
+    <button class="btn" id="l-btn" type="submit">Se connecter</button>
+    <p class="doux" style="margin-top:14px">Mot de passe oublié : l'administrateur peut le réinitialiser dans Supabase (Authentication › Users).</p>
+  </form>
+</section>
+
+<!-- =======================================================================
+     APPLICATION
+     ======================================================================= -->
+<div id="app" hidden>
+  <header class="barre">
+    <h1>Belinga Localisation · Logistique</h1>
+    <div class="rech">
+      <input id="recherche" type="search" placeholder="Rechercher : nom, matricule ou téléphone…" autocomplete="off" aria-label="Rechercher un chauffeur">
+      <div id="resultats" class="resultats" hidden></div>
+    </div>
+    <div class="infos">
+      <span id="maj">—</span>
+      <button class="btn sec" id="btn-actualiser" type="button">⟳ Actualiser</button>
+      <span id="utilisateur"></span>
+      <button class="btn sec" id="btn-deconnexion" type="button">Déconnexion</button>
+    </div>
+  </header>
+
+  <nav class="onglets" role="tablist" aria-label="Sections">
+    <button role="tab" data-vue="carte" aria-selected="true">🗺️ Carte</button>
+    <button role="tab" data-vue="libreville">🏙️ Libreville</button>
+    <button role="tab" data-vue="chauffeurs">👥 Chauffeurs</button>
+    <button role="tab" data-vue="alertes">⚠️ Alertes <span id="badge-alertes" class="badge zero">0</span></button>
+    <button role="tab" data-vue="synthese">📊 Synthèse</button>
+    <button role="tab" data-vue="lieux">📍 Lieux et zones</button>
+    <button role="tab" data-vue="journal">📜 Journal</button>
+    <button role="tab" data-vue="parametres">⚙️ Paramètres</button>
+  </nav>
+
+  <!-- ===================== VUE CARTE ===================== -->
+  <section class="vue" id="v-carte">
+    <div class="split">
+      <div class="panneau">
+        <div class="ligne">
+          <label class="ligne" style="font-weight:700"><input type="checkbox" id="f-dispo"> Disponibles maintenant</label>
+          <span class="doux" title="Statut « Disponible à Libreville » ou « Sur site », pointage récent, accord donné">ⓘ</span>
+        </div>
+        <p class="doux" style="margin:6px 0 0">
+          <span class="point" style="background:#15803D"></span>Disponible : chez lui, base MARIA, INFRATEC, fin de course<br>
+          <span class="point" style="background:#D97706"></span>Disponible, à vérifier (autre endroit, GPS éloigné ou hors de Libreville)
+        </p>
+        <div class="ligne" style="margin-top:8px">
+          <select id="f-zone" aria-label="Filtrer par zone"><option value="">Toutes les zones</option></select>
+          <select id="f-quartier" aria-label="Filtrer par quartier"><option value="">Tous les quartiers</option></select>
+        </div>
+        <h3>Statuts</h3>
+        <div class="puces" id="f-statuts"></div>
+        <h3><span id="nb-liste">0</span> chauffeur(s)</h3>
+        <div id="liste-carte"></div>
+      </div>
+      <div id="map-carte" class="carte-map"></div>
+    </div>
+  </section>
+
+  <!-- ===================== VUE LIBREVILLE ===================== -->
+  <section class="vue" id="v-libreville" hidden>
+    <div class="split">
+      <div class="panneau">
+        <h2 style="margin-top:0;font-size:16px">🚕 Chauffeur le plus proche</h2>
+        <label class="champ" for="pc-lieu">Lieu de prise en charge</label>
+        <div class="ligne">
+          <input id="pc-lieu" type="text" list="dl-lieux" placeholder="Quartier ou lieu…" style="flex:1">
+          <datalist id="dl-lieux"></datalist>
+          <button class="btn" id="pc-chercher" type="button">Chercher</button>
+        </div>
+        <button class="btn sec petit" id="pc-carte" type="button" style="margin-top:6px">📍 Choisir le point sur la carte</button>
+        <div id="pc-resultats"></div>
+        <h3>Chauffeurs par quartier</h3>
+        <div id="groupes-quartiers"></div>
+      </div>
+      <div id="map-lbv" class="carte-map"></div>
+    </div>
+  </section>
+
+  <!-- ===================== VUE CHAUFFEURS ===================== -->
+  <section class="vue" id="v-chauffeurs" hidden>
+    <div class="bloc">
+      <div class="ligne">
+        <button class="btn" id="btn-ajout-chauffeur" type="button">➕ Ajouter un chauffeur</button>
+        <button class="btn sec" id="btn-import" type="button">📥 Importer un CSV</button>
+        <button class="btn sec" id="btn-modele" type="button">Modèle CSV</button>
+        <input type="file" id="fichier-csv" accept=".csv,text/csv,text/plain" hidden>
+        <label class="ligne" style="margin-left:auto"><input type="checkbox" id="ch-inactifs"> Afficher les inactifs</label>
+      </div>
+      <div id="import-resultat"></div>
+    </div>
+    <div class="bloc">
+      <table>
+        <thead><tr><th>Matricule</th><th>Nom</th><th>Téléphone</th><th>Équipe</th><th>Binôme</th><th>Statut / zone</th><th>Dernier pointage</th><th>Compte</th><th>Actions</th></tr></thead>
+        <tbody id="tab-chauffeurs"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== VUE ALERTES ===================== -->
+  <section class="vue" id="v-alertes" hidden>
+    <div class="bloc">
+      <h2>Alertes en cours</h2>
+      <p class="doux" id="alertes-regles"></p>
+      <table>
+        <thead><tr><th>Type</th><th>Chauffeur</th><th>Détail</th><th>Dernier pointage</th><th>Actions</th></tr></thead>
+        <tbody id="tab-alertes"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== VUE SYNTHÈSE ===================== -->
+  <section class="vue" id="v-synthese" hidden>
+    <div class="bloc ligne">
+      <button class="btn" id="btn-export-csv" type="button">📄 Exporter en CSV</button>
+      <button class="btn sec" id="btn-export-pdf" type="button">🖨️ Imprimer / PDF</button>
+      <span class="doux">Les exports sont enregistrés dans le journal d'audit.</span>
+    </div>
+    <div class="grille2" id="synthese"></div>
+  </section>
+
+  <!-- ===================== VUE LIEUX ET ZONES ===================== -->
+  <section class="vue" id="v-lieux" hidden>
+    <div class="split" style="height:60vh">
+      <div class="panneau">
+        <p class="doux">Faites glisser un point sur la carte pour corriger ses coordonnées. Les cercles verts pointillés sont les zones.</p>
+        <button class="btn" id="btn-ajout-lieu" type="button">➕ Ajouter un lieu (cliquer sur la carte)</button>
+        <button class="btn sec" id="btn-ajout-zone" type="button" style="margin-top:6px">➕ Ajouter une zone (cliquer sur la carte)</button>
+        <label class="ligne" style="margin-top:10px"><input type="checkbox" id="lieux-inactifs" checked> Afficher les lieux désactivés</label>
+        <div id="mode-info" class="message att" hidden></div>
+      </div>
+      <div id="map-lieux" class="carte-map"></div>
+    </div>
+    <div class="bloc" style="margin-top:12px">
+      <h2>Lieux (quartiers et lieux fréquents)</h2>
+      <input type="search" id="lieux-filtre" placeholder="Filtrer…" style="margin-bottom:8px">
+      <table class="tab-edit">
+        <thead><tr><th>Nom</th><th>Type</th><th>Ville</th><th class="num">Rayon (m)</th><th>À vérifier</th><th>Actif</th><th>Actions</th></tr></thead>
+        <tbody id="tab-lieux"></tbody>
+      </table>
+    </div>
+    <div class="grille2">
+      <div class="bloc">
+        <h2>Fiabilité des quartiers (30 derniers jours)</h2>
+        <p class="doux">Un taux de correction élevé indique des coordonnées à ajuster.</p>
+        <div id="stats-corrections"></div>
+      </div>
+      <div class="bloc">
+        <h2>Repères souvent saisis</h2>
+        <p class="doux">Repères saisis au moins 3 fois : ils peuvent devenir des « lieux fréquents ».</p>
+        <div id="reperes"></div>
+      </div>
+    </div>
+    <div class="bloc">
+      <h2>Zones de géorepérage</h2>
+      <table class="tab-edit">
+        <thead><tr><th>Nom</th><th>Type</th><th>Latitude</th><th>Longitude</th><th class="num">Rayon (m)</th><th class="num">Priorité</th><th>Couleur</th><th>Actif</th><th>Actions</th></tr></thead>
+        <tbody id="tab-zones"></tbody>
+      </table>
+      <p class="doux">Priorité : quand un point est dans plusieurs cercles, la zone au plus petit numéro l'emporte. Hors des cercles, la province est estimée d'après la ville la plus proche.</p>
+    </div>
+  </section>
+
+  <!-- ===================== VUE JOURNAL ===================== -->
+  <section class="vue" id="v-journal" hidden>
+    <div class="bloc">
+      <div class="ligne"><h2 style="margin:0">Journal d'audit</h2>
+        <input type="search" id="journal-filtre" placeholder="Filtrer (nom, action, e-mail)…">
+        <button class="btn sec petit" id="btn-journal" type="button">⟳ Recharger</button></div>
+      <p class="doux">300 dernières actions : consultations de positions, historiques, exports, PIN, imports, retraits de consentement…</p>
+      <table>
+        <thead><tr><th>Date (heure du Gabon)</th><th>Par</th><th>Action</th><th>Chauffeur</th><th>Détails</th></tr></thead>
+        <tbody id="tab-journal"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== VUE PARAMÈTRES ===================== -->
+  <section class="vue" id="v-parametres" hidden>
+    <div class="bloc" style="max-width:720px">
+      <h2>Alertes et rappels</h2>
+      <form id="f-params">
+        <div class="grille2">
+          <div><label class="champ" for="pa-seuil">Alerte sans pointage — équipe site (heures)</label><input id="pa-seuil" type="number" min="1" max="72" required></div>
+          <div><label class="champ" for="pa-seuil-lbv">Alerte sans pointage — équipe Libreville (heures)</label><input id="pa-seuil-lbv" type="number" min="1" max="72" required></div>
+          <div><label class="champ" for="pa-rappel">Rappel chauffeur — équipe site (minutes)</label><input id="pa-rappel" type="number" min="15" max="1440" required></div>
+          <div><label class="champ" for="pa-rappel-lbv">Rappel chauffeur — équipe Libreville (minutes)</label><input id="pa-rappel-lbv" type="number" min="15" max="1440" required></div>
+          <div><label class="champ" for="pa-debut">Début du service (heure du Gabon)</label><input id="pa-debut" type="time" required></div>
+          <div><label class="champ" for="pa-fin">Fin du service (heure du Gabon)</label><input id="pa-fin" type="time" required></div>
+          <div><label class="champ" for="pa-precision">Précision GPS maximale conseillée (m)</label><input id="pa-precision" type="number" min="20" max="5000" required></div>
+        </div>
+        <label class="champ">Jours de service</label>
+        <div class="puces" id="pa-jours"></div>
+        <div id="pa-msg"></div>
+        <button class="btn" type="submit" style="margin-top:14px">Enregistrer les paramètres</button>
+      </form>
+    </div>
+  </section>
+</div>
+
+<!-- Fenêtre modale générique -->
+<div id="modale" class="voile" hidden role="dialog" aria-modal="true" aria-labelledby="modale-titre">
+  <div class="fenetre">
+    <h2 id="modale-titre"></h2>
+    <div id="modale-corps"></div>
+    <div class="actions" id="modale-actions"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<div id="impression"></div>
+
+<script>
+'use strict';
+/* ===========================================================================
+   BELINGA LOCALISATION — INTERFACE LOGISTIQUE
+   ---------------------------------------------------------------------------
+   - Connexion Supabase Auth (e-mail + mot de passe) + contrôle « gestionnaire ».
+   - Les positions sont lues UNIQUEMENT via loc_positions_actuelles() et
+     loc_historique_chauffeur(), qui inscrivent chaque consultation au journal.
+   - Aucune position n'est conservée dans le navigateur (mémoire seulement).
+   =========================================================================== */
+
+const CFG = window.LOC_CONFIG;
+
+/* Statuts : mêmes codes et couleurs que l'application chauffeur */
+const STATUTS = {
+  sur_site:         { libelle: 'Sur site',                couleur: '#B45309', position: true },
+  en_mission:       { libelle: 'En mission (trajet)',     couleur: '#1D4ED8', position: true },
+  dispo_libreville: { libelle: 'Disponible à Libreville', couleur: '#15803D', position: true },
+  en_course:        { libelle: 'En course',               couleur: '#7C3AED', position: true },
+  autre_province:   { libelle: 'Autre province',          couleur: '#0E7490', position: true },
+  repos:            { libelle: 'En repos',                couleur: '#6B7280', position: false },
+  conge:            { libelle: 'Congé',                   couleur: '#4B5563', position: false },
+  malade:           { libelle: 'Malade',                  couleur: '#B91C1C', position: false },
+};
+const STATUTS_DISPONIBLES = ['dispo_libreville', 'sur_site'];
+
+/* « Disponible à Libreville » : lieu déclaré par le chauffeur (mêmes codes que la base).
+   VERT : chez lui, fin de course, ou base MARIA / INFRATEC confirmées par le GPS.
+   ORANGE « à vérifier » : autre endroit, lieu non précisé, ou GPS loin de la base déclarée. */
+const LIEUX_DISPO = {
+  chez_moi:   { libelle: 'Chez lui',             ico: '🏠' },
+  base_maria: { libelle: 'Base véhicules MARIA', ico: '🚗' },
+  infratec:   { libelle: 'INFRATEC CONSULTING',  ico: '🏢' },
+  fin_course: { libelle: 'Fin de course',        ico: '🏁' },
+  ailleurs:   { libelle: 'Autre endroit',        ico: '📍' },
+};
+const COULEUR_A_VERIFIER = '#D97706';
+
+/* Villes de référence pour estimer la province hors des zones (approximatif) */
+const VILLES_PROVINCES = [
+  ['Estuaire', 0.39, 9.45], ['Estuaire', 0.39, 9.76], ['Estuaire', 1.00, 9.58], ['Estuaire', 0.17, 10.12],
+  ['Haut-Ogooué', -1.63, 13.58], ['Haut-Ogooué', -1.57, 13.20], ['Haut-Ogooué', -0.66, 13.68], ['Haut-Ogooué', -1.59, 14.24], ['Haut-Ogooué', -1.18, 13.88],
+  ['Moyen-Ogooué', -0.70, 10.24], ['Moyen-Ogooué', -0.18, 10.76],
+  ['Ngounié', -1.87, 11.06], ['Ngounié', -1.22, 10.60], ['Ngounié', -1.90, 11.91], ['Ngounié', -2.40, 11.36],
+  ['Nyanga', -2.85, 11.03], ['Nyanga', -3.43, 10.65],
+  ['Ogooué-Ivindo', 0.57, 12.86], ['Ogooué-Ivindo', -0.09, 11.94], ['Ogooué-Ivindo', 1.02, 13.93], ['Ogooué-Ivindo', 0.32, 12.45], ['Ogooué-Ivindo', 1.08, 13.20],
+  ['Ogooué-Lolo', -1.13, 12.47], ['Ogooué-Lolo', -0.82, 12.71],
+  ['Ogooué-Maritime', -0.72, 8.78], ['Ogooué-Maritime', -1.57, 9.26], ['Ogooué-Maritime', -2.65, 10.00],
+  ['Woleu-Ntem', 1.60, 11.58], ['Woleu-Ntem', 2.08, 11.50], ['Woleu-Ntem', 0.78, 11.55], ['Woleu-Ntem', 2.15, 12.13], ['Woleu-Ntem', 0.95, 10.79],
+];
+
+const ACTIONS_JOURNAL = {
+  consultation_positions: 'Consultation des positions', consultation_historique: "Consultation d'un historique",
+  export_csv: 'Export CSV', export_pdf: 'Export PDF / impression', definition_pin: 'PIN défini',
+  deblocage: 'Compte débloqué', import_chauffeurs: 'Import CSV', blocage_pin: 'Blocage (erreurs de PIN)',
+  retrait_consentement: 'Retrait du consentement', purge_automatique: 'Purge automatique (30 jours)',
+  modification_chauffeur: 'Chauffeur modifié', ajout_chauffeur: 'Chauffeur ajouté', suppression_chauffeur: 'Chauffeur supprimé',
+};
+
+/* État en mémoire */
+const etat = {
+  user: null, chauffeurs: [], lieux: [], zones: [], params: {}, maj: null,
+  vue: 'carte', cartes: {}, couches: {}, filtreStatuts: new Set(), chargement: false,
+  modeCarte: null,  // 'pc' (prise en charge), 'lieu', 'zone'
+};
+
+const sb = (window.supabase && CFG) ? window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_CLE, {
+  auth: { persistSession: true, autoRefreshToken: true, storageKey: 'loc-logistique-auth' },
+}) : null;
+
+/* ===========================================================================
+   OUTILS
+   =========================================================================== */
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const normaliser = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000, r = Math.PI / 180;
+  const a = Math.sin((lat2 - lat1) * r / 2) ** 2 + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin((lon2 - lon1) * r / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+const distanceTexte = (m) => m == null ? '' : (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`);
+const dateHeure = (d) => d ? new Date(d).toLocaleString('fr-FR', { timeZone: 'Africa/Libreville', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+const heure = (d) => new Date(d).toLocaleTimeString('fr-FR', { timeZone: 'Africa/Libreville', hour: '2-digit', minute: '2-digit' });
+function ilYa(d) {
+  if (!d) return '';
+  const s = Math.max(0, (Date.now() - new Date(d).getTime()) / 1000);
+  if (s < 60) return "à l'instant";
+  if (s < 3600) return `il y a ${Math.floor(s / 60)} min`;
+  if (s < 86400) return `il y a ${Math.floor(s / 3600)} h`;
+  return `il y a ${Math.floor(s / 86400)} j`;
+}
+/** Même normalisation du téléphone que dans la base (chiffres, sans indicatif 241). */
+function normaliserTel(t) {
+  let v = String(t || '').replace(/\D/g, '');
+  if (v.startsWith('00241')) v = v.slice(5);
+  else if (v.startsWith('241') && v.length > 10) v = v.slice(3);
+  return v;
+}
+const nomComplet = (c) => `${c.prenom ? c.prenom + ' ' : ''}${c.nom}`;
+
+let toastMin = null;
+function toast(t, type = '', ms = 4000) {
+  const e = $('#toast'); e.textContent = t; e.className = 'toast ' + type; e.hidden = false;
+  clearTimeout(toastMin); toastMin = setTimeout(() => { e.hidden = true; }, ms);
+}
+
+/** Fenêtre modale. boutons : [{ libelle, valeur, classe }]. Renvoie la valeur choisie. */
+function modale(titre, html, boutons = [{ libelle: 'Fermer', valeur: 'ok', classe: 'sec' }], avantFermeture) {
+  return new Promise(resolve => {
+    $('#modale-titre').textContent = titre;
+    $('#modale-corps').innerHTML = html;
+    const zone = $('#modale-actions'); zone.innerHTML = '';
+    boutons.forEach(b => {
+      const el = document.createElement('button');
+      el.type = 'button'; el.className = 'btn ' + (b.classe || ''); el.textContent = b.libelle;
+      el.addEventListener('click', async () => {
+        // avantFermeture peut refuser la fermeture (formulaire invalide) en renvoyant false
+        if (avantFermeture && b.valeur !== 'annuler') {
+          el.disabled = true;
+          const ok = await avantFermeture(b.valeur).catch(e => { toast(e.message, 'ko', 6000); return false; });
+          el.disabled = false;
+          if (ok === false) return;
+        }
+        $('#modale').hidden = true; resolve(b.valeur);
+      });
+      zone.appendChild(el);
+    });
+    $('#modale').hidden = false;
+    ($('#modale-corps input, #modale-corps select') || zone.querySelector('button'))?.focus();
+  });
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('#modale').hidden) $('#modale-actions button:last-child')?.click();
+});
+
+/* ===========================================================================
+   APPELS SUPABASE AVEC MESSAGES CLAIRS EN FRANÇAIS
+   =========================================================================== */
+function messageErreur(err) {
+  const m = String(err && (err.message || err.error_description || err) || '');
+  const code = err && err.code;
+  if (/Failed to fetch|NetworkError|Load failed|network/i.test(m)) return 'Pas de réseau ou serveur injoignable. Réessayez dans un instant.';
+  if (/JWT|jwt|token is expired|401/.test(m) || code === 'PGRST301') return 'SESSION';
+  if (code === '42501' || /Accès refusé|permission denied/i.test(m)) return 'Accès refusé : ce compte n\'est pas autorisé pour cette action.';
+  if (code === '23505') return 'Doublon : ce matricule, ce téléphone ou ce nom existe déjà.';
+  if (code === '23514') return 'Valeur refusée : vérifiez les champs (téléphone 8 à 10 chiffres, rayon, coordonnées…).';
+  if (code === '23503') return 'Élément lié introuvable.';
+  return m || 'Erreur inconnue.';
+}
+/** Exécute une requête Supabase ; lève une Error avec un message français. */
+async function api(promesse) {
+  let r;
+  try { r = await promesse; } catch (e) { r = { error: e }; }
+  if (r.error) {
+    const msg = messageErreur(r.error);
+    if (msg === 'SESSION') { sessionExpiree(); throw new Error('Session expirée. Reconnectez-vous.'); }
+    throw new Error(msg);
+  }
+  return r.data;
+}
+const rpc = (nom, params = {}) => api(sb.rpc(nom, params));
+
+/* ===========================================================================
+   CONNEXION / DÉCONNEXION
+   =========================================================================== */
+function afficherConnexion(message, type = 'ko') {
+  $('#app').hidden = true; $('#e-connexion').hidden = false;
+  const m = $('#l-msg');
+  if (message) { m.textContent = message; m.className = 'message ' + type; m.hidden = false; } else m.hidden = true;
+  etat.chauffeurs = []; // aucune position ne reste affichée
+}
+
+async function sessionExpiree() {
+  try { await sb.auth.signOut({ scope: 'local' }); } catch { /* ignoré */ }
+  afficherConnexion('Votre session a expiré. Reconnectez-vous.', 'att');
+}
+
+$('#f-connexion').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const email = $('#l-email').value.trim(), mdp = $('#l-mdp').value;
+  const m = $('#l-msg'); m.hidden = true;
+  if (!email || !mdp) { m.textContent = 'Saisissez votre e-mail et votre mot de passe.'; m.className = 'message ko'; m.hidden = false; return; }
+  const btn = $('#l-btn'); btn.disabled = true; btn.textContent = 'Connexion…';
+  try {
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: mdp });
+    if (error) {
+      const t = /Invalid login/i.test(error.message) ? 'E-mail ou mot de passe incorrect.'
+        : /Email not confirmed/i.test(error.message) ? "Adresse e-mail non confirmée. Demandez à l'administrateur de confirmer le compte."
+        : messageErreur(error);
+      throw new Error(t);
+    }
+    $('#l-mdp').value = '';
+    await ouvrirApplication(data.user);
+  } catch (e) {
+    m.textContent = e.message; m.className = 'message ko'; m.hidden = false;
+  } finally { btn.disabled = false; btn.textContent = 'Se connecter'; }
+});
+
+async function ouvrirApplication(user) {
+  const autorise = await rpc('loc_est_gestionnaire');
+  if (!autorise) {
+    await sb.auth.signOut();
+    afficherConnexion("Ce compte n'est pas déclaré comme gestionnaire logistique (table loc_gestionnaires).");
+    return;
+  }
+  etat.user = user;
+  $('#utilisateur').textContent = user.email;
+  $('#e-connexion').hidden = true; $('#app').hidden = false;
+  initialiserFiltres();
+  afficherVue(etat.vue);
+  await chargerTout();
+}
+
+$('#btn-deconnexion').addEventListener('click', async () => {
+  try { await sb.auth.signOut(); } catch { /* hors ligne : session locale effacée quand même */ }
+  afficherConnexion('Vous êtes déconnecté.', 'ok');
+});
+
+/* ===========================================================================
+   CHARGEMENT DES DONNÉES
+   =========================================================================== */
+async function chargerTout() {
+  // Déjà en cours : on relancera une fois terminé (pour ne pas afficher de données périmées)
+  if (etat.chargement) { etat.rechargerApres = true; return; }
+  etat.chargement = true;
+  etat.rechargerApres = false;
+  $('#btn-actualiser').disabled = true;
+  try {
+    const [positions, lieux, zones, params] = await Promise.all([
+      rpc('loc_positions_actuelles'),           // consultation AUDITÉE
+      api(sb.from('loc_lieux').select('id,nom,type,ville,latitude,longitude,rayon_m,approximatif,actif,code').order('nom')),
+      api(sb.from('loc_zones').select('id,nom,type,latitude,longitude,rayon_m,ordre,couleur,approximatif,actif').order('ordre')),
+      api(sb.from('loc_parametres').select('cle,valeur')),
+    ]);
+    etat.lieux = lieux; etat.zones = zones;
+    etat.params = Object.fromEntries(params.map(p => [p.cle, p.valeur]));
+    etat.chauffeurs = positions.map(enrichir);
+    etat.maj = new Date();
+    rendreTout();
+  } catch (e) {
+    toast('Chargement impossible : ' + e.message, 'ko', 7000);
+  } finally {
+    etat.chargement = false;
+    $('#btn-actualiser').disabled = false;
+    majHorloge();
+    if (etat.rechargerApres && etat.user) chargerTout();
+  }
+}
+$('#btn-actualiser').addEventListener('click', chargerTout);
+
+function majHorloge() {
+  $('#maj').textContent = etat.maj ? `Mis à jour à ${heure(etat.maj)} (${ilYa(etat.maj)})` : '—';
+}
+// Actualisation automatique toutes les 2 minutes quand la page est visible
+setInterval(() => { if (etat.user && document.visibilityState === 'visible') chargerTout(); }, 120000);
+setInterval(majHorloge, 30000);
+
+/* ===========================================================================
+   CALCULS : zone, quartier, disponibilité, alertes
+   =========================================================================== */
+const zonesActives = () => etat.zones.filter(z => z.actif).sort((a, b) => a.ordre - b.ordre);
+const lieuxActifs = () => etat.lieux.filter(l => l.actif);
+const seuil = (equipe) => Number(equipe === 'libreville' ? etat.params.seuil_alerte_libreville_h : etat.params.seuil_alerte_h) || 6;
+
+/** Province estimée d'un point (ville de référence la plus proche), ou « Hors Gabon ». */
+function provinceDe(lat, lon) {
+  let meilleur = null;
+  for (const [prov, la, lo] of VILLES_PROVINCES) {
+    const d = haversine(lat, lon, la, lo);
+    if (!meilleur || d < meilleur.d) meilleur = { prov, d };
+  }
+  return (!meilleur || meilleur.d > 250000) ? 'Hors Gabon' : meilleur.prov;
+}
+
+/** Zone d'un point : cercle de géorepérage, sinon province estimée. */
+function zoneDe(lat, lon) {
+  for (const z of zonesActives()) {
+    if (haversine(lat, lon, z.latitude, z.longitude) <= z.rayon_m) return { nom: z.nom, type: z.type, estimee: false };
+  }
+  return { nom: provinceDe(lat, lon), type: 'province', estimee: true };
+}
+
+/** Province déclarée par le chauffeur, en texte : « Ngounié (Mouila) ». */
+const texteProvince = (province, ville) => province ? province + (ville ? ` (${ville})` : '') : '';
+function lieuLePlusProche(lat, lon) {
+  let m = null;
+  for (const l of lieuxActifs()) { const d = haversine(lat, lon, l.latitude, l.longitude); if (!m || d < m.d) m = { l, d }; }
+  return m;
+}
+
+/**
+ * « Disponible à Libreville » : vert ou orange selon le lieu déclaré.
+ * Renseigne c._dispoEtat ('vert' | 'orange' | null) et c._dispoMotif (texte affiché).
+ */
+function evaluerDisponibilite(c) {
+  const d = c.dernier;
+  c._dispoEtat = null; c._dispoMotif = '';
+  if (!d || d.statut !== 'dispo_libreville') return;
+  const code = d.lieu_dispo, lieu = LIEUX_DISPO[code];
+  const vert = (motif) => { c._dispoEtat = 'vert'; c._dispoMotif = motif; };
+  const orange = (motif) => { c._dispoEtat = 'orange'; c._dispoMotif = motif; };
+  // GPS hors du Grand Libreville : orange quel que soit le lieu déclaré (v1.1.1)
+  c._dispoHorsZone = !!(c._pos && c._zone && c._zone.type !== 'libreville');
+  if (c._dispoHorsZone) return orange(`Déclaré disponible à Libreville mais situé : ${c._zoneNom}`);
+  if (code === 'chez_moi' || code === 'fin_course') return vert(`${lieu.ico} ${lieu.libelle}`);
+  if (code === 'base_maria' || code === 'infratec') {
+    const ref = etat.lieux.find(l => l.code === code && l.actif);
+    if (!ref) return vert(`${lieu.ico} ${lieu.libelle} (lieu non configuré)`);
+    if (!c._pos) return orange(`${lieu.ico} ${lieu.libelle} déclarée, sans position GPS`);
+    const dist = haversine(c._pos[0], c._pos[1], ref.latitude, ref.longitude);
+    const tolerance = ref.rayon_m + Math.min(Number(d.precision_m) || 0, 200);   // rayon + précision du GPS
+    if (dist <= tolerance) return vert(`${lieu.ico} ${lieu.libelle} ✓ confirmée par le GPS`);
+    return orange(`${lieu.ico} ${lieu.libelle} déclarée, mais position à ${distanceTexte(dist)}`);
+  }
+  if (code === 'ailleurs') return orange('📍 Disponible hors lieu prévu');
+  return orange('Lieu de disponibilité non précisé');
+}
+
+/** Couleur d'un chauffeur : celle du statut, ou orange si sa disponibilité est à vérifier. */
+const couleurChauffeur = (c) => c._dispoEtat === 'orange' ? COULEUR_A_VERIFIER : (c.dernier ? STATUTS[c.dernier.statut].couleur : '#94A3B8');
+
+/** Ajoute à chaque chauffeur les informations calculées (préfixe « _ »). */
+function enrichir(c) {
+  const d = c.dernier;
+  c._nom = nomComplet(c);
+  c._consent = c.consentement === 'accepte';
+  c._pos = d && d.latitude != null ? [d.latitude, d.longitude] : null;
+  c._age_h = d ? (Date.now() - new Date(d.horodatage).getTime()) / 3600000 : null;
+  c._seuil = seuil(c.equipe);
+  c._recent = d ? c._age_h <= c._seuil : false;
+  c._prive = d ? !STATUTS[d.statut]?.position : false;
+  c._zone = c._pos ? zoneDe(c._pos[0], c._pos[1]) : null;
+  c._zoneNom = c._zone ? c._zone.nom + (c._zone.estimee ? ' (estimée)' : '') : (c._prive ? 'Position non partagée' : (d ? 'Sans position' : '—'));
+  // « Autre province » : la province déclarée par le chauffeur prime (même sans GPS)
+  c._provinceDeclaree = d && d.statut === 'autre_province' && d.province ? d.province : null;
+  if (c._provinceDeclaree) c._zoneNom = `${c._provinceDeclaree} (déclarée)`;
+  c._quartier = null;
+  if (d) c._quartier = d.quartier_confirme || d.quartier_detecte || null;
+  if (!c._quartier && c._pos && c._zone && c._zone.type === 'libreville') {
+    const p = lieuLePlusProche(c._pos[0], c._pos[1]);
+    if (p) c._quartier = p.l.nom + ' (calculé)';
+  }
+  c._dispo = !!(c.actif && c._consent && d && STATUTS_DISPONIBLES.includes(d.statut) && c._recent);
+  evaluerDisponibilite(c);
+
+  // Alertes (chauffeurs actifs uniquement)
+  c._alertes = [];
+  if (c.actif) {
+    if (c.bloque) c._alertes.push({ type: 'Compte bloqué', niveau: 'ko', detail: 'Trop d\'erreurs de PIN' });
+    if (!c._consent) c._alertes.push({ type: 'Sans consentement', niveau: 'att', detail: c.consentement === 'retire' ? 'Accord retiré par le chauffeur' : 'Accord jamais donné' });
+    else if (!d) c._alertes.push({ type: 'Jamais pointé', niveau: 'att', detail: 'Aucun pointage enregistré' });
+    else if (!c._prive && !c._recent) c._alertes.push({ type: 'Pas de pointage récent', niveau: 'ko', detail: `Aucun pointage depuis ${Math.floor(c._age_h)} h (seuil ${c._seuil} h)` });
+    if (d && c._pos) {
+      if (d.statut === 'sur_site' && c._zone.type !== 'site') c._alertes.push({ type: 'Hors zone', niveau: 'ko', detail: `Déclaré « Sur site » mais situé : ${c._zoneNom}` });
+      if (d.statut === 'dispo_libreville' && c._zone.type !== 'libreville') c._alertes.push({ type: 'Hors zone', niveau: 'ko', detail: `Déclaré « Disponible à Libreville » mais situé : ${c._zoneNom}` });
+      // Province déclarée différente de la province estimée par le GPS (estimation : à vérifier)
+      if (c._provinceDeclaree) {
+        const estimee = provinceDe(c._pos[0], c._pos[1]);
+        if (estimee !== c._provinceDeclaree) c._alertes.push({ type: 'Province à vérifier', niveau: 'att',
+          detail: `Déclaré : ${c._provinceDeclaree} — position GPS : ${estimee} (estimée)` });
+      }
+    }
+    // (hors de Libreville : déjà signalé par l'alerte rouge « Hors zone », pas de doublon)
+    if (c._dispoEtat === 'orange' && !c._dispoHorsZone) c._alertes.push({ type: 'Disponibilité à vérifier', niveau: 'att', detail: c._dispoMotif });
+    if (!c.pin_defini) c._alertes.push({ type: 'PIN non défini', niveau: 'att', detail: 'Le chauffeur ne peut pas se connecter' });
+  }
+  return c;
+}
+
+/* ===========================================================================
+   AFFICHAGE GÉNÉRAL
+   =========================================================================== */
+function afficherVue(vue) {
+  etat.vue = vue;
+  document.querySelectorAll('.onglets button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.vue === vue)));
+  document.querySelectorAll('.vue').forEach(v => { v.hidden = v.id !== 'v-' + vue; });
+  quitterModeCarte();
+  if (vue === 'carte') { initCarte('carte', 'map-carte', [0.6, 11.6], 7); }
+  if (vue === 'libreville') { initCarte('lbv', 'map-lbv', [0.41, 9.47], 12); }
+  if (vue === 'lieux') { initCarte('lieux', 'map-lieux', [0.41, 9.47], 12); chargerStatsLieux(); }
+  if (vue === 'journal') chargerJournal();
+  rendreVue(vue);
+  Object.values(etat.cartes).forEach(m => setTimeout(() => m.invalidateSize(), 50));
+}
+document.querySelectorAll('.onglets button').forEach(b => b.addEventListener('click', () => afficherVue(b.dataset.vue)));
+
+function rendreTout() {
+  rendreFiltresOptions();
+  const nbAlertes = etat.chauffeurs.reduce((n, c) => n + c._alertes.filter(a => a.niveau === 'ko').length, 0);
+  const b = $('#badge-alertes'); b.textContent = nbAlertes; b.className = 'badge' + (nbAlertes ? '' : ' zero');
+  rendreVue(etat.vue);
+}
+function rendreVue(vue) {
+  if (!etat.maj) return;
+  ({ carte: rendreCarte, libreville: rendreLibreville, chauffeurs: rendreChauffeurs, alertes: rendreAlertes,
+     synthese: rendreSynthese, lieux: rendreLieux, parametres: rendreParametres }[vue] || (() => {}))();
+}
+
+/* --- Cartes Leaflet (créées à la première ouverture de l'onglet) --- */
+function initCarte(cle, id, centre, zoom) {
+  if (etat.cartes[cle]) return etat.cartes[cle];
+  if (!window.L) { $('#' + id).innerHTML = '<p class="message ko">Carte indisponible (pas de réseau pour charger Leaflet).</p>'; return null; }
+  const m = L.map(id, { zoomControl: true }).setView(centre, zoom);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; contributeurs OpenStreetMap',
+  }).addTo(m);
+  etat.couches[cle] = L.layerGroup().addTo(m);
+  m.on('click', (e) => clicCarte(cle, e.latlng));
+  etat.cartes[cle] = m;
+  return m;
+}
+
+/** Marqueur coloré selon le statut (plus pâle si le pointage est ancien). */
+function marqueurChauffeur(c) {
+  const mk = L.circleMarker(c._pos, {
+    radius: 9, color: '#fff', weight: 2, fillColor: couleurChauffeur(c), fillOpacity: c._recent ? 0.95 : 0.4,
+    dashArray: c._recent ? null : '3',
+  });
+  mk.bindTooltip(`${esc(c._nom)} — ${esc(ilYa(c.dernier.horodatage))}`);
+  mk.bindPopup(() => popupChauffeur(c));
+  return mk;
+}
+
+function popupChauffeur(c) {
+  const d = c.dernier, s = d ? STATUTS[d.statut] : null;
+  const b = c.binome;
+  return `<b>${esc(c._nom)}</b> <span class="doux">(${esc(c.matricule)})</span><br>`
+    + (s ? `<span class="point" style="background:${couleurChauffeur(c)}"></span>${esc(s.libelle)}` : 'Aucun pointage')
+    + (d && d.destination ? ` → ${esc(d.destination)}` : '') + '<br>'
+    + (c._dispoEtat ? `<span class="etiq ${c._dispoEtat === 'vert' ? 'ok' : 'att'}">${c._dispoEtat === 'vert' ? '✓' : '⚠ à vérifier'}</span> ${esc(c._dispoMotif)}<br>` : '')
+    + (d ? `<span class="doux">${esc(dateHeure(d.horodatage))} · <b>${esc(ilYa(d.horodatage))}</b></span><br>` : '')
+    + `Zone : ${esc(c._zoneNom)}<br>`
+    + (c._quartier ? `Quartier : ${esc(c._quartier)}<br>` : '')
+    + (d && d.repere ? `Repère : « ${esc(d.repere)} »<br>` : '')
+    + (c._provinceDeclaree ? `Province déclarée : <b>${esc(texteProvince(d.province, d.ville))}</b>`
+        + (c._zone ? ` <span class="doux">(GPS : ${esc(c._zone.nom)})</span>` : '') + '<br>' : '')
+    + (d && d.precision_m != null ? `<span class="doux">Précision ± ${Math.round(d.precision_m)} m</span><br>` : '')
+    + (b ? `Binôme : ${esc(nomComplet(b))} <a href="tel:${esc(b.telephone)}">${esc(b.telephone)}</a><br>` : '')
+    + `<a class="btn appel petit" href="tel:${esc(c.telephone)}">📞 Appeler ${esc(c.telephone)}</a> `
+    + `<button class="btn sec petit" type="button" data-action="historique" data-id="${esc(c.id)}">🕘 Historique 7 j</button>`;
+}
+
+/* ===========================================================================
+   VUE CARTE
+   =========================================================================== */
+function initialiserFiltres() {
+  const zone = $('#f-statuts'); zone.innerHTML = '';
+  Object.entries(STATUTS).forEach(([code, s]) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'puce'; b.style.setProperty('--c', s.couleur);
+    b.setAttribute('aria-pressed', 'false'); b.textContent = s.libelle;
+    b.addEventListener('click', () => {
+      etat.filtreStatuts.has(code) ? etat.filtreStatuts.delete(code) : etat.filtreStatuts.add(code);
+      b.setAttribute('aria-pressed', String(etat.filtreStatuts.has(code)));
+      rendreCarte();
+    });
+    zone.appendChild(b);
+  });
+}
+['#f-dispo', '#f-zone', '#f-quartier'].forEach(s => $(s).addEventListener('change', rendreCarte));
+
+function rendreFiltresOptions() {
+  const remplir = (sel, valeurs, premier) => {
+    const actuel = $(sel).value;
+    $(sel).innerHTML = `<option value="">${premier}</option>` + valeurs.map(v => `<option${v === actuel ? ' selected' : ''}>${esc(v)}</option>`).join('');
+  };
+  const zones = [...new Set(etat.chauffeurs.map(c => c._zoneNom))].sort((a, b) => a.localeCompare(b, 'fr'));
+  const quartiers = [...new Set(etat.chauffeurs.map(c => c._quartier).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
+  remplir('#f-zone', zones, 'Toutes les zones');
+  remplir('#f-quartier', quartiers, 'Tous les quartiers');
+  $('#dl-lieux').innerHTML = lieuxActifs().map(l => `<option value="${esc(l.nom)}">${esc(l.ville)}</option>`).join('');
+}
+
+function chauffeursFiltres() {
+  const dispo = $('#f-dispo').checked, zone = $('#f-zone').value, q = $('#f-quartier').value;
+  return etat.chauffeurs.filter(c => c.actif
+    && (!dispo || c._dispo)
+    && (!zone || c._zoneNom === zone)
+    && (!q || c._quartier === q)
+    && (!etat.filtreStatuts.size || (c.dernier && etat.filtreStatuts.has(c.dernier.statut))));
+}
+
+function carteChauffeurHtml(c) {
+  const d = c.dernier, s = d ? STATUTS[d.statut] : null;
+  return `<div class="carte-ch" data-action="localiser" data-id="${esc(c.id)}">`
+    + `<div class="t"><b>${s ? `<span class="point" style="background:${couleurChauffeur(c)}"></span>` : ''}${esc(c._nom)}</b>`
+    + `<span class="doux">${d ? esc(ilYa(d.horodatage)) : 'jamais'}</span></div>`
+    + `<div class="doux">${s ? esc(s.libelle) : 'Aucun pointage'} · ${esc(c._zoneNom)}${c._quartier ? ' · ' + esc(c._quartier) : ''}</div>`
+    + `<div class="ligne" style="margin-top:4px"><a class="btn appel petit" href="tel:${esc(c.telephone)}" onclick="event.stopPropagation()">📞 ${esc(c.telephone)}</a>`
+    + (c._alertes.some(a => a.niveau === 'ko') ? '<span class="etiq ko">⚠ alerte</span>' : '')
+    + (c._dispoEtat === 'orange' ? '<span class="etiq att">dispo à vérifier</span>' : (c._dispo ? '<span class="etiq ok">disponible</span>' : ''))
+    + '</div>' + (c._dispoEtat ? `<div class="doux">${esc(c._dispoMotif)}</div>` : '') + '</div>';
+}
+
+function rendreCarte() {
+  const liste = chauffeursFiltres();
+  $('#nb-liste').textContent = liste.length;
+  $('#liste-carte').innerHTML = liste.length ? liste.map(carteChauffeurHtml).join('') : '<p class="vide">Aucun chauffeur ne correspond aux filtres.</p>';
+  const couche = etat.couches.carte;
+  if (!couche) return;
+  couche.clearLayers();
+  etat.marqueurs = {};
+  liste.filter(c => c._pos).forEach(c => { etat.marqueurs[c.id] = marqueurChauffeur(c).addTo(couche); });
+  // Zones en arrière-plan
+  zonesActives().forEach(z => L.circle([z.latitude, z.longitude], { radius: z.rayon_m, color: z.couleur, weight: 1, fill: false, dashArray: '4', interactive: false }).addTo(couche));
+}
+
+/** Centre la carte sur un chauffeur et ouvre sa fiche. */
+function localiserChauffeur(id) {
+  const c = etat.chauffeurs.find(x => x.id === id);
+  if (!c) return;
+  if (!c._pos) {
+    modale(c._nom, `<p>${c.dernier ? (c._prive ? `Statut « ${esc(STATUTS[c.dernier.statut].libelle)} » : aucune position partagée.` : 'Dernier pointage sans position GPS.') : 'Aucun pointage.'}</p>` + popupChauffeur(c));
+    return;
+  }
+  if (etat.vue !== 'carte') afficherVue('carte');
+  // S'assurer que le chauffeur est visible malgré les filtres
+  if (!etat.marqueurs || !etat.marqueurs[id]) {
+    $('#f-dispo').checked = false; $('#f-zone').value = ''; $('#f-quartier').value = '';
+    etat.filtreStatuts.clear(); document.querySelectorAll('#f-statuts .puce').forEach(p => p.setAttribute('aria-pressed', 'false'));
+    rendreCarte();
+  }
+  etat.cartes.carte.setView(c._pos, 14);
+  etat.marqueurs[id]?.openPopup();
+}
+
+/* ===========================================================================
+   VUE LIBREVILLE : groupes par quartier + chauffeur le plus proche
+   =========================================================================== */
+function rendreLibreville() {
+  const lbv = etat.chauffeurs.filter(c => c.actif && c._zone && c._zone.type === 'libreville');
+  const groupes = {};
+  lbv.forEach(c => { const q = c._quartier || 'Quartier non précisé'; (groupes[q] = groupes[q] || []).push(c); });
+  const noms = Object.keys(groupes).sort((a, b) => groupes[b].length - groupes[a].length || a.localeCompare(b, 'fr'));
+  $('#groupes-quartiers').innerHTML = noms.length ? noms.map(q => {
+    const dispo = groupes[q].filter(c => c._dispo).length;
+    return `<details class="groupe" open><summary>${esc(q)} — ${groupes[q].length} chauffeur(s)${dispo ? ` · <span class="etiq ok">${dispo} dispo</span>` : ''}</summary>`
+      + groupes[q].map(carteChauffeurHtml).join('') + '</details>';
+  }).join('') : '<p class="vide">Aucun chauffeur localisé dans le Grand Libreville.</p>';
+
+  const couche = etat.couches.lbv;
+  if (!couche) return;
+  couche.clearLayers();
+  lieuxActifs().forEach(l => L.circle([l.latitude, l.longitude], { radius: l.rayon_m, color: '#64748B', weight: 1, fillOpacity: 0.04, interactive: false }).addTo(couche));
+  lieuxActifs().forEach(l => L.marker([l.latitude, l.longitude], { icon: L.divIcon({ className: '', html: `<span style="font-size:11px;color:#334155;font-weight:600;white-space:nowrap">${esc(l.nom)}</span>`, iconSize: [0, 0] }), interactive: false }).addTo(couche));
+  lbv.filter(c => c._pos).forEach(c => marqueurChauffeur(c).addTo(couche));
+  if (etat.pointPC) L.marker(etat.pointPC.latlng).bindTooltip('Prise en charge : ' + esc(etat.pointPC.nom), { permanent: true }).addTo(couche);
+}
+
+$('#pc-chercher').addEventListener('click', () => {
+  const saisie = normaliser($('#pc-lieu').value);
+  if (!saisie) return toast('Saisissez un lieu ou choisissez un point sur la carte.', 'ko');
+  const l = lieuxActifs().find(x => normaliser(x.nom) === saisie) || lieuxActifs().find(x => normaliser(x.nom).includes(saisie));
+  if (!l) return toast('Lieu inconnu. Choisissez dans la liste ou cliquez sur la carte.', 'ko');
+  $('#pc-lieu').value = l.nom;
+  chauffeurLePlusProche({ lat: l.latitude, lng: l.longitude }, l.nom);
+});
+$('#pc-lieu').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#pc-chercher').click(); });
+$('#pc-carte').addEventListener('click', () => entrerModeCarte('pc', 'Cliquez sur la carte de Libreville pour placer le point de prise en charge.'));
+
+/** Classe les chauffeurs « Disponible à Libreville » par distance au point donné. */
+function chauffeurLePlusProche(latlng, nom) {
+  etat.pointPC = { latlng: [latlng.lat, latlng.lng], nom };
+  const candidats = etat.chauffeurs
+    .filter(c => c.actif && c._consent && c.dernier && c.dernier.statut === 'dispo_libreville' && c._pos)
+    .map(c => ({ c, d: haversine(latlng.lat, latlng.lng, c._pos[0], c._pos[1]) }))
+    .sort((a, b) => a.d - b.d).slice(0, 10);
+  $('#pc-resultats').innerHTML = `<h3>Depuis : ${esc(nom)}</h3>` + (candidats.length ? '<table><thead><tr><th>#</th><th>Chauffeur</th><th class="num">Distance*</th><th></th></tr></thead><tbody>'
+    + candidats.map(({ c, d }, i) => `<tr><td>${i + 1}</td><td><span class="point" style="background:${couleurChauffeur(c)}"></span><b>${esc(c._nom)}</b><br><span class="doux">${esc(c._quartier || '')} · pointé ${esc(ilYa(c.dernier.horodatage))}</span>`
+      + `<br><span class="etiq ${c._dispoEtat === 'vert' ? 'ok' : 'att'}">${c._dispoEtat === 'vert' ? '✓' : '⚠ à vérifier'}</span> <span class="doux">${esc(c._dispoMotif)}</span>`
+      + (c._recent ? '' : '<br><span class="etiq att">pointage ancien</span>') + `</td><td class="num">${distanceTexte(d)}</td>`
+      + `<td><a class="btn appel petit" href="tel:${esc(c.telephone)}">📞 Appeler</a></td></tr>`).join('')
+    + '</tbody></table><p class="doux">* Distance à vol d\'oiseau depuis le dernier pointage.</p>'
+    : '<p class="vide">Aucun chauffeur « Disponible à Libreville » localisé.</p>');
+  rendreLibreville();
+  etat.cartes.lbv?.setView(etat.pointPC.latlng, 13);
+}
+
+/* ===========================================================================
+   MODES « CLIC SUR LA CARTE » (prise en charge, nouveau lieu, nouvelle zone)
+   =========================================================================== */
+function entrerModeCarte(mode, texte) {
+  etat.modeCarte = mode;
+  const cle = mode === 'pc' ? 'lbv' : 'lieux';
+  etat.cartes[cle]?.getContainer().classList.add('mode-carte');
+  if (mode !== 'pc') { const m = $('#mode-info'); m.textContent = texte + ' (Échap pour annuler)'; m.hidden = false; }
+  toast(texte, '', 5000);
+}
+function quitterModeCarte() {
+  etat.modeCarte = null;
+  Object.values(etat.cartes).forEach(m => m.getContainer().classList.remove('mode-carte'));
+  const m = $('#mode-info'); if (m) m.hidden = true;
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && etat.modeCarte) quitterModeCarte(); });
+
+function clicCarte(cle, latlng) {
+  const mode = etat.modeCarte;
+  if (!mode) return;
+  if (mode === 'pc' && cle === 'lbv') { quitterModeCarte(); const p = lieuLePlusProche(latlng.lat, latlng.lng); chauffeurLePlusProche(latlng, p ? `point choisi (près de ${p.l.nom})` : 'point choisi'); }
+  if (mode === 'lieu' && cle === 'lieux') { quitterModeCarte(); editerLieu(null, latlng); }
+  if (mode === 'zone' && cle === 'lieux') { quitterModeCarte(); editerZone(null, latlng); }
+}
+
+/* ===========================================================================
+   RECHERCHE INSTANTANÉE (nom, matricule, téléphone)
+   =========================================================================== */
+$('#recherche').addEventListener('input', () => {
+  const q = normaliser($('#recherche').value), qTel = q.replace(/\D/g, '');
+  const zone = $('#resultats');
+  if (q.length < 2) { zone.hidden = true; return; }
+  const res = etat.chauffeurs.filter(c => normaliser(c._nom).includes(q) || normaliser(c.nom + ' ' + (c.prenom || '')).includes(q)
+    || normaliser(c.matricule).includes(q) || (qTel.length >= 3 && c.telephone.includes(qTel))).slice(0, 10);
+  zone.innerHTML = res.length ? res.map(c => {
+    const s = c.dernier ? STATUTS[c.dernier.statut] : null;
+    return `<div class="resultat"><div class="q"><b>${esc(c._nom)}</b> <span class="doux">${esc(c.matricule)} · ${esc(c.telephone)}</span><br>`
+      + `<span class="doux">${s ? `<span class="point" style="background:${s.couleur}"></span>${esc(s.libelle)} · ${esc(ilYa(c.dernier.horodatage))}` : 'Aucun pointage'} · ${esc(c._zoneNom)}${c._quartier ? ' · ' + esc(c._quartier) : ''}</span>`
+      + (c.binome ? `<br><span class="doux">Binôme : ${esc(nomComplet(c.binome))} (${esc(c.binome.telephone)})</span>` : '') + '</div>'
+      + `<a class="btn appel petit" href="tel:${esc(c.telephone)}">📞 Appeler</a>`
+      + `<button class="btn sec petit" type="button" data-action="localiser" data-id="${esc(c.id)}">🗺️ Voir</button></div>`;
+  }).join('') : '<div class="resultat doux">Aucun chauffeur trouvé.</div>';
+  zone.hidden = false;
+});
+document.addEventListener('click', (e) => { if (!e.target.closest('.rech')) $('#resultats').hidden = true; });
+
+/* Actions déclenchées depuis les listes, fiches et tableaux */
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const id = el.dataset.id;
+  const actions = {
+    localiser: () => { $('#resultats').hidden = true; localiserChauffeur(id); },
+    historique: () => afficherHistorique(id),
+    modifier: () => editerChauffeur(id),
+    pin: () => definirPin(id),
+    debloquer: () => debloquer(id),
+    'lieu-enregistrer': () => enregistrerLigneLieu(Number(id)),
+    'lieu-voir': () => voirLieu(Number(id)),
+    'zone-enregistrer': () => enregistrerLigneZone(Number(id)),
+    'repere-creer': () => creerLieuDepuisRepere(Number(el.dataset.index)),
+  };
+  if (actions[el.dataset.action]) { e.preventDefault(); actions[el.dataset.action](); }
+});
+
+/* ===========================================================================
+   HISTORIQUE D'UN CHAUFFEUR (consultation auditée)
+   =========================================================================== */
+async function afficherHistorique(id) {
+  const c = etat.chauffeurs.find(x => x.id === id);
+  try {
+    const h = await rpc('loc_historique_chauffeur', { p_chauffeur: id, p_jours: 7 });
+    const lignes = h.map(p => {
+      const s = STATUTS[p.statut] || { libelle: p.statut, couleur: '#555' };
+      const ld = p.lieu_dispo && LIEUX_DISPO[p.lieu_dispo];
+      return `<tr><td>${esc(dateHeure(p.horodatage))}</td><td><span class="point" style="background:${s.couleur}"></span>${esc(s.libelle)}${p.destination ? ' → ' + esc(p.destination) : ''}`
+        + `${ld ? `<br><span class="doux">${ld.ico} ${esc(ld.libelle)}</span>` : ''}</td>`
+        + `<td>${p.province ? '<b>' + esc(texteProvince(p.province, p.ville)) + '</b> <span class="doux">(déclarée)</span><br>' : ''}`
+        + `${p.latitude != null ? esc(zoneDe(p.latitude, p.longitude).nom) : '<span class="doux">sans position</span>'}</td>`
+        + `<td>${esc(p.quartier_confirme || p.quartier_detecte || '')}${p.quartier_detecte && p.quartier_confirme && p.quartier_detecte !== p.quartier_confirme ? ` <span class="doux">(proposé : ${esc(p.quartier_detecte)})</span>` : ''}${p.repere ? '<br>« ' + esc(p.repere) + ' »' : ''}</td>`
+        + `<td>${p.precision_m != null ? '± ' + Math.round(p.precision_m) + ' m' : ''}${p.hors_ligne ? ' <span class="etiq att">hors ligne</span>' : ''}</td></tr>`;
+    }).join('');
+    // Tracé sur la carte principale
+    if (etat.vue !== 'carte') afficherVue('carte');
+    const pts = h.filter(p => p.latitude != null).map(p => [p.latitude, p.longitude]).reverse();
+    if (etat.trace) etat.trace.remove();
+    if (pts.length && etat.cartes.carte) {
+      etat.trace = L.layerGroup([L.polyline(pts, { color: '#334155', weight: 3, dashArray: '6' }),
+        ...pts.map((p, i) => L.circleMarker(p, { radius: 4, color: '#334155', fillOpacity: i === pts.length - 1 ? 1 : 0.4 }))]).addTo(etat.cartes.carte);
+      etat.cartes.carte.fitBounds(L.latLngBounds(pts).pad(0.3));
+    }
+    await modale(`Historique 7 jours — ${c ? c._nom : ''}`, h.length
+      ? `<p class="doux">${h.length} pointage(s). Le tracé est affiché sur la carte. Consultation enregistrée au journal.</p><div style="overflow:auto"><table><thead><tr><th>Date</th><th>Statut</th><th>Zone</th><th>Quartier / repère</th><th>Précision</th></tr></thead><tbody>${lignes}</tbody></table></div>`
+      : '<p class="vide">Aucun pointage sur les 7 derniers jours.</p>',
+    [{ libelle: 'Effacer le tracé', valeur: 'effacer', classe: 'sec' }, { libelle: 'Fermer', valeur: 'ok' }]).then(v => { if (v === 'effacer' && etat.trace) { etat.trace.remove(); etat.trace = null; } });
+  } catch (e) { toast(e.message, 'ko', 6000); }
+}
+
+/* ===========================================================================
+   VUE CHAUFFEURS : liste, ajout, modification, PIN, import CSV
+   =========================================================================== */
+$('#ch-inactifs').addEventListener('change', rendreChauffeurs);
+
+function rendreChauffeurs() {
+  const tous = $('#ch-inactifs').checked;
+  const liste = etat.chauffeurs.filter(c => tous || c.actif);
+  $('#tab-chauffeurs').innerHTML = liste.map(c => {
+    const d = c.dernier, s = d ? STATUTS[d.statut] : null;
+    const compte = [
+      c._consent ? '<span class="etiq ok">accord</span>' : `<span class="etiq att">${c.consentement === 'retire' ? 'accord retiré' : 'sans accord'}</span>`,
+      c.pin_defini ? '' : '<span class="etiq ko">PIN non défini</span>',
+      c.bloque ? '<span class="etiq ko">bloqué</span>' : '',
+      c.est_demo ? '<span class="etiq">démo</span>' : '',
+      c.actif ? '' : '<span class="etiq">inactif</span>',
+    ].join(' ');
+    return `<tr class="${c.actif ? '' : 'inactif'}"><td>${esc(c.matricule)}</td><td><b>${esc(c._nom)}</b></td>`
+      + `<td><a href="tel:${esc(c.telephone)}">${esc(c.telephone)}</a></td><td>${c.equipe === 'libreville' ? 'Libreville' : 'Site'}</td>`
+      + `<td>${c.binome ? esc(nomComplet(c.binome)) + `<br><a class="doux" href="tel:${esc(c.binome.telephone)}">${esc(c.binome.telephone)}</a>` : '<span class="doux">—</span>'}</td>`
+      + `<td>${s ? `<span class="point" style="background:${s.couleur}"></span>${esc(s.libelle)}<br><span class="doux">${esc(c._zoneNom)}${c._quartier ? ' · ' + esc(c._quartier) : ''}</span>` : '<span class="doux">—</span>'}</td>`
+      + `<td>${d ? esc(dateHeure(d.horodatage)) + '<br><span class="doux">' + esc(ilYa(d.horodatage)) + '</span>' : '<span class="doux">jamais</span>'}</td>`
+      + `<td>${compte}</td>`
+      + `<td><div class="ligne"><button class="btn sec petit" data-action="modifier" data-id="${esc(c.id)}">Modifier</button>`
+      + `<button class="btn sec petit" data-action="pin" data-id="${esc(c.id)}">PIN</button>`
+      + (c.bloque ? `<button class="btn sec petit" data-action="debloquer" data-id="${esc(c.id)}">Débloquer</button>` : '')
+      + `<button class="btn sec petit" data-action="historique" data-id="${esc(c.id)}">Historique</button></div></td></tr>`;
+  }).join('') || '<tr><td colspan="9" class="vide">Aucun chauffeur. Ajoutez-en ou importez un fichier CSV.</td></tr>';
+}
+
+$('#btn-ajout-chauffeur').addEventListener('click', () => editerChauffeur(null));
+
+/** Formulaire d'ajout / de modification d'un chauffeur. */
+async function editerChauffeur(id) {
+  const c = id ? etat.chauffeurs.find(x => x.id === id) : null;
+  const options = etat.chauffeurs.filter(x => x.id !== id).sort((a, b) => a._nom.localeCompare(b._nom, 'fr'))
+    .map(x => `<option value="${esc(x.id)}"${c && c.binome && c.binome.id === x.id ? ' selected' : ''}>${esc(x._nom)} (${esc(x.matricule)})</option>`).join('');
+  const html = `<div class="grille2" style="grid-template-columns:1fr 1fr">
+      <div><label class="champ" for="ce-mat">Matricule *</label><input id="ce-mat" class="champ-l" type="text" maxlength="30" value="${esc(c ? c.matricule : '')}"></div>
+      <div><label class="champ" for="ce-tel">Téléphone *</label><input id="ce-tel" class="champ-l" type="text" value="${esc(c ? c.telephone : '')}" placeholder="077 12 34 56"></div>
+      <div><label class="champ" for="ce-nom">Nom *</label><input id="ce-nom" class="champ-l" type="text" maxlength="80" value="${esc(c ? c.nom : '')}"></div>
+      <div><label class="champ" for="ce-prenom">Prénom</label><input id="ce-prenom" class="champ-l" type="text" maxlength="80" value="${esc(c ? c.prenom || '' : '')}"></div>
+      <div><label class="champ" for="ce-equipe">Équipe</label><select id="ce-equipe" class="champ-l"><option value="site">Site / route</option><option value="libreville"${c && c.equipe === 'libreville' ? ' selected' : ''}>Libreville</option></select></div>
+      <div><label class="champ" for="ce-binome">Binôme de remplacement</label><select id="ce-binome" class="champ-l"><option value="">— Aucun —</option>${options}</select></div>
+    </div>
+    <label class="ligne" style="margin-top:12px"><input type="checkbox" id="ce-actif"${!c || c.actif ? ' checked' : ''}> Chauffeur actif</label>
+    ${c ? '' : '<p class="doux">Après l\'ajout, définissez un PIN provisoire (bouton « PIN ») et communiquez-le au chauffeur.</p>'}`;
+  const boutons = [{ libelle: c ? 'Enregistrer' : 'Ajouter', valeur: 'ok' }];
+  if (c) boutons.push({ libelle: 'Supprimer', valeur: 'supprimer', classe: 'danger' });
+  boutons.push({ libelle: 'Annuler', valeur: 'annuler', classe: 'sec' });
+
+  const choix = await modale(c ? `Modifier — ${c._nom}` : 'Ajouter un chauffeur', html, boutons, async (v) => {
+    if (v === 'supprimer') return true;
+    const donnees = {
+      matricule: $('#ce-mat').value.trim(), nom: $('#ce-nom').value.trim(), prenom: $('#ce-prenom').value.trim() || null,
+      telephone: normaliserTel($('#ce-tel').value), equipe: $('#ce-equipe').value,
+      binome_id: $('#ce-binome').value || null, actif: $('#ce-actif').checked,
+    };
+    if (!donnees.matricule || !donnees.nom) throw new Error('Le matricule et le nom sont obligatoires.');
+    if (!/^\d{8,10}$/.test(donnees.telephone)) throw new Error('Téléphone invalide : 8 à 10 chiffres (sans +241).');
+    if (c) {
+      await api(sb.from('loc_chauffeurs').update(donnees).eq('id', c.id));
+      rpc('loc_journaliser', { p_action: 'modification_chauffeur', p_chauffeur: c.id, p_details: { matricule: donnees.matricule } }).catch(() => {});
+      toast('Chauffeur modifié ✓', 'ok');
+    } else {
+      const r = await api(sb.from('loc_chauffeurs').insert(donnees).select('id'));
+      rpc('loc_journaliser', { p_action: 'ajout_chauffeur', p_chauffeur: r[0].id, p_details: { matricule: donnees.matricule } }).catch(() => {});
+      toast('Chauffeur ajouté ✓ — pensez à définir son PIN.', 'ok', 6000);
+    }
+    return true;
+  });
+  if (choix === 'supprimer' && c) {
+    const conf = await modale('Supprimer définitivement ?', `<p>Supprimer <b>${esc(c._nom)}</b> efface aussi tous ses pointages et son historique de consentement.</p><p>Pour un départ temporaire, préférez décocher « Chauffeur actif ».</p>`,
+      [{ libelle: 'Supprimer définitivement', valeur: 'oui', classe: 'danger' }, { libelle: 'Annuler', valeur: 'annuler', classe: 'sec' }]);
+    if (conf === 'oui') {
+      try {
+        await api(sb.from('loc_chauffeurs').delete().eq('id', c.id));
+        rpc('loc_journaliser', { p_action: 'suppression_chauffeur', p_details: { matricule: c.matricule, nom: c._nom } }).catch(() => {});
+        toast('Chauffeur supprimé.', 'ok');
+      } catch (e) { toast(e.message, 'ko', 6000); }
+    }
+  }
+  if (choix !== 'annuler') chargerTout();
+}
+
+/** Définit un PIN provisoire (le chauffeur devra le changer à la connexion). */
+async function definirPin(id) {
+  const c = etat.chauffeurs.find(x => x.id === id);
+  const choix = await modale(`PIN provisoire — ${c._nom}`,
+    `<p>Le chauffeur devra choisir son propre PIN à la prochaine connexion. Ses sessions ouvertes seront fermées et son compte débloqué.</p>
+     <label class="champ" for="pin-val">PIN provisoire (4 chiffres)</label>
+     <div class="ligne"><input id="pin-val" type="text" inputmode="numeric" maxlength="4" style="font-size:22px;letter-spacing:.3em;width:120px">
+     <button class="btn sec petit" type="button" id="pin-auto">Générer</button></div>
+     <p class="doux">Refusés : 0000, 1111, 1234, 4321…</p>`,
+    [{ libelle: 'Enregistrer le PIN', valeur: 'ok' }, { libelle: 'Annuler', valeur: 'annuler', classe: 'sec' }],
+    async () => {
+      const pin = $('#pin-val').value.trim();
+      if (!/^\d{4}$/.test(pin)) throw new Error('Le PIN doit contenir 4 chiffres.');
+      const r = await rpc('loc_definir_pin', { p_chauffeur: id, p_pin: pin });
+      if (!r.ok) throw new Error(r.message);
+      return true;
+    });
+  if (choix === 'ok') { toast('PIN enregistré ✓ Communiquez-le au chauffeur.', 'ok', 6000); chargerTout(); }
+}
+document.addEventListener('click', (e) => {
+  if (e.target.id !== 'pin-auto') return;
+  // PIN aléatoire non trivial
+  let p;
+  do { p = String(crypto.getRandomValues(new Uint16Array(1))[0] % 10000).padStart(4, '0'); }
+  while (/^(\d)\1{3}$/.test(p) || '0123456789'.includes(p) || '9876543210'.includes(p));
+  $('#pin-val').value = p;
+});
+
+async function debloquer(id) {
+  try { await rpc('loc_debloquer', { p_chauffeur: id }); toast('Compte débloqué ✓', 'ok'); chargerTout(); }
+  catch (e) { toast(e.message, 'ko', 6000); }
+}
+
+/* --- Import CSV --- */
+$('#btn-modele').addEventListener('click', () => {
+  telecharger('modele-chauffeurs.csv',
+    'matricule;nom;prenom;telephone;equipe;binome_matricule;pin\n'
+    + 'F-0001;MBA;Jean;077123456;site;F-0002;5823\n'
+    + 'F-0002;NDONG;Paul;066123456;libreville;F-0001;\n');
+});
+$('#btn-import').addEventListener('click', () => $('#fichier-csv').click());
+$('#fichier-csv').addEventListener('change', async () => {
+  const f = $('#fichier-csv').files[0];
+  $('#fichier-csv').value = '';
+  if (!f) return;
+  const zone = $('#import-resultat');
+  try {
+    const texte = await lireFichierTexte(f);
+    const lignes = analyserCsv(texte);
+    if (!lignes.length) throw new Error('Fichier vide ou en-têtes non reconnus (matricule, nom, telephone obligatoires).');
+    const conf = await modale('Importer des chauffeurs', `<p><b>${lignes.length}</b> ligne(s) lue(s). Les chauffeurs existants (même matricule) seront mis à jour.</p>`
+      + `<table><thead><tr><th>Matricule</th><th>Nom</th><th>Téléphone</th><th>Équipe</th><th>Binôme</th><th>PIN</th></tr></thead><tbody>`
+      + lignes.slice(0, 8).map(l => `<tr><td>${esc(l.matricule)}</td><td>${esc((l.prenom || '') + ' ' + (l.nom || ''))}</td><td>${esc(l.telephone)}</td><td>${esc(l.equipe || 'site')}</td><td>${esc(l.binome_matricule || '')}</td><td>${l.pin ? '••••' : ''}</td></tr>`).join('')
+      + `</tbody></table>${lignes.length > 8 ? `<p class="doux">… et ${lignes.length - 8} autre(s).</p>` : ''}`,
+      [{ libelle: 'Importer', valeur: 'ok' }, { libelle: 'Annuler', valeur: 'annuler', classe: 'sec' }]);
+    if (conf !== 'ok') return;
+    const r = await rpc('loc_importer_chauffeurs', { p_lignes: lignes });
+    if (!r.ok) throw new Error(r.message);
+    zone.innerHTML = `<div class="message ${r.erreurs.length ? 'att' : 'ok'}">${r.crees} créé(s), ${r.mis_a_jour} mis à jour, ${r.erreurs.length} erreur(s).</div>`
+      + (r.erreurs.length ? '<table><thead><tr><th>Ligne</th><th>Matricule</th><th>Problème</th></tr></thead><tbody>'
+        + r.erreurs.map(e => `<tr><td>${e.ligne + 1}</td><td>${esc(e.matricule)}</td><td>${esc(e.message)}</td></tr>`).join('') + '</tbody></table>' : '');
+    chargerTout();
+  } catch (e) {
+    zone.innerHTML = `<div class="message ko">${esc(e.message)}</div>`;
+  }
+});
+
+/** Lit un fichier en UTF-8, ou en Windows-1252 si les accents sont illisibles (CSV Excel). */
+async function lireFichierTexte(f) {
+  const buf = await f.arrayBuffer();
+  let t = new TextDecoder('utf-8').decode(buf);
+  if (t.includes('�')) t = new TextDecoder('windows-1252').decode(buf);
+  return t.replace(/^﻿/, '');
+}
+
+/** Analyse un CSV (séparateur ; , ou tabulation, guillemets gérés) -> objets. */
+function analyserCsv(texte) {
+  const premiere = texte.split(/\r?\n/)[0] || '';
+  const sep = [';', '\t', ','].sort((a, b) => premiere.split(b).length - premiere.split(a).length)[0];
+  const lignes = [];
+  let champ = '', ligne = [], guillemets = false;
+  for (let i = 0; i < texte.length; i++) {
+    const ch = texte[i];
+    if (guillemets) {
+      if (ch === '"' && texte[i + 1] === '"') { champ += '"'; i++; }
+      else if (ch === '"') guillemets = false;
+      else champ += ch;
+    } else if (ch === '"') guillemets = true;
+    else if (ch === sep) { ligne.push(champ); champ = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && texte[i + 1] === '\n') i++;
+      ligne.push(champ); lignes.push(ligne); ligne = []; champ = '';
+    } else champ += ch;
+  }
+  if (champ || ligne.length) { ligne.push(champ); lignes.push(ligne); }
+  const nonVides = lignes.filter(l => l.some(c => c.trim()));
+  if (nonVides.length < 2) return [];
+  // Reconnaissance des en-têtes (avec ou sans accents)
+  const alias = { matricule: 'matricule', nom: 'nom', prenom: 'prenom', telephone: 'telephone', tel: 'telephone', portable: 'telephone',
+    equipe: 'equipe', binome: 'binome_matricule', binome_matricule: 'binome_matricule', 'matricule binome': 'binome_matricule', pin: 'pin' };
+  const entetes = nonVides[0].map(h => alias[normaliser(h).replace(/[^a-z_ ]/g, '')] || null);
+  if (!entetes.includes('matricule') || !entetes.includes('nom') || !entetes.includes('telephone')) return [];
+  return nonVides.slice(1).map(l => {
+    const o = {};
+    entetes.forEach((cle, i) => { if (cle) o[cle] = (l[i] || '').trim(); });
+    if (o.equipe) o.equipe = normaliser(o.equipe).startsWith('lib') ? 'libreville' : 'site';
+    return o;
+  });
+}
+
+function telecharger(nom, contenu, type = 'text/csv;charset=utf-8') {
+  const blob = new Blob(['﻿' + contenu], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nom;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+/* ===========================================================================
+   VUE ALERTES
+   =========================================================================== */
+function rendreAlertes() {
+  $('#alertes-regles').textContent = `Seuils : pas de pointage depuis ${etat.params.seuil_alerte_h} h (équipe site) ou ${etat.params.seuil_alerte_libreville_h} h (équipe Libreville). `
+    + 'Pas d\'alerte pendant un repos, un congé ou une maladie. « Hors zone » : statut déclaré incohérent avec la position.';
+  const lignes = [];
+  etat.chauffeurs.forEach(c => c._alertes.forEach(a => lignes.push({ c, a })));
+  const ordre = { ko: 0, att: 1 };
+  lignes.sort((x, y) => ordre[x.a.niveau] - ordre[y.a.niveau] || (y.c._age_h || 0) - (x.c._age_h || 0));
+  $('#tab-alertes').innerHTML = lignes.length ? lignes.map(({ c, a }) => `<tr><td><span class="etiq ${a.niveau}">${esc(a.type)}</span></td>`
+    + `<td><b>${esc(c._nom)}</b><br><span class="doux">${esc(c.matricule)} · ${c.equipe === 'libreville' ? 'Libreville' : 'Site'}</span></td>`
+    + `<td>${esc(a.detail)}</td><td>${c.dernier ? esc(dateHeure(c.dernier.horodatage)) + '<br><span class="doux">' + esc(ilYa(c.dernier.horodatage)) + '</span>' : '—'}</td>`
+    + `<td><div class="ligne"><a class="btn appel petit" href="tel:${esc(c.telephone)}">📞 Appeler</a>`
+    + (c.binome ? `<a class="btn sec petit" href="tel:${esc(c.binome.telephone)}" title="${esc(nomComplet(c.binome))}">📞 Binôme</a>` : '')
+    + (c._pos ? `<button class="btn sec petit" data-action="localiser" data-id="${esc(c.id)}">🗺️ Voir</button>` : '') + '</div></td></tr>').join('')
+    : '<tr><td colspan="5" class="vide">Aucune alerte. ✓</td></tr>';
+}
+
+/* ===========================================================================
+   VUE SYNTHÈSE + EXPORTS
+   =========================================================================== */
+function compter(cle) {
+  const m = new Map();
+  etat.chauffeurs.filter(c => c.actif).forEach(c => { const k = cle(c); m.set(k, (m.get(k) || 0) + 1); });
+  return [...m.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0]), 'fr'));
+}
+function tableauSynthese(titre, entetes, lignes) {
+  return `<div class="bloc"><h2>${esc(titre)}</h2><table><thead><tr>${entetes.map((h, i) => `<th${i ? ' class="num"' : ''}>${esc(h)}</th>`).join('')}</tr></thead><tbody>`
+    + lignes.map(l => `<tr>${l.map((v, i) => `<td${i ? ' class="num"' : ''}>${i ? v : esc(v)}</td>`).join('')}</tr>`).join('') + '</tbody></table></div>';
+}
+function contenuSynthese() {
+  const actifs = etat.chauffeurs.filter(c => c.actif);
+  const parStatut = compter(c => c.dernier ? STATUTS[c.dernier.statut].libelle : 'Aucun pointage');
+  const parZone = compter(c => c._zoneNom);
+  const lbv = actifs.filter(c => c._zone && c._zone.type === 'libreville');
+  const mq = new Map();
+  lbv.forEach(c => { const k = c._quartier || 'Non précisé'; const v = mq.get(k) || [0, 0]; v[0]++; if (c._dispo) v[1]++; mq.set(k, v); });
+  const parQuartier = [...mq.entries()].sort((a, b) => b[1][0] - a[1][0]).map(([k, v]) => [k, v[0], v[1]]);
+  const dispoVerts = actifs.filter(c => c._dispo && c._dispoEtat !== 'orange').length;
+  const dispoOranges = actifs.filter(c => c._dispo && c._dispoEtat === 'orange').length;
+  return tableauSynthese('Vue d\'ensemble', ['Indicateur', 'Nombre'], [
+      ['Chauffeurs actifs', actifs.length], ['Disponibles maintenant (vert)', dispoVerts],
+      ['Disponibles à vérifier (orange)', dispoOranges],
+      ['Pointage récent (dans le seuil)', actifs.filter(c => c._recent).length],
+      ['Alertes', actifs.reduce((n, c) => n + c._alertes.filter(a => a.niveau === 'ko').length, 0)],
+      ['Sans consentement', actifs.filter(c => !c._consent).length]])
+    + tableauSynthese('Par statut', ['Statut', 'Chauffeurs'], parStatut)
+    + tableauSynthese('Par zone', ['Zone', 'Chauffeurs'], parZone)
+    + tableauSynthese('Libreville — par quartier', ['Quartier', 'Chauffeurs', 'Disponibles'], parQuartier.length ? parQuartier : [['Aucun chauffeur à Libreville', 0, 0]]);
+}
+function rendreSynthese() { $('#synthese').innerHTML = contenuSynthese(); }
+
+/** Lignes d'export (une par chauffeur actif). */
+function lignesExport() {
+  return etat.chauffeurs.filter(c => c.actif).map(c => {
+    const d = c.dernier;
+    return {
+      Matricule: c.matricule, Nom: c.nom, 'Prénom': c.prenom || '', 'Téléphone': c.telephone,
+      'Équipe': c.equipe === 'libreville' ? 'Libreville' : 'Site', Statut: d ? STATUTS[d.statut].libelle : 'Aucun pointage',
+      Disponible: c._dispo ? 'Oui' : 'Non', Zone: c._zoneNom,
+      'Province déclarée': c._provinceDeclaree || '', 'Ville déclarée': c._provinceDeclaree && d.ville || '',
+      'Disponibilité': c._dispoEtat ? `${c._dispoEtat === 'vert' ? 'Vert' : 'À vérifier'} — ${c._dispoMotif}` : '',
+      Quartier: c._quartier || '', 'Repère': d && d.repere || '',
+      Destination: d && d.destination || '', 'Dernier pointage (heure du Gabon)': d ? dateHeure(d.horodatage) : '',
+      'Ancienneté': d ? ilYa(d.horodatage) : '', 'Précision (m)': d && d.precision_m != null ? Math.round(d.precision_m) : '',
+      Latitude: d && d.latitude != null ? d.latitude.toFixed(5) : '', Longitude: d && d.longitude != null ? d.longitude.toFixed(5) : '',
+      'Binôme': c.binome ? nomComplet(c.binome) : '', 'Tél. binôme': c.binome ? c.binome.telephone : '',
+      Consentement: c._consent ? 'Oui' : 'Non', Alertes: c._alertes.filter(a => a.niveau === 'ko').map(a => a.type).join(', '),
+    };
+  });
+}
+
+$('#btn-export-csv').addEventListener('click', () => {
+  const lignes = lignesExport();
+  if (!lignes.length) return toast('Rien à exporter.', 'ko');
+  const cell = (v) => { const s = String(v ?? ''); return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const entetes = Object.keys(lignes[0]);
+  const csv = [entetes.map(cell).join(';'), ...lignes.map(l => entetes.map(h => cell(l[h])).join(';'))].join('\r\n');
+  const date = new Date(Date.now() + 3600e3).toISOString().slice(0, 16).replace(/[-:T]/g, '');
+  telecharger(`localisation-chauffeurs-${date}.csv`, csv);
+  rpc('loc_journaliser', { p_action: 'export_csv', p_details: { lignes: lignes.length } }).catch(() => {});
+  toast('Export CSV téléchargé ✓', 'ok');
+});
+
+$('#btn-export-pdf').addEventListener('click', () => {
+  const lignes = lignesExport();
+  const cols = ['Matricule', 'Nom', 'Prénom', 'Téléphone', 'Statut', 'Zone', 'Quartier', 'Dernier pointage (heure du Gabon)', 'Ancienneté', 'Binôme', 'Alertes'];
+  $('#impression').innerHTML = `<h1>Belinga Localisation — situation des chauffeurs</h1>`
+    + `<p>Édité le ${esc(dateHeure(new Date()))} (heure du Gabon) par ${esc(etat.user.email)}. Document interne — données personnelles.</p>`
+    + contenuSynthese().replace(/class="bloc"/g, '')
+    + `<h2>Détail par chauffeur</h2><table><thead><tr>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>`
+    + lignes.map(l => `<tr>${cols.map(c => `<td>${esc(l[c])}</td>`).join('')}</tr>`).join('') + '</tbody></table>';
+  rpc('loc_journaliser', { p_action: 'export_pdf', p_details: { lignes: lignes.length } }).catch(() => {});
+  window.print();
+});
+
+/* ===========================================================================
+   VUE LIEUX ET ZONES
+   =========================================================================== */
+$('#lieux-filtre').addEventListener('input', rendreTableLieux);
+$('#lieux-inactifs').addEventListener('change', rendreLieux);
+$('#btn-ajout-lieu').addEventListener('click', () => { afficherVue('lieux'); entrerModeCarte('lieu', 'Cliquez sur la carte à l\'emplacement du nouveau lieu.'); });
+$('#btn-ajout-zone').addEventListener('click', () => { afficherVue('lieux'); entrerModeCarte('zone', 'Cliquez sur la carte au centre de la nouvelle zone.'); });
+
+function rendreLieux() {
+  rendreTableLieux();
+  rendreTableZones();
+  const couche = etat.couches.lieux;
+  if (!couche) return;
+  couche.clearLayers();
+  zonesActives().forEach(z => L.circle([z.latitude, z.longitude], { radius: z.rayon_m, color: z.couleur, weight: 2, fill: false, dashArray: '6', interactive: false }).addTo(couche));
+  const voirInactifs = $('#lieux-inactifs').checked;
+  etat.lieux.filter(l => l.actif || voirInactifs).forEach(l => {
+    const couleur = !l.actif ? '#94A3B8' : (l.type === 'lieu_frequent' ? '#7C3AED' : '#00703C');
+    L.circle([l.latitude, l.longitude], { radius: l.rayon_m, color: couleur, weight: 1, fillOpacity: 0.06, interactive: false }).addTo(couche);
+    const mk = L.marker([l.latitude, l.longitude], {
+      draggable: true, title: l.nom,
+      icon: L.divIcon({ className: '', iconSize: [16, 16], iconAnchor: [8, 8],
+        html: `<div style="width:16px;height:16px;border-radius:50%;background:${couleur};border:2px solid #fff;box-shadow:0 0 0 1px ${couleur}"></div>` }),
+    });
+    mk.bindTooltip(`${esc(l.nom)}${l.approximatif ? ' (à vérifier)' : ''}${l.actif ? '' : ' — désactivé'}`);
+    mk.on('dragend', async () => {
+      const p = mk.getLatLng();
+      const c = await modale('Déplacer ce lieu ?', `<p>Nouvelle position de <b>${esc(l.nom)}</b> : ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</p><label class="ligne"><input type="checkbox" id="dep-verifie" checked> Position vérifiée sur le terrain</label>`,
+        [{ libelle: 'Enregistrer', valeur: 'ok' }, { libelle: 'Annuler', valeur: 'annuler', classe: 'sec' }]);
+      if (c !== 'ok') { mk.setLatLng([l.latitude, l.longitude]); return; }
+      try {
+        await api(sb.from('loc_lieux').update({ latitude: +p.lat.toFixed(6), longitude: +p.lng.toFixed(6), approximatif: !$('#dep-verifie').checked }).eq('id', l.id));
+        toast('Lieu déplacé ✓', 'ok'); await rechargerReferentiels();
+      } catch (e) { mk.setLatLng([l.latitude, l.longitude]); toast(e.message, 'ko', 6000); }
+    });
+    mk.addTo(couche);
+  });
+}
+
+function rendreTableLieux() {
+  const f = normaliser($('#lieux-filtre').value);
+  const liste = etat.lieux.filter(l => !f || normaliser(l.nom + ' ' + l.ville).includes(f));
+  $('#tab-lieux').innerHTML = liste.map(l => `<tr class="${l.actif ? '' : 'inactif'}" data-lieu="${l.id}">`
+    + `<td><input type="text" data-champ="nom" value="${esc(l.nom)}" maxlength="80">`
+    + (l.code ? `<br><span class="etiq ${l.approximatif ? 'att' : 'ok'}">Lieu de référence « disponible »${l.approximatif ? ' — à placer sur la carte' : ''}</span>` : '') + '</td>'
+    + `<td><select data-champ="type"><option value="quartier">Quartier</option><option value="lieu_frequent"${l.type === 'lieu_frequent' ? ' selected' : ''}>Lieu fréquent</option></select></td>`
+    + `<td><input type="text" data-champ="ville" value="${esc(l.ville)}" maxlength="60"></td>`
+    + `<td class="num"><input type="number" data-champ="rayon_m" value="${l.rayon_m}" min="50" max="10000" step="50"></td>`
+    + `<td><input type="checkbox" data-champ="approximatif"${l.approximatif ? ' checked' : ''} aria-label="À vérifier"></td>`
+    + `<td><input type="checkbox" data-champ="actif"${l.actif ? ' checked' : ''} aria-label="Actif"></td>`
+    + `<td><div class="ligne"><button class="btn petit" data-action="lieu-enregistrer" data-id="${l.id}">Enregistrer</button>`
+    + `<button class="btn sec petit" data-action="lieu-voir" data-id="${l.id}">🗺️</button></div></td></tr>`).join('')
+    || '<tr><td colspan="7" class="vide">Aucun lieu.</td></tr>';
+}
+
+/** Lit les champs d'une ligne de tableau (lieu ou zone). */
+function lireLigne(tr) {
+  const o = {};
+  tr.querySelectorAll('[data-champ]').forEach(el => {
+    o[el.dataset.champ] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value.trim();
+  });
+  return o;
+}
+
+async function enregistrerLigneLieu(id) {
+  const o = lireLigne(document.querySelector(`tr[data-lieu="${id}"]`));
+  if (!o.nom) return toast('Le nom est obligatoire.', 'ko');
+  if (!(o.rayon_m >= 50 && o.rayon_m <= 10000)) return toast('Rayon entre 50 et 10 000 m.', 'ko');
+  try { await api(sb.from('loc_lieux').update(o).eq('id', id)); toast('Lieu enregistré ✓', 'ok'); await rechargerReferentiels(); }
+  catch (e) { toast(e.message, 'ko', 6000); }
+}
+function voirLieu(id) {
+  const l = etat.lieux.find(x => x.id === id);
+  if (l && etat.cartes.lieux) { etat.cartes.lieux.setView([l.latitude, l.longitude], 15); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+}
+
+/** Formulaire de création d'un lieu (au point cliqué, ou depuis un repère). */
+async function editerLieu(_, latlng, defaut = {}) {
+  const choix = await modale('Nouveau lieu', `<div class="grille2" style="grid-template-columns:1fr 1fr">
+      <div><label class="champ" for="nl-nom">Nom *</label><input id="nl-nom" class="champ-l" type="text" maxlength="80" value="${esc(defaut.nom || '')}"></div>
+      <div><label class="champ" for="nl-type">Type</label><select id="nl-type" class="champ-l"><option value="quartier">Quartier</option><option value="lieu_frequent"${defaut.type === 'lieu_frequent' ? ' selected' : ''}>Lieu fréquent</option></select></div>
+      <div><label class="champ" for="nl-ville">Ville</label><input id="nl-ville" class="champ-l" type="text" value="${esc(defaut.ville || 'Libreville')}"></div>
+      <div><label class="champ" for="nl-rayon">Rayon (m)</label><input id="nl-rayon" class="champ-l" type="number" min="50" max="10000" step="50" value="${defaut.rayon || 500}"></div>
+    </div><p class="doux">Position : ${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}</p>
+    <label class="ligne"><input type="checkbox" id="nl-verifie"> Position vérifiée sur le terrain</label>`,
+    [{ libelle: 'Créer le lieu', valeur: 'ok' }, { libelle: 'Annuler', valeur: 'annuler', classe: 'sec' }],
+    async () => {
+      const o = { nom: $('#nl-nom').value.trim(), type: $('#nl-type').value, ville: $('#nl-ville').value.trim() || 'Libreville',
+        rayon_m: Number($('#nl-rayon').value), latitude: +latlng.lat.toFixed(6), longitude: +latlng.lng.toFixed(6), approximatif: !$('#nl-verifie').checked };
+      if (!o.nom) throw new Error('Le nom est obligatoire.');
+      await api(sb.from('loc_lieux').insert(o));
+      return true;
+    });
+  if (choix === 'ok') { toast('Lieu créé ✓ Il sera proposé aux chauffeurs à leur prochaine mise à jour.', 'ok', 6000); await rechargerReferentiels(); }
+}
+
+/* --- Zones --- */
+function rendreTableZones() {
+  $('#tab-zones').innerHTML = etat.zones.map(z => `<tr class="${z.actif ? '' : 'inactif'}" data-zone="${z.id}">`
+    + `<td><input type="text" data-champ="nom" value="${esc(z.nom)}" maxlength="60"></td>`
+    + `<td><select data-champ="type">${[['site', 'Site'], ['ville', 'Ville'], ['libreville', 'Libreville (quartiers)'], ['autre', 'Autre']].map(([v, t]) => `<option value="${v}"${z.type === v ? ' selected' : ''}>${t}</option>`).join('')}</select></td>`
+    + `<td><input type="number" data-champ="latitude" value="${z.latitude}" step="0.0001"></td>`
+    + `<td><input type="number" data-champ="longitude" value="${z.longitude}" step="0.0001"></td>`
+    + `<td class="num"><input type="number" data-champ="rayon_m" value="${z.rayon_m}" min="100" max="100000" step="100"></td>`
+    + `<td class="num"><input type="number" data-champ="ordre" value="${z.ordre}" min="1" max="999" style="width:70px"></td>`
+    + `<td><input type="color" data-champ="couleur" value="${esc(z.couleur)}" aria-label="Couleur"></td>`
+    + `<td><input type="checkbox" data-champ="actif"${z.actif ? ' checked' : ''} aria-label="Actif"></td>`
+    + `<td><button class="btn petit" data-action="zone-enregistrer" data-id="${z.id}">Enregistrer</button></td></tr>`).join('');
+}
+async function enregistrerLigneZone(id) {
+  const o = lireLigne(document.querySelector(`tr[data-zone="${id}"]`));
+  if (!o.nom) return toast('Le nom est obligatoire.', 'ko');
+  if (!(o.latitude >= -90 && o.latitude <= 90 && o.longitude >= -180 && o.longitude <= 180)) return toast('Coordonnées invalides.', 'ko');
+  try { await api(sb.from('loc_zones').update(o).eq('id', id)); toast('Zone enregistrée ✓', 'ok'); await rechargerReferentiels(); }
+  catch (e) { toast(e.message, 'ko', 6000); }
+}
+async function editerZone(_, latlng) {
+  const choix = await modale('Nouvelle zone', `<div class="grille2" style="grid-template-columns:1fr 1fr">
+      <div><label class="champ" for="nz-nom">Nom *</label><input id="nz-nom" class="champ-l" type="text" maxlength="60"></div>
+      <div><label class="champ" for="nz-type">Type</label><select id="nz-type" class="champ-l"><option value="ville">Ville</option><option value="site">Site</option><option value="autre">Autre</option></select></div>
+      <div><label class="champ" for="nz-rayon">Rayon (m)</label><input id="nz-rayon" class="champ-l" type="number" min="100" max="100000" step="100" value="5000"></div>
+      <div><label class="champ" for="nz-ordre">Priorité</label><input id="nz-ordre" class="champ-l" type="number" min="1" max="999" value="50"></div>
+    </div><p class="doux">Centre : ${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}</p>`,
+    [{ libelle: 'Créer la zone', valeur: 'ok' }, { libelle: 'Annuler', valeur: 'annuler', classe: 'sec' }],
+    async () => {
+      const o = { nom: $('#nz-nom').value.trim(), type: $('#nz-type').value, rayon_m: Number($('#nz-rayon').value),
+        ordre: Number($('#nz-ordre').value) || 50, latitude: +latlng.lat.toFixed(6), longitude: +latlng.lng.toFixed(6) };
+      if (!o.nom) throw new Error('Le nom est obligatoire.');
+      await api(sb.from('loc_zones').insert(o));
+      return true;
+    });
+  if (choix === 'ok') { toast('Zone créée ✓', 'ok'); await rechargerReferentiels(); }
+}
+
+/** Recharge lieux et zones (sans relire les positions) puis recalcule l'affichage. */
+async function rechargerReferentiels() {
+  try {
+    const [lieux, zones] = await Promise.all([
+      api(sb.from('loc_lieux').select('id,nom,type,ville,latitude,longitude,rayon_m,approximatif,actif,code').order('nom')),
+      api(sb.from('loc_zones').select('id,nom,type,latitude,longitude,rayon_m,ordre,couleur,approximatif,actif').order('ordre')),
+    ]);
+    etat.lieux = lieux; etat.zones = zones;
+    etat.chauffeurs.forEach(enrichir);
+    rendreTout();
+  } catch (e) { toast(e.message, 'ko', 6000); }
+}
+
+/* --- Statistiques de corrections et repères fréquents --- */
+async function chargerStatsLieux() {
+  try {
+    const [stats, reperes] = await Promise.all([rpc('loc_stats_corrections', { p_jours: 30 }), rpc('loc_reperes_frequents', { p_minimum: 3 })]);
+    $('#stats-corrections').innerHTML = stats.length ? '<table><thead><tr><th>Quartier proposé</th><th class="num">Pointages</th><th class="num">Corrigés</th><th class="num">Taux</th><th>Corrigé surtout vers</th></tr></thead><tbody>'
+      + stats.map(s => `<tr><td>${esc(s.lieu)}</td><td class="num">${s.total}</td><td class="num">${s.corriges}</td>`
+        + `<td class="num"><span class="etiq ${s.taux_correction >= 30 ? 'ko' : s.taux_correction > 0 ? 'att' : 'ok'}">${s.taux_correction} %</span></td>`
+        + `<td>${s.corrige_le_plus_vers ? esc(s.corrige_le_plus_vers) + ` (${s.corrige_le_plus_vers_nb})` : '—'}</td></tr>`).join('') + '</tbody></table>'
+      : '<p class="vide">Pas encore de données de confirmation.</p>';
+    etat.reperes = reperes;
+    $('#reperes').innerHTML = reperes.length ? '<table><thead><tr><th>Repère</th><th class="num">Fois</th><th class="num">Chauffeurs</th><th>Quartier habituel</th><th></th></tr></thead><tbody>'
+      + reperes.map((r, i) => `<tr><td>« ${esc(r.repere)} »</td><td class="num">${r.nb}</td><td class="num">${r.nb_chauffeurs}</td><td>${esc(r.quartier_habituel || '—')}</td>`
+        + `<td><button class="btn sec petit" data-action="repere-creer" data-index="${i}">Créer ce lieu</button></td></tr>`).join('') + '</tbody></table>'
+      : '<p class="vide">Aucun repère saisi au moins 3 fois.</p>';
+  } catch (e) { $('#stats-corrections').innerHTML = `<p class="message ko">${esc(e.message)}</p>`; }
+}
+function creerLieuDepuisRepere(i) {
+  const r = etat.reperes[i];
+  if (!r) return;
+  editerLieu(null, { lat: r.latitude_moyenne, lng: r.longitude_moyenne }, { nom: r.repere, type: 'lieu_frequent', rayon: 200 });
+}
+
+/* ===========================================================================
+   VUE JOURNAL D'AUDIT
+   =========================================================================== */
+$('#btn-journal').addEventListener('click', chargerJournal);
+$('#journal-filtre').addEventListener('input', rendreJournal);
+async function chargerJournal() {
+  try {
+    etat.journal = await api(sb.from('loc_audit').select('id,email,chauffeur_id,action,details,horodatage').order('horodatage', { ascending: false }).limit(300));
+    rendreJournal();
+  } catch (e) { $('#tab-journal').innerHTML = `<tr><td colspan="5" class="message ko">${esc(e.message)}</td></tr>`; }
+}
+function rendreJournal() {
+  const noms = new Map(etat.chauffeurs.map(c => [c.id, `${c._nom} (${c.matricule})`]));
+  const f = normaliser($('#journal-filtre').value);
+  const lignes = (etat.journal || []).map(j => ({ ...j, _nom: noms.get(j.chauffeur_id) || (j.chauffeur_id ? 'chauffeur supprimé' : ''),
+    _action: ACTIONS_JOURNAL[j.action] || j.action }))
+    .filter(j => !f || normaliser(`${j.email} ${j._nom} ${j._action}`).includes(f));
+  const details = (d) => Object.entries(d || {}).map(([k, v]) => `${esc(k.replace(/_/g, ' '))} : ${esc(typeof v === 'object' ? JSON.stringify(v) : v)}`).join(' · ');
+  $('#tab-journal').innerHTML = lignes.map(j => `<tr><td>${esc(dateHeure(j.horodatage))}</td><td>${esc(j.email || (j.chauffeur_id ? 'le chauffeur' : 'système'))}</td>`
+    + `<td>${esc(j._action)}</td><td>${esc(j._nom)}</td><td class="doux">${details(j.details)}</td></tr>`).join('')
+    || '<tr><td colspan="5" class="vide">Aucune entrée.</td></tr>';
+}
+
+/* ===========================================================================
+   VUE PARAMÈTRES
+   =========================================================================== */
+function rendreParametres() {
+  const p = etat.params;
+  $('#pa-seuil').value = p.seuil_alerte_h; $('#pa-seuil-lbv').value = p.seuil_alerte_libreville_h;
+  $('#pa-rappel').value = p.rappel_minutes; $('#pa-rappel-lbv').value = p.rappel_libreville_minutes;
+  $('#pa-debut').value = p.heure_debut_service; $('#pa-fin').value = p.heure_fin_service;
+  $('#pa-precision').value = p.precision_max_m;
+  const jours = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+  $('#pa-jours').innerHTML = jours.map((j, i) => `<button type="button" class="puce" data-jour="${i + 1}" aria-pressed="${(p.jours_service || []).includes(i + 1)}">${j}</button>`).join('');
+  $('#pa-jours').querySelectorAll('.puce').forEach(b => b.addEventListener('click', () => b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true'))));
+}
+$('#f-params').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = $('#pa-msg');
+  const valeurs = {
+    seuil_alerte_h: Number($('#pa-seuil').value), seuil_alerte_libreville_h: Number($('#pa-seuil-lbv').value),
+    rappel_minutes: Number($('#pa-rappel').value), rappel_libreville_minutes: Number($('#pa-rappel-lbv').value),
+    heure_debut_service: $('#pa-debut').value, heure_fin_service: $('#pa-fin').value,
+    precision_max_m: Number($('#pa-precision').value),
+    jours_service: [...$('#pa-jours').querySelectorAll('[aria-pressed=true]')].map(b => Number(b.dataset.jour)),
+  };
+  if (!$('#f-params').checkValidity()) { $('#f-params').reportValidity(); return; }
+  if (valeurs.heure_debut_service >= valeurs.heure_fin_service) { msg.innerHTML = '<div class="message ko">La fin du service doit être après le début.</div>'; return; }
+  if (!valeurs.jours_service.length) { msg.innerHTML = '<div class="message ko">Choisissez au moins un jour de service.</div>'; return; }
+  try {
+    for (const [cle, valeur] of Object.entries(valeurs)) {
+      if (JSON.stringify(etat.params[cle]) !== JSON.stringify(valeur)) await api(sb.from('loc_parametres').update({ valeur }).eq('cle', cle));
+    }
+    msg.innerHTML = '<div class="message ok">Paramètres enregistrés ✓ Les téléphones les reçoivent à leur prochaine mise à jour (au plus tard 12 h).</div>';
+    await chargerTout();
+  } catch (err) { msg.innerHTML = `<div class="message ko">${esc(err.message)}</div>`; }
+});
+
+/* ===========================================================================
+   DÉMARRAGE
+   =========================================================================== */
+async function demarrer() {
+  if (!CFG || !sb) {
+    afficherConnexion(!CFG ? 'Configuration manquante (config.js).' : 'Bibliothèque Supabase non chargée : vérifiez la connexion Internet.');
+    return;
+  }
+  sb.auth.onAuthStateChange((evt) => {
+    if (evt === 'SIGNED_OUT' && etat.user) { etat.user = null; afficherConnexion('Vous êtes déconnecté.', 'att'); }
+  });
+  try {
+    const { data } = await sb.auth.getSession();
+    if (data && data.session) await ouvrirApplication(data.session.user);
+    else afficherConnexion();
+  } catch (e) {
+    afficherConnexion(e.message);
+  }
+}
+demarrer();
+</script>
+</body>
+</html>

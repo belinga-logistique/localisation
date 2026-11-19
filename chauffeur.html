@@ -1,0 +1,1834 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#00703C">
+<meta name="description" content="Belinga Localisation — pointage des chauffeurs">
+<title>Belinga Localisation — Chauffeur</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icones/icone-192.png">
+<link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
+<!-- Configuration Supabase (URL + clé publishable) : uniquement dans config.js -->
+<script src="config.js"></script>
+<style>
+/* =========================================================================
+   STYLES — sobres, très contrastés (lisibles en plein soleil), gros boutons
+   ========================================================================= */
+:root {
+  --fond: #F2F7F4;
+  --carte: #FFFFFF;
+  --texte: #0F172A;
+  --texte-doux: #475569;
+  --bord: #CBD5E1;
+  --primaire: #00703C;
+  --primaire-fonce: #004F2A;
+  --succes: #166534;
+  --succes-fond: #DCFCE7;
+  --alerte: #92400E;
+  --alerte-fond: #FEF3C7;
+  --danger: #B91C1C;
+  --danger-fond: #FEE2E2;
+  --rayon: 14px;
+  --ombre: 0 1px 3px rgba(15, 23, 42, .12);
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--fond); color: var(--texte);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 18px; line-height: 1.45;
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+
+/* --- Barre du haut --- */
+.barre {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: var(--primaire); color: #fff;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+}
+.barre h1 { font-size: 19px; margin: 0; font-weight: 700; }
+.pastille {
+  font-size: 14px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+  background: #fff; white-space: nowrap;
+}
+.pastille.en-ligne { color: var(--succes); }
+.pastille.hors-ligne { color: var(--danger); }
+
+main { max-width: 560px; margin: 0 auto; padding: 16px; }
+.ecran h2 { font-size: 22px; margin: 4px 0 14px; }
+
+/* --- Cartes --- */
+.carte {
+  background: var(--carte); border: 1px solid var(--bord); border-radius: var(--rayon);
+  padding: 16px; margin-bottom: 14px; box-shadow: var(--ombre);
+}
+.carte h3 { font-size: 17px; margin: 0 0 10px; color: var(--texte-doux); text-transform: uppercase; letter-spacing: .03em; }
+
+/* --- Formulaires --- */
+label { display: block; font-weight: 700; margin: 12px 0 6px; }
+input[type=tel], input[type=text], input[type=password], input[type=search], select {
+  width: 100%; min-height: 56px; padding: 12px 14px;
+  border: 2px solid var(--bord); border-radius: 12px; background: #fff; font-size: 20px;
+}
+input:focus-visible, button:focus-visible { outline: 3px solid #F59E0B; outline-offset: 2px; }
+.pin { letter-spacing: .5em; text-align: center; font-size: 26px; }
+.a-remplir { border-color: var(--danger) !important; background: var(--danger-fond) !important; }
+/* Choix du lieu de disponibilité : gros boutons, un par ligne */
+.lieux-dispo { display: grid; gap: 8px; border-radius: 12px; border: 2px solid transparent; padding: 2px; }
+.lieu-dispo {
+  min-height: 56px; padding: 10px 14px; border-radius: 12px; border: 3px solid var(--bord);
+  background: #fff; font-weight: 700; font-size: 17px; text-align: left; display: flex; align-items: center; gap: 10px;
+}
+.lieu-dispo[aria-checked=true] { border-color: #15803D; background: #DCFCE7; color: #14532D; }
+.lieu-dispo[aria-checked=true]::after { content: "✓"; margin-left: auto; font-size: 20px; }
+.lieu-dispo[data-lieu=ailleurs][aria-checked=true] { border-color: #B45309; background: var(--alerte-fond); color: var(--alerte); }
+.aide { font-size: 15px; color: var(--texte-doux); margin: 6px 0 0; }
+.case { display: flex; gap: 12px; align-items: flex-start; font-weight: 600; margin: 14px 0; }
+.case input { width: 28px; height: 28px; flex: none; margin-top: 2px; }
+
+/* --- Boutons --- */
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; min-height: 56px; padding: 12px 16px; margin-top: 12px;
+  border: 2px solid transparent; border-radius: 12px; font-weight: 700; font-size: 18px;
+  background: var(--primaire); color: #fff; text-align: center;
+}
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.btn.secondaire { background: #fff; color: var(--primaire); border-color: var(--primaire); }
+.btn.danger { background: var(--danger); }
+.btn.danger-contour { background: #fff; color: var(--danger); border-color: var(--danger); }
+.btn.lien { background: none; color: var(--primaire); text-decoration: underline; min-height: 44px; }
+.rangee { display: flex; gap: 10px; }
+.rangee .btn { flex: 1; }
+
+/* Gros bouton de pointage */
+.btn-pointer {
+  min-height: 92px; font-size: 22px; letter-spacing: .02em; border-radius: 18px;
+  background: var(--primaire); box-shadow: 0 4px 0 var(--primaire-fonce);
+}
+.btn-pointer.prive { background: #374151; box-shadow: 0 4px 0 #1F2937; }
+
+/* --- Grille des statuts --- */
+.statuts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.statut {
+  min-height: 72px; padding: 10px 8px; border-radius: 12px; border: 3px solid var(--bord);
+  background: #fff; font-weight: 700; font-size: 16px; line-height: 1.2;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+}
+.statut .ico { font-size: 22px; }
+.statut[aria-pressed=true] { color: #fff; border-color: transparent; background: var(--c); }
+.statut[aria-pressed=true]::after { content: "✓ choisi"; font-size: 13px; }
+
+/* --- Bandeaux d'état --- */
+.bandeau { border-radius: 12px; padding: 12px 14px; font-weight: 700; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.bandeau.ok { background: var(--succes-fond); color: var(--succes); }
+.bandeau.attente { background: var(--alerte-fond); color: var(--alerte); }
+.bandeau.erreur { background: var(--danger-fond); color: var(--danger); }
+.bandeau.neutre { background: #E2E8F0; color: var(--texte-doux); }
+.bandeau .btn { width: auto; min-height: 44px; margin: 0 0 0 auto; padding: 8px 14px; font-size: 16px; }
+.message { margin-top: 12px; }
+
+/* --- Listes --- */
+.liste { list-style: none; margin: 0; padding: 0; }
+.liste li { padding: 12px 0; border-bottom: 1px solid var(--bord); display: flex; gap: 12px; align-items: flex-start; }
+.liste li:last-child { border-bottom: 0; }
+.point { width: 14px; height: 14px; border-radius: 50%; flex: none; margin-top: 6px; }
+.petit { font-size: 15px; color: var(--texte-doux); }
+.etiquette { display: inline-block; font-size: 13px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--alerte-fond); color: var(--alerte); }
+
+/* --- Navigation du bas --- */
+.nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  display: flex; background: #fff; border-top: 1px solid var(--bord);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.nav button {
+  flex: 1; min-height: 64px; border: 0; background: none; font-size: 14px; font-weight: 700;
+  color: var(--texte-doux); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+}
+.nav button .ico { font-size: 22px; }
+.nav button[aria-current=page] { color: var(--primaire); box-shadow: inset 0 3px 0 var(--primaire); }
+
+/* --- Fenêtres (modales) --- */
+.voile {
+  position: fixed; inset: 0; z-index: 50; background: rgba(15, 23, 42, .6);
+  display: flex; align-items: flex-end; justify-content: center; padding: 0;
+}
+.fenetre {
+  background: #fff; width: 100%; max-width: 560px; max-height: 92vh; overflow: auto;
+  border-radius: 18px 18px 0 0; padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+}
+@media (min-width: 600px) { .voile { align-items: center; } .fenetre { border-radius: 18px; } }
+.fenetre h2 { margin: 0 0 10px; font-size: 21px; }
+.grand { font-size: 26px; font-weight: 800; color: var(--primaire); margin: 6px 0; }
+.choix-lieu { width: 100%; text-align: left; min-height: 56px; padding: 10px 12px; border: 1px solid var(--bord); border-radius: 10px; background: #fff; margin-top: 8px; }
+.choix-lieu b { display: block; }
+.liste-lieux { max-height: 46vh; overflow: auto; margin-top: 8px; }
+.compteur { text-align: right; font-size: 14px; color: var(--texte-doux); }
+
+/* Recherche GPS : indicateur animé */
+.radar { width: 70px; height: 70px; margin: 10px auto; border-radius: 50%; border: 6px solid #BBE5CC; border-top-color: var(--primaire); animation: tourne 1s linear infinite; }
+@keyframes tourne { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .radar { animation: none; } }
+
+/* Notification éphémère */
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom));
+  z-index: 60; max-width: calc(100% - 32px); width: 520px; padding: 14px 16px; border-radius: 12px;
+  font-weight: 700; color: #fff; background: #1E293B; box-shadow: 0 6px 20px rgba(0,0,0,.25);
+}
+.toast.succes { background: var(--succes); }
+.toast.erreur { background: var(--danger); }
+.toast.attente { background: var(--alerte); }
+
+.texte-consentement h3 { font-size: 17px; margin: 16px 0 4px; color: var(--primaire); text-transform: none; letter-spacing: 0; }
+.texte-consentement p, .texte-consentement ul { margin: 4px 0; }
+.texte-consentement ul { padding-left: 22px; }
+.version { text-align: center; font-size: 13px; color: var(--texte-doux); margin-top: 18px; }
+</style>
+</head>
+<body>
+
+<header class="barre">
+  <h1>Belinga Localisation</h1>
+  <span id="pastille-reseau" class="pastille en-ligne" role="status">● En ligne</span>
+</header>
+
+<main>
+  <!-- =====================================================================
+       ÉCRAN : CONNEXION
+       ===================================================================== -->
+  <section id="e-connexion" class="ecran" hidden>
+    <h2>Connexion chauffeur</h2>
+    <div class="carte">
+      <form id="f-connexion" novalidate>
+        <label for="c-tel">Numéro de téléphone</label>
+        <input id="c-tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="077 12 34 56" required>
+        <label for="c-pin">PIN (4 chiffres)</label>
+        <input id="c-pin" class="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="current-password" placeholder="••••" required>
+        <div id="c-msg" class="bandeau erreur message" role="alert" hidden></div>
+        <button id="c-btn" class="btn" type="submit">Se connecter</button>
+      </form>
+      <button id="c-oubli" class="btn lien" type="button">PIN oublié ?</button>
+    </div>
+    <p class="aide">La première connexion nécessite du réseau. Ensuite, l'application fonctionne aussi sans réseau.</p>
+  </section>
+
+  <!-- =====================================================================
+       ÉCRAN : CHANGEMENT DE PIN
+       ===================================================================== -->
+  <section id="e-pin" class="ecran" hidden>
+    <h2>Choisir mon PIN</h2>
+    <div class="carte">
+      <p id="pin-intro" class="aide">Pour votre sécurité, choisissez un PIN personnel que vous seul connaissez.</p>
+      <form id="f-pin" novalidate>
+        <label for="p-ancien">PIN actuel</label>
+        <input id="p-ancien" class="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="current-password" required>
+        <label for="p-nouveau">Nouveau PIN</label>
+        <input id="p-nouveau" class="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password" required>
+        <label for="p-confirme">Confirmer le nouveau PIN</label>
+        <input id="p-confirme" class="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password" required>
+        <p class="aide">Évitez les PIN trop simples (0000, 1111, 1234…) et votre année de naissance.</p>
+        <div id="p-msg" class="bandeau erreur message" role="alert" hidden></div>
+        <button id="p-btn" class="btn" type="submit">Enregistrer mon PIN</button>
+        <button id="p-annuler" class="btn secondaire" type="button">Annuler</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       ÉCRAN : CONSENTEMENT (premier lancement)
+       ===================================================================== -->
+  <section id="e-consentement" class="ecran" hidden>
+    <h2>Votre accord pour la localisation</h2>
+    <div class="carte texte-consentement" id="texte-consentement">
+      <h3>Pourquoi ?</h3>
+      <p>Permettre au département logistique de Fortescue Belinga de savoir où trouver rapidement un chauffeur disponible (missions, courses, remplacements, sécurité et urgences).</p>
+      <h3>Quelles données ?</h3>
+      <ul>
+        <li>Uniquement quand <b>vous</b> appuyez sur « Pointer » : position GPS, précision, heure et statut.</li>
+        <li>À Libreville : le quartier proposé, le quartier que vous confirmez et un repère facultatif.</li>
+        <li><b>Aucun suivi en continu</b>, aucune localisation en arrière-plan.</li>
+        <li>Repos, congé, maladie : <b>aucune position</b> n'est envoyée.</li>
+      </ul>
+      <h3>Qui les voit ?</h3>
+      <p>Seulement les responsables autorisés du département logistique. Chaque consultation est enregistrée dans un journal.</p>
+      <h3>Combien de temps ?</h3>
+      <p>Les positions sont <b>supprimées automatiquement après 30 jours</b>.</p>
+      <h3>Vos droits</h3>
+      <p>Vous pouvez <b>retirer votre accord à tout moment</b> (Réglages › Mes données). Vos positions sont alors effacées. Vous pouvez aussi demander à la logistique quelles données sont enregistrées sur vous.</p>
+    </div>
+    <div class="carte">
+      <label class="case"><input id="cs-lu" type="checkbox"> J'ai lu et compris ces informations.</label>
+      <div id="cs-msg" class="bandeau erreur message" role="alert" hidden></div>
+      <button id="cs-accepter" class="btn" type="button" disabled>J'accepte</button>
+      <button id="cs-refuser" class="btn secondaire" type="button">Je refuse</button>
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       ÉCRAN : PRINCIPAL (pointage)
+       ===================================================================== -->
+  <section id="e-principal" class="ecran" hidden>
+    <h2 id="bonjour">Bonjour</h2>
+
+    <div id="etat-envoi" class="bandeau neutre" role="status" aria-live="polite">—</div>
+    <div id="bandeau-rappel" class="bandeau attente message" role="alert" hidden>⏰ Pensez à pointer votre position.</div>
+    <div id="bandeau-installer" class="bandeau neutre message" hidden>
+      📲 Installez l'application pour l'ouvrir d'un geste, même sans réseau.
+      <button id="btn-installer" type="button" class="btn">Installer</button>
+      <button id="btn-installer-non" type="button" class="btn secondaire" aria-label="Plus tard">Plus tard</button>
+    </div>
+
+    <div class="carte" style="margin-top:14px">
+      <h3>1. Mon statut</h3>
+      <div id="grille-statuts" class="statuts" role="group" aria-label="Choix du statut"></div>
+      <div id="bloc-destination" hidden>
+        <label for="destination">Destination de la course</label>
+        <input id="destination" type="text" maxlength="80" placeholder="Ex. Aéroport, Port d'Owendo…">
+      </div>
+      <div id="bloc-lieu-dispo" hidden>
+        <label id="lieu-dispo-titre">Où êtes-vous disponible ? *</label>
+        <div id="grille-lieux-dispo" class="lieux-dispo" role="radiogroup" aria-labelledby="lieu-dispo-titre"></div>
+        <p class="aide">Vous apparaissez en <b style="color:#15803D">vert</b> pour la logistique si vous êtes chez vous,
+          à la base MARIA, chez INFRATEC CONSULTING ou en fin de course.</p>
+      </div>
+      <div id="bloc-province" hidden>
+        <label for="province">Province où je me trouve *</label>
+        <select id="province">
+          <option value="">— Choisir la province —</option>
+        </select>
+        <label for="ville">Ville ou localité (facultatif)</label>
+        <input id="ville" type="text" maxlength="60" placeholder="Ex. Mouila, Lambaréné, Franceville…">
+      </div>
+      <p id="note-prive" class="aide" hidden>🔒 Pour ce statut, <b>aucune position</b> n'est envoyée.</p>
+    </div>
+
+    <button id="btn-pointer" class="btn btn-pointer" type="button">📍 POINTER MA POSITION</button>
+
+    <div class="carte" style="margin-top:18px">
+      <h3>Dernier pointage</h3>
+      <div id="dernier-pointage" class="petit">Aucun pointage pour l'instant.</div>
+    </div>
+
+    <div class="carte" id="carte-binome" hidden>
+      <h3>Mon binôme de remplacement</h3>
+      <div id="binome"></div>
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       ÉCRAN : HISTORIQUE
+       ===================================================================== -->
+  <section id="e-historique" class="ecran" hidden>
+    <h2>Mes pointages</h2>
+    <div class="carte" id="carte-attente" hidden>
+      <h3>En attente d'envoi</h3>
+      <ul id="liste-attente" class="liste"></ul>
+    </div>
+    <div class="carte">
+      <h3>Envoyés (30 derniers jours)</h3>
+      <div id="h-msg" class="petit"></div>
+      <ul id="liste-historique" class="liste"></ul>
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       ÉCRAN : RÉGLAGES
+       ===================================================================== -->
+  <section id="e-reglages" class="ecran" hidden>
+    <h2>Réglages</h2>
+
+    <div class="carte">
+      <h3>Application</h3>
+      <p id="etat-hors-ligne" class="petit">Vérification du mode hors ligne…</p>
+      <button id="btn-installer-2" class="btn" type="button" hidden>📲 Installer l'application sur le téléphone</button>
+      <p id="aide-installer" class="aide" hidden>Pour installer : menu ⋮ de Chrome › « Ajouter à l'écran d'accueil » ou « Installer l'application ».</p>
+    </div>
+
+    <div class="carte">
+      <h3>Rappels de pointage</h3>
+      <label class="case"><input id="r-actif" type="checkbox"> Me rappeler de pointer pendant mes heures de service</label>
+      <p id="r-info" class="aide"></p>
+      <p class="aide">Le rappel s'affiche quand l'application est ouverte ou en arrière-plan récent. Gardez-la ouverte pendant le service.</p>
+      <button id="r-tester" class="btn secondaire" type="button">Tester le rappel</button>
+    </div>
+
+    <div class="carte">
+      <h3>Mon compte</h3>
+      <div id="compte" class="petit"></div>
+      <button id="btn-changer-pin" class="btn secondaire" type="button">Changer mon PIN</button>
+    </div>
+
+    <div class="carte">
+      <h3>Liste des quartiers</h3>
+      <p id="ref-info" class="petit"></p>
+      <button id="btn-ref" class="btn secondaire" type="button">Mettre à jour la liste</button>
+    </div>
+
+    <div class="carte">
+      <h3>Mes données</h3>
+      <button id="btn-voir-consentement" class="btn secondaire" type="button">Relire les conditions</button>
+      <button id="btn-retrait" class="btn danger-contour" type="button">Retirer mon accord</button>
+    </div>
+
+    <button id="btn-deconnexion" class="btn secondaire" type="button">Se déconnecter</button>
+    <p class="version" id="version"></p>
+  </section>
+
+  <!-- Erreur de configuration -->
+  <section id="e-config" class="ecran" hidden>
+    <div class="bandeau erreur">Configuration manquante : le fichier config.js est introuvable ou incomplet. Contactez la logistique.</div>
+  </section>
+</main>
+
+<!-- Navigation du bas -->
+<nav class="nav" id="nav" hidden aria-label="Navigation principale">
+  <button type="button" data-ecran="principal"><span class="ico" aria-hidden="true">📍</span>Pointer</button>
+  <button type="button" data-ecran="historique"><span class="ico" aria-hidden="true">🕘</span>Historique</button>
+  <button type="button" data-ecran="reglages"><span class="ico" aria-hidden="true">⚙️</span>Réglages</button>
+</nav>
+
+<!-- Fenêtre générique (questions, erreurs) -->
+<div id="modale" class="voile" hidden role="dialog" aria-modal="true" aria-labelledby="modale-titre">
+  <div class="fenetre">
+    <h2 id="modale-titre"></h2>
+    <div id="modale-corps"></div>
+    <div id="modale-boutons"></div>
+  </div>
+</div>
+
+<!-- Fenêtre recherche GPS -->
+<div id="m-gps" class="voile" hidden role="dialog" aria-modal="true" aria-labelledby="gps-titre">
+  <div class="fenetre" style="text-align:center">
+    <h2 id="gps-titre">Recherche du signal GPS…</h2>
+    <div class="radar" aria-hidden="true"></div>
+    <p id="gps-precision" class="grand" aria-live="polite">—</p>
+    <p class="aide">Restez à découvert, loin des bâtiments si possible.</p>
+    <button id="gps-utiliser" class="btn" type="button" disabled>Utiliser cette position</button>
+    <button id="gps-annuler" class="btn secondaire" type="button">Annuler</button>
+  </div>
+</div>
+
+<!-- Fenêtre détection / confirmation du quartier (Libreville) -->
+<div id="m-quartier" class="voile" hidden role="dialog" aria-modal="true" aria-labelledby="q-titre">
+  <div class="fenetre">
+    <!-- Étape 1 : proposition -->
+    <div id="q-proposition">
+      <h2 id="q-titre">Vous êtes à :</h2>
+      <p id="q-nom" class="grand"></p>
+      <p id="q-detail" class="petit"></p>
+      <div id="q-alerte" class="bandeau attente message" hidden></div>
+      <div class="rangee">
+        <button id="q-oui" class="btn" type="button">Oui</button>
+        <button id="q-corriger" class="btn secondaire" type="button">Corriger</button>
+      </div>
+    </div>
+    <!-- Étape 2 : correction -->
+    <div id="q-correction" hidden>
+      <h2>Choisir mon quartier</h2>
+      <input id="q-recherche" type="search" placeholder="Rechercher un quartier…" autocomplete="off" aria-label="Rechercher un quartier">
+      <div id="q-liste" class="liste-lieux"></div>
+      <button id="q-aucun" class="btn lien" type="button">Mon quartier n'est pas dans la liste</button>
+    </div>
+    <!-- Étape 3 : repère facultatif -->
+    <div id="q-repere-bloc" hidden>
+      <h2>Lieu précis (facultatif)</h2>
+      <p class="petit" id="q-recap"></p>
+      <label for="q-repere">Repère</label>
+      <input id="q-repere" type="text" maxlength="60" placeholder="Ex. Bureau Fortescue, Carrefour Rio…">
+      <div class="compteur"><span id="q-compteur">0</span>/60</div>
+      <button id="q-valider" class="btn" type="button">Valider le pointage</button>
+    </div>
+    <button id="q-annuler" class="btn lien" type="button">Annuler le pointage</button>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="assertive" hidden></div>
+
+<script>
+'use strict';
+/* ===========================================================================
+   BELINGA LOCALISATION — INTERFACE CHAUFFEUR
+   ---------------------------------------------------------------------------
+   Fonctionnement général :
+   1. Connexion téléphone + PIN -> jeton de session (stocké sur le téléphone).
+   2. Consentement obligatoire avant tout pointage.
+   3. Chaque pointage est d'abord rangé dans une FILE D'ATTENTE locale
+      (IndexedDB), puis envoyé. Sans réseau, il reste dans la file et part
+      automatiquement au retour du réseau.
+   4. À Libreville, le quartier est détecté (distance de Haversine), puis
+      confirmé ou corrigé par le chauffeur. La liste des quartiers est gardée
+      sur le téléphone : la détection marche aussi sans réseau.
+   =========================================================================== */
+
+const CFG = window.LOC_CONFIG;
+
+/* ---------------------------------------------------------------------------
+   Statuts possibles (mêmes codes que dans la base de données)
+   position: false -> AUCUNE position n'est envoyée (vie privée)
+   --------------------------------------------------------------------------- */
+const STATUTS = {
+  sur_site:         { libelle: 'Sur site',                couleur: '#B45309', ico: '⛏️', position: true },
+  en_mission:       { libelle: 'En mission (trajet)',     couleur: '#1D4ED8', ico: '🚙', position: true },
+  dispo_libreville: { libelle: 'Disponible à Libreville', couleur: '#15803D', ico: '✅', position: true },
+  en_course:        { libelle: 'En course',               couleur: '#7C3AED', ico: '📍', position: true },
+  autre_province:   { libelle: 'Autre province',          couleur: '#0E7490', ico: '🗺️', position: true },
+  repos:            { libelle: 'En repos',                couleur: '#6B7280', ico: '🏠', position: false },
+  conge:            { libelle: 'Congé',                   couleur: '#4B5563', ico: '🌴', position: false },
+  malade:           { libelle: 'Malade',                  couleur: '#B91C1C', ico: '🤒', position: false },
+};
+
+/* Les 9 provinces du Gabon (mêmes noms que dans la base de données) */
+const PROVINCES = ['Estuaire', 'Haut-Ogooué', 'Moyen-Ogooué', 'Ngounié', 'Nyanga',
+  'Ogooué-Ivindo', 'Ogooué-Lolo', 'Ogooué-Maritime', 'Woleu-Ntem'];
+
+/* Lieux de disponibilité (statut « Disponible à Libreville »), mêmes codes que la base */
+const LIEUX_DISPO = {
+  chez_moi:   { libelle: 'Chez moi',                ico: '🏠' },
+  base_maria: { libelle: 'Base véhicules MARIA',    ico: '🚗' },
+  infratec:   { libelle: 'INFRATEC CONSULTING',     ico: '🏢' },
+  fin_course: { libelle: 'Fin de course',           ico: '🏁' },
+  ailleurs:   { libelle: 'Autre endroit',           ico: '📍' },
+};
+
+/* Valeurs par défaut si la liste des paramètres n'a pas encore été chargée */
+const PARAMS_DEFAUT = {
+  precision_max_m: 200, rappel_minutes: 240, rappel_libreville_minutes: 120,
+  heure_debut_service: '06:00', heure_fin_service: '18:00', jours_service: [1, 2, 3, 4, 5, 6],
+  version_consentement: 'v1',
+};
+
+/* État de l'application en mémoire */
+const etat = {
+  jeton: null,          // jeton de session (texte)
+  profil: null,         // { chauffeur, consentement, pin_a_changer }
+  ref: null,            // référentiel : { lieux, zones, parametres, charge_le }
+  statut: null,         // statut choisi
+  enLigne: navigator.onLine,
+  syncEnCours: false,
+  pointageEnCours: false,
+  ecran: null,
+};
+
+/* ===========================================================================
+   OUTILS GÉNÉRAUX
+   =========================================================================== */
+const $ = (sel) => document.querySelector(sel);
+
+/** Protège un texte avant de l'insérer dans la page (évite toute injection). */
+function esc(t) {
+  return String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/** Lecture / écriture du stockage local, sans jamais planter (navigation privée...). */
+function lsGet(cle, defaut = null) {
+  try { const v = localStorage.getItem(cle); return v === null ? defaut : JSON.parse(v); } catch { return defaut; }
+}
+function lsSet(cle, val) { try { localStorage.setItem(cle, JSON.stringify(val)); } catch { /* stockage plein ou interdit */ } }
+function lsDel(cle) { try { localStorage.removeItem(cle); } catch { /* ignoré */ } }
+
+/** Identifiant unique d'un pointage (créé sur le téléphone, évite les doublons). */
+function uuid() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+/** Distance en mètres entre deux points GPS (formule de Haversine). */
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad, dLon = (lon2 - lon1) * rad;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+/** Affiche une distance lisible : « 350 m » ou « 1,2 km ». */
+function distanceTexte(m) {
+  if (m == null || isNaN(m)) return '';
+  return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`;
+}
+
+/** Heure à l'heure du Gabon (UTC+1, sans changement d'heure). */
+function heure(d) {
+  return new Date(d).toLocaleTimeString('fr-FR', { timeZone: 'Africa/Libreville', hour: '2-digit', minute: '2-digit' });
+}
+function dateHeure(d) {
+  return new Date(d).toLocaleString('fr-FR', { timeZone: 'Africa/Libreville', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+/** « à l'instant », « il y a 25 min », « il y a 3 h », « il y a 2 j ». */
+function ilYa(d) {
+  const s = Math.max(0, (Date.now() - new Date(d).getTime()) / 1000);
+  if (s < 60) return "à l'instant";
+  if (s < 3600) return `il y a ${Math.floor(s / 60)} min`;
+  if (s < 86400) return `il y a ${Math.floor(s / 3600)} h`;
+  return `il y a ${Math.floor(s / 86400)} j`;
+}
+/** Jour (1 = lundi ... 7 = dimanche) et minutes depuis minuit, à l'heure du Gabon. */
+function momentGabon(d = new Date()) {
+  const g = new Date(d.getTime() + 3600 * 1000); // UTC+1 fixe
+  return { jour: g.getUTCDay() || 7, minutes: g.getUTCHours() * 60 + g.getUTCMinutes() };
+}
+/** Texte sans accents ni majuscules, pour la recherche. */
+function normaliser(t) {
+  return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+function param(cle) {
+  const p = etat.ref && etat.ref.parametres;
+  return p && p[cle] !== undefined && p[cle] !== null ? p[cle] : PARAMS_DEFAUT[cle];
+}
+
+/* Notification éphémère en bas de l'écran */
+let toastMinuteur = null;
+function toast(texte, type = '', duree = 4500) {
+  const t = $('#toast');
+  t.textContent = texte; t.className = 'toast ' + type; t.hidden = false;
+  clearTimeout(toastMinuteur);
+  toastMinuteur = setTimeout(() => { t.hidden = true; }, duree);
+}
+/** Masque la notification (appelé à l'ouverture d'une fenêtre pour ne pas cacher ses boutons). */
+function cacherToast() { clearTimeout(toastMinuteur); $('#toast').hidden = true; }
+
+/**
+ * Fenêtre de question. Renvoie une promesse avec la « valeur » du bouton choisi.
+ * boutons : [{ libelle, valeur, classe }]
+ */
+function dialogue({ titre, html = '', boutons = [{ libelle: 'OK', valeur: 'ok' }] }) {
+  cacherToast();
+  return new Promise(resolve => {
+    const m = $('#modale');
+    $('#modale-titre').textContent = titre;
+    $('#modale-corps').innerHTML = html;
+    const zone = $('#modale-boutons');
+    zone.innerHTML = '';
+    boutons.forEach((b, i) => {
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'btn ' + (b.classe || (i === 0 ? '' : 'secondaire'));
+      el.textContent = b.libelle;
+      el.addEventListener('click', () => { m.hidden = true; resolve(b.valeur); });
+      zone.appendChild(el);
+    });
+    m.hidden = false;
+    zone.querySelector('button')?.focus();
+  });
+}
+
+/* ===========================================================================
+   STOCKAGE HORS LIGNE (IndexedDB)
+   - « file » : pointages en attente d'envoi
+   - « kv »   : référentiel (quartiers, zones, paramètres)
+   Si IndexedDB est indisponible, repli en mémoire (avec avertissement).
+   =========================================================================== */
+const DB = {
+  _db: null,
+  _memoire: null,
+  ouvrir() {
+    if (this._db) return Promise.resolve(this._db);
+    return new Promise((resolve, reject) => {
+      let req;
+      try { req = indexedDB.open('belinga-localisation', 1); } catch (e) { return reject(e); }
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains('file')) db.createObjectStore('file', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
+      };
+      req.onsuccess = () => { this._db = req.result; resolve(this._db); };
+      req.onerror = () => reject(req.error);
+      req.onblocked = () => reject(new Error('Base locale bloquée'));
+    });
+  },
+  async op(store, mode, action) {
+    if (!this._memoire) {
+      try {
+        const db = await this.ouvrir();
+        return await new Promise((resolve, reject) => {
+          const tx = db.transaction(store, mode);
+          const req = action(tx.objectStore(store));
+          tx.oncomplete = () => resolve(req ? req.result : undefined);
+          tx.onerror = () => reject(tx.error);
+          tx.onabort = () => reject(tx.error);
+        });
+      } catch (e) {
+        console.warn('IndexedDB indisponible, repli en mémoire', e);
+        this._memoire = { file: new Map(), kv: new Map() };
+        toast('Attention : stockage hors ligne indisponible sur ce navigateur. Gardez du réseau pour pointer.', 'erreur', 8000);
+      }
+    }
+    // Repli en mémoire (perdu à la fermeture de la page)
+    const m = this._memoire[store];
+    const fauxStore = {
+      get: k => ({ result: m.get(k) }),
+      put: (v, k) => { m.set(k !== undefined ? k : v.id, v); return { result: undefined }; },
+      delete: k => { m.delete(k); return { result: undefined }; },
+      getAll: () => ({ result: [...m.values()] }),
+    };
+    const r = action(fauxStore);
+    return r ? r.result : undefined;
+  },
+  get(store, cle) { return this.op(store, 'readonly', s => s.get(cle)); },
+  put(store, val, cle) { return this.op(store, 'readwrite', s => (cle === undefined ? s.put(val) : s.put(val, cle))); },
+  del(store, cle) { return this.op(store, 'readwrite', s => s.delete(cle)); },
+  tout(store) { return this.op(store, 'readonly', s => s.getAll()); },
+};
+
+/* ===========================================================================
+   COMMUNICATION AVEC SUPABASE (fonctions SQL « loc_ »)
+   =========================================================================== */
+class ErreurReseau extends Error {}
+
+/**
+ * Appelle une fonction SQL de Supabase.
+ * - Lève ErreurReseau si pas de réseau / serveur injoignable (on réessaiera).
+ * - Lève Error avec un message en français pour les autres problèmes.
+ */
+async function rpc(nom, params = {}) {
+  const ctrl = new AbortController();
+  const minuteur = setTimeout(() => ctrl.abort(), 20000);
+  let rep;
+  try {
+    rep = await fetch(`${CFG.SUPABASE_URL}/rest/v1/rpc/${nom}`, {
+      method: 'POST',
+      headers: { apikey: CFG.SUPABASE_CLE, 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+      signal: ctrl.signal,
+      cache: 'no-store',
+    });
+  } catch {
+    majReseau(false);
+    throw new ErreurReseau('Pas de réseau.');
+  } finally {
+    clearTimeout(minuteur);
+  }
+  if (rep.status >= 500 || rep.status === 429) {
+    throw new ErreurReseau(`Serveur momentanément indisponible (${rep.status}).`);
+  }
+  let data;
+  try { data = await rep.json(); } catch {
+    // Réponse non JSON : souvent un portail Wi-Fi ou un réseau instable
+    majReseau(false);
+    throw new ErreurReseau('Réponse illisible du réseau.');
+  }
+  majReseau(true);
+  if (!rep.ok) throw new Error((data && data.message) || `Erreur ${rep.status}`);
+  return data;
+}
+
+/** Met à jour l'indicateur « En ligne / Hors ligne ». */
+function majReseau(enLigne) {
+  etat.enLigne = enLigne;
+  const p = $('#pastille-reseau');
+  p.textContent = enLigne ? '● En ligne' : '● Hors ligne';
+  p.className = 'pastille ' + (enLigne ? 'en-ligne' : 'hors-ligne');
+}
+
+/* ===========================================================================
+   SESSION ET NAVIGATION ENTRE ÉCRANS
+   =========================================================================== */
+function sauverSession() {
+  lsSet('loc.jeton', etat.jeton);
+  lsSet('loc.profil', etat.profil);
+  // Copie pour le service worker (envoi en arrière-plan, application fermée)
+  if (etat.jeton && etat.profil) {
+    DB.put('kv', { jeton: etat.jeton, chauffeur_id: etat.profil.chauffeur.id }, 'session').catch(() => {});
+  }
+}
+
+/** Fin de session (expirée ou déconnexion). Les pointages en attente sont CONSERVÉS. */
+async function finSession(message) {
+  etat.jeton = null; etat.profil = null;
+  lsDel('loc.jeton'); lsDel('loc.profil');
+  DB.del('kv', 'session').catch(() => {});
+  router();
+  if (message) {
+    const n = (await DB.tout('file')).length;
+    const m = $('#c-msg');
+    m.textContent = message + (n ? ` Vos ${n} pointage(s) en attente seront envoyés après la connexion.` : '');
+    m.className = 'bandeau attente message'; m.hidden = false;
+  }
+}
+
+/** Choisit l'écran à afficher selon l'état de la session. */
+function router() {
+  if (!CFG || !CFG.SUPABASE_URL || !CFG.SUPABASE_CLE) return afficher('config');
+  if (!etat.jeton || !etat.profil) return afficher('connexion');
+  if (etat.profil.pin_a_changer) return ouvrirChangementPin(true);
+  if (!etat.profil.consentement) return afficher('consentement');
+  if (!['principal', 'historique', 'reglages'].includes(etat.ecran)) afficher('principal');
+  else afficher(etat.ecran);
+}
+
+function afficher(nom) {
+  document.querySelectorAll('.ecran').forEach(e => { e.hidden = e.id !== 'e-' + nom; });
+  etat.ecran = nom;
+  const avecNav = ['principal', 'historique', 'reglages'].includes(nom);
+  $('#nav').hidden = !avecNav;
+  document.querySelectorAll('#nav button').forEach(b => {
+    if (b.dataset.ecran === nom) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
+  if (nom === 'principal') rendrePrincipal();
+  if (nom === 'historique') chargerHistorique();
+  if (nom === 'reglages') rendreReglages();
+  if (nom === 'consentement') { $('#cs-lu').checked = false; $('#cs-accepter').disabled = true; $('#cs-msg').hidden = true; }
+  window.scrollTo(0, 0);
+}
+
+/* ===========================================================================
+   CONNEXION
+   =========================================================================== */
+$('#c-tel').value = lsGet('loc.tel', '');
+
+$('#f-connexion').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const tel = $('#c-tel').value.trim();
+  const pin = $('#c-pin').value.trim();
+  const msg = $('#c-msg');
+  msg.hidden = true; msg.className = 'bandeau erreur message';
+  if (tel.replace(/\D/g, '').length < 8) { msg.textContent = 'Saisissez votre numéro de téléphone complet.'; msg.hidden = false; return; }
+  if (!/^\d{4}$/.test(pin)) { msg.textContent = 'Le PIN contient 4 chiffres.'; msg.hidden = false; return; }
+
+  const btn = $('#c-btn');
+  btn.disabled = true; btn.textContent = 'Connexion…';
+  try {
+    const r = await rpc('loc_connexion', { p_telephone: tel, p_pin: pin, p_appareil: navigator.userAgent.slice(0, 300) });
+    if (!r.ok) { msg.textContent = r.message; msg.hidden = false; $('#c-pin').value = ''; return; }
+    etat.jeton = r.jeton;
+    etat.profil = { chauffeur: r.chauffeur, consentement: r.consentement, pin_a_changer: r.pin_a_changer };
+    sauverSession();
+    lsSet('loc.tel', tel);
+    $('#c-pin').value = '';
+    await chargerReferentiel();       // quartiers pour le mode hors ligne
+    rafraichirProfil();               // binôme (non bloquant)
+    router();
+    synchroniser().then(() => majEtatEnvoi());
+  } catch (e) {
+    msg.textContent = e instanceof ErreurReseau
+      ? 'Pas de réseau. La connexion nécessite du réseau : réessayez dès que possible.'
+      : 'Erreur : ' + e.message;
+    msg.hidden = false;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Se connecter';
+  }
+});
+
+$('#c-oubli').addEventListener('click', () => dialogue({
+  titre: 'PIN oublié',
+  html: '<p>Contactez le département logistique : il peut vous attribuer un nouveau PIN provisoire. Vous choisirez ensuite votre propre PIN.</p>',
+}));
+
+/** Met à jour le profil (binôme, consentement) depuis le serveur. Silencieux hors réseau. */
+async function rafraichirProfil() {
+  if (!etat.jeton) return;
+  try {
+    const r = await rpc('loc_moi', { p_jeton: etat.jeton });
+    if (!r.ok) {
+      if (r.erreur === 'session_invalide') finSession('Votre session a expiré. Reconnectez-vous.');
+      return;
+    }
+    const avant = JSON.stringify(etat.profil);
+    etat.profil = { chauffeur: r.chauffeur, consentement: r.consentement, pin_a_changer: r.pin_a_changer };
+    sauverSession();
+    if (avant !== JSON.stringify(etat.profil)) router();
+  } catch { /* hors ligne : on garde le profil enregistré */ }
+}
+
+/* ===========================================================================
+   CHANGEMENT DE PIN
+   =========================================================================== */
+let pinObligatoire = false;
+function ouvrirChangementPin(obligatoire) {
+  pinObligatoire = obligatoire;
+  ['#p-ancien', '#p-nouveau', '#p-confirme'].forEach(s => { $(s).value = ''; });
+  $('#p-msg').hidden = true;
+  $('#p-annuler').textContent = obligatoire ? 'Se déconnecter' : 'Annuler';
+  $('#pin-intro').textContent = obligatoire
+    ? 'Votre PIN a été fourni par la logistique. Choisissez maintenant un PIN personnel que vous seul connaissez.'
+    : 'Choisissez un nouveau PIN personnel.';
+  afficher('pin');
+}
+
+$('#f-pin').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const ancien = $('#p-ancien').value, nouveau = $('#p-nouveau').value, confirme = $('#p-confirme').value;
+  const msg = $('#p-msg');
+  const erreur = (t) => { msg.textContent = t; msg.hidden = false; };
+  msg.hidden = true;
+  if (!/^\d{4}$/.test(ancien) || !/^\d{4}$/.test(nouveau)) return erreur('Chaque PIN contient exactement 4 chiffres.');
+  if (nouveau !== confirme) return erreur('Les deux nouveaux PIN ne sont pas identiques.');
+  const btn = $('#p-btn');
+  btn.disabled = true;
+  try {
+    const r = await rpc('loc_changer_pin', { p_jeton: etat.jeton, p_ancien: ancien, p_nouveau: nouveau });
+    if (!r.ok) {
+      if (r.erreur === 'session_invalide') return finSession(r.message);
+      return erreur(r.message);
+    }
+    etat.profil.pin_a_changer = false;
+    sauverSession();
+    toast('Nouveau PIN enregistré ✓', 'succes');
+    etat.ecran = null;
+    router();
+  } catch (e) {
+    erreur(e instanceof ErreurReseau ? 'Pas de réseau. Le changement de PIN nécessite du réseau.' : 'Erreur : ' + e.message);
+  } finally { btn.disabled = false; }
+});
+
+$('#p-annuler').addEventListener('click', () => {
+  if (pinObligatoire) deconnexion();
+  else afficher('reglages');
+});
+
+/* ===========================================================================
+   CONSENTEMENT
+   =========================================================================== */
+$('#cs-lu').addEventListener('change', () => { $('#cs-accepter').disabled = !$('#cs-lu').checked; });
+
+$('#cs-accepter').addEventListener('click', async () => {
+  const btn = $('#cs-accepter'), msg = $('#cs-msg');
+  btn.disabled = true; msg.hidden = true;
+  try {
+    const r = await rpc('loc_consentir', {
+      p_jeton: etat.jeton, p_version: String(param('version_consentement')), p_appareil: navigator.userAgent.slice(0, 300),
+    });
+    if (!r.ok) {
+      if (r.erreur === 'session_invalide') return finSession(r.message);
+      msg.textContent = r.message; msg.hidden = false; return;
+    }
+    etat.profil.consentement = true;
+    sauverSession();
+    toast('Merci. Votre accord est enregistré (' + dateHeure(r.horodatage) + ').', 'succes');
+    etat.ecran = null;
+    router();
+  } catch (e) {
+    msg.textContent = e instanceof ErreurReseau
+      ? 'Pas de réseau. Votre accord doit être enregistré en ligne : réessayez dès que possible.'
+      : 'Erreur : ' + e.message;
+    msg.hidden = false;
+  } finally { btn.disabled = !$('#cs-lu').checked; }
+});
+
+$('#cs-refuser').addEventListener('click', async () => {
+  const c = await dialogue({
+    titre: 'Vous refusez',
+    html: "<p>Sans votre accord, l'application ne peut pas enregistrer vos pointages. Vous pourrez accepter plus tard en vous reconnectant.</p>",
+    boutons: [{ libelle: 'Revenir', valeur: 'non' }, { libelle: 'Se déconnecter', valeur: 'quitter', classe: 'secondaire' }],
+  });
+  if (c === 'quitter') deconnexion();
+});
+
+/* ===========================================================================
+   RÉFÉRENTIEL (quartiers, zones, paramètres) — gardé pour le hors ligne
+   =========================================================================== */
+async function chargerReferentiel(force = false) {
+  if (!etat.jeton) return false;
+  const age = etat.ref ? Date.now() - (etat.ref.charge_le || 0) : Infinity;
+  if (!force && age < 12 * 3600 * 1000) return true; // frais de moins de 12 h
+  try {
+    const r = await rpc('loc_referentiel', { p_jeton: etat.jeton });
+    if (!r.ok) {
+      if (r.erreur === 'session_invalide') finSession(r.message);
+      return false;
+    }
+    etat.ref = { lieux: r.lieux, zones: r.zones, parametres: r.parametres, charge_le: Date.now() };
+    await DB.put('kv', etat.ref, 'referentiel');
+    return true;
+  } catch { return false; }
+}
+
+/** Le point est-il dans la zone Libreville (détection du quartier activée) ? */
+function dansLibreville(lat, lon) {
+  const zones = (etat.ref && etat.ref.zones) || [];
+  return zones.some(z => z.type === 'libreville' && haversine(lat, lon, z.lat, z.lon) <= z.rayon_m);
+}
+
+/** Nom de la zone où se trouve un point (Site Belinga, Makokou…), ou distance à Libreville. */
+function zoneDuPoint(lat, lon) {
+  const zones = ((etat.ref && etat.ref.zones) || []);
+  const z = zones.find(x => haversine(lat, lon, x.lat, x.lon) <= x.rayon_m);
+  if (z) return z.nom;
+  const lbv = zones.find(x => x.type === 'libreville');
+  return lbv ? `hors des zones connues, à ${Math.round(haversine(lat, lon, lbv.lat, lbv.lon) / 1000)} km de Libreville` : 'hors de Libreville';
+}
+
+/** Lieux triés du plus proche au plus éloigné. */
+function lieuxParDistance(lat, lon) {
+  return ((etat.ref && etat.ref.lieux) || [])
+    .map(l => ({ ...l, distance: haversine(lat, lon, l.lat, l.lon) }))
+    .sort((a, b) => a.distance - b.distance);
+}
+
+/* ===========================================================================
+   ÉCRAN PRINCIPAL
+   =========================================================================== */
+function construireStatuts() {
+  const grille = $('#grille-statuts');
+  grille.innerHTML = '';
+  Object.entries(STATUTS).forEach(([code, s]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'statut';
+    b.dataset.statut = code;
+    b.style.setProperty('--c', s.couleur);
+    b.setAttribute('aria-pressed', 'false');
+    b.innerHTML = `<span class="ico" aria-hidden="true">${s.ico}</span><span>${esc(s.libelle)}</span>`;
+    b.addEventListener('click', () => choisirStatut(code));
+    grille.appendChild(b);
+  });
+}
+
+function choisirStatut(code, mettreFocus = true) {
+  etat.statut = code;
+  lsSet('loc.statut', code);
+  document.querySelectorAll('.statut').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.statut === code)));
+  const def = STATUTS[code];
+  $('#bloc-destination').hidden = code !== 'en_course';
+  $('#bloc-province').hidden = code !== 'autre_province';
+  $('#bloc-lieu-dispo').hidden = code !== 'dispo_libreville';
+  $('#note-prive').hidden = def.position;
+  const btn = $('#btn-pointer');
+  btn.textContent = def.position ? '📍 POINTER MA POSITION' : '📤 ENVOYER MON STATUT';
+  btn.classList.toggle('prive', !def.position);
+  if (code === 'en_course' && mettreFocus) setTimeout(() => $('#destination').focus(), 50);
+  if (code === 'autre_province' && mettreFocus && !$('#province').value) setTimeout(() => $('#province').focus(), 50);
+}
+
+/** Crée les boutons « Où êtes-vous disponible ? ». */
+function construireLieuxDispo() {
+  const zone = $('#grille-lieux-dispo');
+  Object.entries(LIEUX_DISPO).forEach(([code, l]) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'lieu-dispo'; b.dataset.lieu = code;
+    b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', 'false');
+    b.innerHTML = `<span aria-hidden="true">${l.ico}</span><span>${esc(l.libelle)}</span>`;
+    b.addEventListener('click', () => choisirLieuDispo(code));
+    zone.appendChild(b);
+  });
+}
+function choisirLieuDispo(code) {
+  etat.lieuDispo = LIEUX_DISPO[code] ? code : null;
+  lsSet('loc.lieuDispo', etat.lieuDispo);
+  document.querySelectorAll('.lieu-dispo').forEach(b => b.setAttribute('aria-checked', String(b.dataset.lieu === etat.lieuDispo)));
+  $('#grille-lieux-dispo').classList.remove('a-remplir');
+}
+
+/** Remplit la liste déroulante des provinces. */
+function construireProvinces() {
+  const sel = $('#province');
+  PROVINCES.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p; o.textContent = p;
+    sel.appendChild(o);
+  });
+}
+
+/** Province (et ville) en texte lisible : « Ngounié (Mouila) ». */
+function texteProvince(province, ville) {
+  if (!province) return '';
+  return province + (ville ? ` (${ville})` : '');
+}
+
+function rendrePrincipal() {
+  const c = etat.profil && etat.profil.chauffeur;
+  if (!c) return;
+  $('#bonjour').textContent = `Bonjour ${c.prenom || c.nom}`;
+  if (etat.statut) choisirStatut(etat.statut, false);
+  $('#destination').value = lsGet('loc.destination', '');
+  const provinceMemo = lsGet('loc.province', '');
+  $('#province').value = PROVINCES.includes(provinceMemo) ? provinceMemo : '';
+  $('#ville').value = lsGet('loc.ville', '');
+  choisirLieuDispo(lsGet('loc.lieuDispo', null));
+
+  // Dernier pointage
+  const d = lsGet('loc.dernier');
+  const zone = $('#dernier-pointage');
+  if (d && d.chauffeur_id === c.id) {
+    const s = STATUTS[d.statut] || { libelle: d.statut, couleur: '#555' };
+    zone.innerHTML = `<b style="color:${s.couleur}">${esc(s.libelle)}</b>`
+      + (d.lieu ? ` — ${esc(d.lieu)}` : '')
+      + (d.destination ? ` — vers ${esc(d.destination)}` : '')
+      + (d.province ? ` — ${esc(texteProvince(d.province, d.ville))}` : '')
+      + (d.lieu_dispo && LIEUX_DISPO[d.lieu_dispo] ? ` — ${LIEUX_DISPO[d.lieu_dispo].ico} ${esc(LIEUX_DISPO[d.lieu_dispo].libelle)}` : '')
+      + `<br>${esc(dateHeure(d.horodatage))} (${esc(ilYa(d.horodatage))})`
+      + (d.sans_position ? '<br><span class="etiquette">sans position</span>' : '');
+  } else {
+    zone.textContent = "Aucun pointage pour l'instant.";
+  }
+
+  // Binôme
+  const b = c.binome;
+  $('#carte-binome').hidden = !b;
+  if (b) {
+    $('#binome').innerHTML = `<b>${esc((b.prenom ? b.prenom + ' ' : '') + b.nom)}</b><br>`
+      + `<a class="btn secondaire" href="tel:${esc(b.telephone)}">📞 Appeler ${esc(b.telephone)}</a>`;
+  }
+  majEtatEnvoi();
+  verifierRappel();
+}
+
+/** Nombre de pointages en attente pour le chauffeur connecté. */
+async function pointagesEnAttente() {
+  if (!etat.profil) return [];
+  const id = etat.profil.chauffeur.id;
+  return (await DB.tout('file')).filter(p => p.chauffeur_id === id).sort((a, b) => a.horodatage.localeCompare(b.horodatage));
+}
+
+/** Indicateur « Envoyé » / « En attente de réseau (N pointages) ». */
+async function majEtatEnvoi() {
+  const zone = $('#etat-envoi');
+  if (!zone || !etat.profil) return;
+  const n = (await pointagesEnAttente()).length;
+  if (etat.syncEnCours && n) {
+    zone.className = 'bandeau attente';
+    zone.textContent = `⏳ Envoi en cours (${n} pointage${n > 1 ? 's' : ''})…`;
+  } else if (n) {
+    zone.className = 'bandeau attente';
+    zone.innerHTML = `⏳ En attente de réseau (${n} pointage${n > 1 ? 's' : ''})`
+      + '<button type="button" class="btn secondaire" id="btn-renvoyer">Envoyer</button>';
+    $('#btn-renvoyer').addEventListener('click', async () => {
+      const r = await synchroniser();
+      if (r.statut === 'hors_ligne') toast('Toujours pas de réseau. Envoi automatique dès son retour.', 'attente');
+      else afficherResultatSync(r);
+    });
+  } else {
+    const t = lsGet('loc.dernierEnvoi');
+    zone.className = t ? 'bandeau ok' : 'bandeau neutre';
+    zone.textContent = t ? `✓ Envoyé — dernier envoi à ${heure(t)}` : 'Aucun pointage envoyé pour le moment.';
+  }
+}
+
+$('#destination').addEventListener('input', () => lsSet('loc.destination', $('#destination').value));
+$('#province').addEventListener('change', () => lsSet('loc.province', $('#province').value));
+$('#ville').addEventListener('input', () => lsSet('loc.ville', $('#ville').value));
+
+/* ===========================================================================
+   POINTAGE
+   =========================================================================== */
+$('#btn-pointer').addEventListener('click', pointer);
+
+/** Met en évidence un champ à remplir : centré à l'écran (au-dessus du message) et encadré de rouge. */
+function signalerChamp(sel) {
+  const el = $(sel);
+  el.classList.add('a-remplir');
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => el.focus({ preventScroll: true }), 300);
+  const retirer = () => { el.classList.remove('a-remplir'); el.removeEventListener('input', retirer); el.removeEventListener('change', retirer); };
+  el.addEventListener('input', retirer);
+  el.addEventListener('change', retirer);
+}
+
+async function pointer() {
+  if (etat.pointageEnCours) return;
+  const statut = etat.statut;
+  if (!statut || !STATUTS[statut]) {
+    toast("Choisissez d'abord votre statut (étape 1).", 'erreur');
+    $('#grille-statuts').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  const def = STATUTS[statut];
+  let destination = null;
+  if (statut === 'en_course') {
+    destination = $('#destination').value.trim();
+    if (!destination) { signalerChamp('#destination'); toast('Indiquez la destination de la course.', 'erreur'); return; }
+  }
+  let province = null, ville = null;
+  if (statut === 'autre_province') {
+    province = $('#province').value;
+    ville = $('#ville').value.trim().slice(0, 60) || null;
+    if (!PROVINCES.includes(province)) {
+      signalerChamp('#province');
+      toast('Choisissez la province où vous vous trouvez.', 'erreur');
+      return;
+    }
+  }
+  let lieuDispo = null;
+  if (statut === 'dispo_libreville') {
+    lieuDispo = etat.lieuDispo;
+    if (!LIEUX_DISPO[lieuDispo]) {
+      const grille = $('#grille-lieux-dispo');
+      grille.classList.add('a-remplir');
+      grille.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toast('Indiquez où vous êtes disponible.', 'erreur');
+      return;
+    }
+  }
+
+  etat.pointageEnCours = true;
+  $('#btn-pointer').disabled = true;
+  try {
+    const p = { statut, destination, province, ville, lieu_dispo: lieuDispo };
+    let lieuNom = null;
+
+    if (def.position) {
+      const pos = await localiser();
+      if (pos === undefined) return; // annulé par le chauffeur
+      if (pos) {
+        p.latitude = pos.lat; p.longitude = pos.lon; p.precision_m = Math.round(pos.precision);
+        // « Disponible à Libreville » alors que le GPS est ailleurs : on prévient le chauffeur
+        const zoneLbvConnue = ((etat.ref && etat.ref.zones) || []).some(z => z.type === 'libreville');
+        if (statut === 'dispo_libreville' && zoneLbvConnue && !dansLibreville(pos.lat, pos.lon)) {
+          const choix = await dialogue({
+            titre: "📍 Vous n'êtes pas à Libreville",
+            html: `<p>Votre position GPS indique : <b>${esc(zoneDuPoint(pos.lat, pos.lon))}</b>.</p>`
+                + '<p>Avec le statut « Disponible à Libreville », vous apparaîtrez <b>en orange « à vérifier »</b> pour la logistique.</p>'
+                + '<p>Choisissez plutôt <b>Sur site</b>, <b>En mission</b> ou <b>Autre province</b>.</p>',
+            boutons: [
+              { libelle: 'Changer de statut', valeur: 'changer' },
+              { libelle: 'Envoyer quand même', valeur: 'envoyer', classe: 'secondaire' },
+            ],
+          });
+          if (choix !== 'envoyer') {
+            $('#grille-statuts').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+          }
+        }
+        // Détection du quartier uniquement dans la zone Libreville
+        if (etat.ref && etat.ref.lieux && etat.ref.lieux.length && dansLibreville(pos.lat, pos.lon)) {
+          const q = await confirmerQuartier(pos);
+          if (q === undefined) return; // annulé
+          Object.assign(p, q.donnees);
+          lieuNom = q.nom;
+        }
+      }
+    }
+    await enregistrerPointage(p, lieuNom);
+  } finally {
+    etat.pointageEnCours = false;
+    $('#btn-pointer').disabled = false;
+  }
+}
+
+/**
+ * Obtient la position GPS en gérant tous les cas d'erreur.
+ * Renvoie { lat, lon, precision }, null (= envoyer sans position) ou undefined (= annulé).
+ */
+async function localiser() {
+  for (;;) {
+    let pos;
+    try {
+      pos = await rechercheGps();
+    } catch (err) {
+      if (err && err.code === 'annule') return undefined;
+      const choix = await dialogue(messageErreurGps(err));
+      if (choix === 'reessayer') continue;
+      if (choix === 'sans') return null;
+      return undefined;
+    }
+    const max = Number(param('precision_max_m')) || 200;
+    if (pos.precision > max) {
+      const choix = await dialogue({
+        titre: '⚠️ Position imprécise',
+        html: `<p>Précision actuelle : <b>± ${Math.round(pos.precision)} m</b> (le maximum conseillé est ${max} m).</p>`
+            + '<p>Pour améliorer : sortez à découvert, éloignez-vous des bâtiments et attendez quelques secondes.</p>',
+        boutons: [
+          { libelle: 'Réessayer', valeur: 'reessayer' },
+          { libelle: 'Envoyer quand même', valeur: 'garder', classe: 'secondaire' },
+          { libelle: 'Annuler', valeur: 'annuler', classe: 'lien' },
+        ],
+      });
+      if (choix === 'reessayer') continue;
+      if (choix !== 'garder') return undefined;
+    }
+    return pos;
+  }
+}
+
+/** Messages clairs selon le type d'erreur GPS. */
+function messageErreurGps(err) {
+  const sans = { libelle: 'Envoyer mon statut sans position', valeur: 'sans', classe: 'secondaire' };
+  const annuler = { libelle: 'Annuler', valeur: 'annuler', classe: 'lien' };
+  const reessayer = { libelle: 'Réessayer', valeur: 'reessayer' };
+  if (err && err.code === 1) {
+    return {
+      titre: '📵 Localisation refusée',
+      html: "<p>L'application n'a pas le droit d'utiliser la position.</p>"
+          + '<p><b>Pour autoriser :</b> touchez le cadenas 🔒 à gauche de l\'adresse en haut, puis <b>Autorisations › Position › Autoriser</b>.<br>'
+          + 'Ou : Paramètres du téléphone › Applications › Chrome › Autorisations › Position.</p>',
+      boutons: [reessayer, sans, annuler],
+    };
+  }
+  if (err && err.code === 2) {
+    return {
+      titre: '📡 GPS indisponible',
+      html: '<p>Le téléphone ne trouve pas sa position. Vérifiez que la <b>localisation est activée</b> (menu rapide en haut de l\'écran, icône « Position »).</p>',
+      boutons: [reessayer, sans, annuler],
+    };
+  }
+  if (err && err.code === 'absent') {
+    return {
+      titre: 'GPS non disponible',
+      html: '<p>Ce navigateur ne permet pas la localisation. Utilisez Chrome sur Android, à jour.</p>',
+      boutons: [sans, annuler],
+    };
+  }
+  return {
+    titre: '⏱️ Signal GPS introuvable',
+    html: '<p>Aucune position trouvée en 45 secondes. Sortez à découvert, loin des bâtiments et des arbres, puis réessayez.</p>',
+    boutons: [reessayer, sans, annuler],
+  };
+}
+
+/**
+ * Recherche GPS : suit la position pendant 20 s maximum et garde la meilleure.
+ * S'arrête dès que la précision est ≤ 25 m. Abandonne après 45 s sans aucune position.
+ */
+function rechercheGps() {
+  return new Promise((resolve, reject) => {
+    if (!('geolocation' in navigator)) return reject({ code: 'absent' });
+    const fen = $('#m-gps');
+    const txt = $('#gps-precision');
+    const btnUtiliser = $('#gps-utiliser');
+    let meilleure = null, fini = false, watchId = null;
+
+    const terminer = (ok, valeur) => {
+      if (fini) return;
+      fini = true;
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      clearTimeout(t1); clearTimeout(t2);
+      fen.hidden = true;
+      btnUtiliser.onclick = null; $('#gps-annuler').onclick = null;
+      ok ? resolve(valeur) : reject(valeur);
+    };
+    const versResultat = (p) => ({ lat: p.coords.latitude, lon: p.coords.longitude, precision: p.coords.accuracy });
+
+    txt.textContent = 'Recherche…';
+    btnUtiliser.disabled = true;
+    cacherToast();
+    fen.hidden = false;
+    btnUtiliser.onclick = () => meilleure && terminer(true, versResultat(meilleure));
+    $('#gps-annuler').onclick = () => terminer(false, { code: 'annule' });
+
+    // Après 20 s : on prend la meilleure position obtenue
+    const t1 = setTimeout(() => { if (meilleure) terminer(true, versResultat(meilleure)); }, 20000);
+    // Après 45 s sans rien : échec
+    const t2 = setTimeout(() => {
+      if (meilleure) terminer(true, versResultat(meilleure)); else terminer(false, { code: 3 });
+    }, 45000);
+
+    try {
+      watchId = navigator.geolocation.watchPosition(
+        (p) => {
+          if (!meilleure || p.coords.accuracy < meilleure.coords.accuracy) meilleure = p;
+          txt.textContent = `Précision : ± ${Math.round(meilleure.coords.accuracy)} m`;
+          btnUtiliser.disabled = false;
+          if (meilleure.coords.accuracy <= 25) terminer(true, versResultat(meilleure));
+        },
+        (err) => {
+          // Refus : on arrête tout de suite. Indisponible : seulement si aucune position.
+          if (err.code === 1 || (err.code === 2 && !meilleure)) terminer(false, { code: err.code });
+          else if (err.code === 3 && !meilleure) terminer(false, { code: 3 });
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 45000 }
+      );
+    } catch {
+      terminer(false, { code: 2 });
+    }
+  });
+}
+
+/**
+ * Détection du quartier (couche 1) + confirmation / correction (couche 2)
+ * + repère facultatif (couche 3).
+ * Renvoie { donnees, nom } ou undefined si annulé.
+ */
+function confirmerQuartier(pos) {
+  return new Promise(resolve => {
+    const fen = $('#m-quartier');
+    const liste = lieuxParDistance(pos.lat, pos.lon);
+    const propose = liste[0];
+    const max = Number(param('precision_max_m')) || 200;
+    let confirme = null;  // lieu confirmé (ou null si « pas dans la liste »)
+
+    const etape = (n) => {
+      $('#q-proposition').hidden = n !== 1;
+      $('#q-correction').hidden = n !== 2;
+      $('#q-repere-bloc').hidden = n !== 3;
+    };
+    const fermer = (valeur) => {
+      fen.hidden = true;
+      ['#q-oui', '#q-corriger', '#q-aucun', '#q-valider', '#q-annuler'].forEach(s => { $(s).onclick = null; });
+      $('#q-recherche').oninput = null; $('#q-repere').oninput = null;
+      resolve(valeur);
+    };
+    const versRepere = () => {
+      $('#q-recap').textContent = confirme ? `Quartier : ${confirme.nom} (${confirme.ville})` : 'Quartier : non trouvé dans la liste';
+      $('#q-repere').value = '';
+      $('#q-compteur').textContent = '0';
+      etape(3);
+      setTimeout(() => $('#q-repere').focus(), 50);
+    };
+
+    // Étape 1 : proposition du lieu le plus proche
+    $('#q-nom').textContent = propose.nom;
+    $('#q-detail').textContent = `${propose.ville} · à ${distanceTexte(propose.distance)} du point de référence`
+      + (propose.approximatif ? ' (coordonnées approximatives)' : '');
+    const alerte = $('#q-alerte');
+    if (pos.precision > max) {
+      alerte.textContent = `Précision GPS faible (± ${Math.round(pos.precision)} m) : vérifiez bien le quartier.`;
+      alerte.hidden = false;
+    } else alerte.hidden = true;
+    etape(1);
+    cacherToast();
+    fen.hidden = false;
+
+    $('#q-oui').onclick = () => { confirme = propose; versRepere(); };
+    $('#q-corriger').onclick = () => {
+      $('#q-recherche').value = '';
+      remplirListe('');
+      etape(2);
+    };
+
+    // Étape 2 : liste avec recherche par nom (triée par distance)
+    function remplirListe(filtre) {
+      const f = normaliser(filtre);
+      const zone = $('#q-liste');
+      zone.innerHTML = '';
+      const trouves = liste.filter(l => !f || normaliser(l.nom).includes(f) || normaliser(l.ville).includes(f));
+      if (!trouves.length) { zone.innerHTML = '<p class="petit">Aucun lieu ne correspond.</p>'; return; }
+      trouves.forEach(l => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'choix-lieu';
+        b.innerHTML = `<b>${esc(l.nom)}</b><span class="petit">${esc(l.ville)} · ${esc(distanceTexte(l.distance))}${l.type === 'lieu_frequent' ? ' · lieu fréquent' : ''}</span>`;
+        b.onclick = () => { confirme = l; versRepere(); };
+        zone.appendChild(b);
+      });
+    }
+    $('#q-recherche').oninput = () => remplirListe($('#q-recherche').value);
+    $('#q-aucun').onclick = () => { confirme = null; versRepere(); };
+
+    // Étape 3 : repère facultatif puis validation
+    $('#q-repere').oninput = () => { $('#q-compteur').textContent = String($('#q-repere').value.length); };
+    $('#q-valider').onclick = () => {
+      const repere = $('#q-repere').value.trim().slice(0, 60);
+      fermer({
+        nom: confirme ? confirme.nom : null,
+        donnees: {
+          quartier_detecte_id: propose.id,
+          distance_detecte_m: Math.round(propose.distance),
+          quartier_confirme_id: confirme ? confirme.id : null,
+          repere: repere || null,
+        },
+      });
+    };
+    $('#q-annuler').onclick = () => fermer(undefined);
+  });
+}
+
+/** Range le pointage dans la file d'attente locale, puis tente l'envoi. */
+async function enregistrerPointage(p, lieuNom) {
+  const c = etat.profil.chauffeur;
+  const item = {
+    ...p,
+    id: uuid(),
+    chauffeur_id: c.id,                 // sert à n'envoyer que les pointages de ce chauffeur
+    horodatage: new Date().toISOString(),
+    cree_ms: Date.now(),
+  };
+  try {
+    await DB.put('file', item);
+  } catch (e) {
+    toast("Impossible d'enregistrer le pointage sur le téléphone : " + e.message, 'erreur', 8000);
+    return;
+  }
+  lsSet('loc.dernier', {
+    chauffeur_id: c.id, statut: p.statut, horodatage: item.horodatage, lieu: lieuNom,
+    destination: p.destination, province: p.province, ville: p.ville, lieu_dispo: p.lieu_dispo,
+    sans_position: STATUTS[p.statut].position && p.latitude == null,
+  });
+  lsSet('loc.dernierRappel', Date.now());
+  $('#bandeau-rappel').hidden = true;
+  rendrePrincipal();
+
+  const r = await synchroniser();
+  if (r.statut === 'ok' && !r.rejets.length) toast('Pointage envoyé ✓', 'succes');
+  else if (r.statut === 'hors_ligne') toast('Pas de réseau : pointage enregistré sur le téléphone. Il sera envoyé automatiquement.', 'attente', 6000);
+  else afficherResultatSync(r);
+}
+
+/* ===========================================================================
+   SYNCHRONISATION DE LA FILE D'ATTENTE
+   =========================================================================== */
+/** Prépare un pointage pour l'envoi (retire les champs internes au téléphone). */
+function versServeur(i) {
+  return {
+    id: i.id, statut: i.statut, horodatage: i.horodatage, destination: i.destination || null,
+    latitude: i.latitude ?? null, longitude: i.longitude ?? null, precision_m: i.precision_m ?? null,
+    quartier_detecte_id: i.quartier_detecte_id ?? null, distance_detecte_m: i.distance_detecte_m ?? null,
+    quartier_confirme_id: i.quartier_confirme_id ?? null, repere: i.repere || null,
+    province: i.province || null, ville: i.ville || null, lieu_dispo: i.lieu_dispo || null,
+    hors_ligne: Date.now() - (i.cree_ms || Date.now()) > 2 * 60 * 1000, // envoyé en différé
+  };
+}
+
+/**
+ * Envoie tous les pointages en attente (par lots de 100).
+ * Renvoie { statut: 'ok' | 'vide' | 'hors_ligne' | 'refus' | 'erreur' | 'ignore', envoyes, rejets, message }
+ */
+async function synchroniser() {
+  if (etat.syncEnCours || !etat.jeton || !etat.profil) return { statut: 'ignore', rejets: [] };
+  etat.syncEnCours = true;
+  majEtatEnvoi();
+  try {
+    let items = await pointagesEnAttente();
+    if (!items.length) return { statut: 'vide', envoyes: 0, rejets: [] };
+    let envoyes = 0;
+    const rejets = [];
+    while (items.length) {
+      const lot = items.slice(0, 100);
+      const r = await rpc('loc_pointer', { p_jeton: etat.jeton, p_pointages: lot.map(versServeur) });
+      if (!r.ok) {
+        // La file est CONSERVÉE : rien n'est perdu.
+        if (r.erreur === 'session_invalide') finSession('Votre session a expiré. Reconnectez-vous.');
+        if (r.erreur === 'consentement_absent') { etat.profil.consentement = false; sauverSession(); router(); }
+        return { statut: 'refus', message: r.message, rejets: [] };
+      }
+      for (const id of r.acceptes) await DB.del('file', id);
+      for (const rej of r.rejetes) { if (rej.id) await DB.del('file', rej.id); rejets.push(rej); }
+      envoyes += r.acceptes.length;
+      items = items.slice(100);
+    }
+    lsSet('loc.dernierEnvoi', Date.now());
+    return { statut: 'ok', envoyes, rejets };
+  } catch (e) {
+    if (e instanceof ErreurReseau) { demanderEnvoiArrierePlan(); return { statut: 'hors_ligne', rejets: [] }; }
+    return { statut: 'erreur', message: e.message, rejets: [] };
+  } finally {
+    etat.syncEnCours = false;
+    majEtatEnvoi();
+  }
+}
+
+/**
+ * Demande au téléphone d'envoyer la file dès le retour du réseau, même si
+ * l'application est fermée (Android / Chrome). Sans effet ailleurs.
+ */
+async function demanderEnvoiArrierePlan() {
+  try {
+    if (!('serviceWorker' in navigator)) return;
+    const reg = await navigator.serviceWorker.ready;
+    if (reg.sync) await reg.sync.register('envoi-pointages');
+  } catch { /* non pris en charge : l'envoi se fera à la prochaine ouverture */ }
+}
+
+function afficherResultatSync(r) {
+  if (r.statut === 'ok' && r.rejets.length) {
+    toast(`${r.envoyes} envoyé(s), ${r.rejets.length} refusé(s) : ${r.rejets.map(x => x.raison).join(', ')}.`, 'erreur', 8000);
+  } else if (r.statut === 'ok') {
+    toast(`${r.envoyes} pointage(s) envoyé(s) ✓`, 'succes');
+  } else if (r.statut === 'refus' || r.statut === 'erreur') {
+    toast(r.message || "Envoi impossible pour le moment.", 'erreur', 7000);
+  }
+}
+
+/* ===========================================================================
+   HISTORIQUE
+   =========================================================================== */
+function ligneHistorique(p, enAttente) {
+  const s = STATUTS[p.statut] || { libelle: p.statut, couleur: '#555' };
+  const details = [];
+  if (p.quartier) details.push(esc(p.quartier));
+  if (p.repere) details.push('« ' + esc(p.repere) + ' »');
+  if (p.destination) details.push('vers ' + esc(p.destination));
+  if (p.province) details.push('📍 ' + esc(texteProvince(p.province, p.ville)));
+  if (p.lieu_dispo && LIEUX_DISPO[p.lieu_dispo]) details.push(LIEUX_DISPO[p.lieu_dispo].ico + ' ' + esc(LIEUX_DISPO[p.lieu_dispo].libelle));
+  if (p.precision_m != null) details.push('± ' + Math.round(p.precision_m) + ' m');
+  if (s.position === false) details.push('🔒 sans position');
+  else if (p.latitude == null) details.push('sans position');
+  return `<li><span class="point" style="background:${s.couleur}"></span><div>`
+    + `<b>${esc(s.libelle)}</b> ${enAttente ? '<span class="etiquette">en attente</span>' : ''}<br>`
+    + `<span class="petit">${esc(dateHeure(p.horodatage))}${details.length ? ' · ' + details.join(' · ') : ''}</span></div></li>`;
+}
+
+async function chargerHistorique() {
+  // Pointages encore sur le téléphone
+  const attente = await pointagesEnAttente();
+  const lieux = new Map(((etat.ref && etat.ref.lieux) || []).map(l => [l.id, l.nom]));
+  $('#carte-attente').hidden = !attente.length;
+  $('#liste-attente').innerHTML = attente.slice().reverse()
+    .map(p => ligneHistorique({ ...p, quartier: lieux.get(p.quartier_confirme_id) || lieux.get(p.quartier_detecte_id) }, true)).join('');
+
+  // Pointages déjà envoyés (lecture en ligne)
+  const msg = $('#h-msg'), liste = $('#liste-historique');
+  msg.textContent = 'Chargement…';
+  try {
+    const r = await rpc('loc_mes_pointages', { p_jeton: etat.jeton, p_limite: 50 });
+    if (!r.ok) {
+      if (r.erreur === 'session_invalide') return finSession(r.message);
+      msg.textContent = r.message; return;
+    }
+    msg.textContent = r.pointages.length ? '' : 'Aucun pointage envoyé.';
+    liste.innerHTML = r.pointages.map(p => ligneHistorique(p, false)).join('');
+  } catch (e) {
+    msg.textContent = e instanceof ErreurReseau
+      ? "Pas de réseau : l'historique en ligne sera affiché au retour du réseau."
+      : 'Erreur : ' + e.message;
+  }
+}
+
+/* ===========================================================================
+   RAPPELS DE POINTAGE (pendant les heures de service)
+   =========================================================================== */
+function frequenceRappel() {
+  const lbv = etat.profil && etat.profil.chauffeur.equipe === 'libreville';
+  return Number(param(lbv ? 'rappel_libreville_minutes' : 'rappel_minutes')) || 240;
+}
+
+function enService(d = new Date()) {
+  const { jour, minutes } = momentGabon(d);
+  const jours = param('jours_service') || [];
+  const vers = (hhmm) => { const [h, m] = String(hhmm).split(':').map(Number); return h * 60 + (m || 0); };
+  return jours.includes(jour) && minutes >= vers(param('heure_debut_service')) && minutes < vers(param('heure_fin_service'));
+}
+
+/** Affiche un rappel si le dernier pointage est trop ancien pendant le service. */
+async function verifierRappel() {
+  if (!etat.profil || !etat.profil.consentement || !lsGet('loc.rappels', false)) return;
+  const d = lsGet('loc.dernier');
+  // Pas de rappel pendant un repos, un congé ou une maladie
+  if (d && d.chauffeur_id === etat.profil.chauffeur.id && !STATUTS[d.statut]?.position) return;
+  if (!enService()) { $('#bandeau-rappel').hidden = true; return; }
+  const freq = frequenceRappel() * 60 * 1000;
+  const dernierPointage = d && d.chauffeur_id === etat.profil.chauffeur.id ? new Date(d.horodatage).getTime() : 0;
+  const dernierRappel = lsGet('loc.dernierRappel', 0);
+  if (Date.now() - dernierPointage < freq) { $('#bandeau-rappel').hidden = true; return; }
+  $('#bandeau-rappel').hidden = false;
+  if (Date.now() - dernierRappel >= freq) {
+    lsSet('loc.dernierRappel', Date.now());
+    notifier('Pensez à pointer', 'Belinga Localisation : indiquez votre statut et votre position.');
+  }
+}
+
+/** Notification système (si autorisée) + vibration. */
+async function notifier(titre, texte) {
+  // La vibration n'est permise qu'après un premier toucher de l'écran
+  const aTouche = !navigator.userActivation || navigator.userActivation.hasBeenActive;
+  try { if (aTouche && navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch { /* ignoré */ }
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const options = { body: texte, icon: 'icones/icone-192.png', badge: 'icones/icone-192.png', tag: 'rappel-pointage', renotify: true };
+  try {
+    const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+    if (reg) { await reg.showNotification(titre, options); return; }
+    new Notification(titre, options);
+  } catch { /* certains téléphones n'autorisent les notifications qu'avec l'application installée */ }
+}
+
+/* ===========================================================================
+   RÉGLAGES
+   =========================================================================== */
+function rendreReglages() {
+  const c = etat.profil.chauffeur;
+  $('#compte').innerHTML = `<b>${esc((c.prenom ? c.prenom + ' ' : '') + c.nom)}</b><br>`
+    + `Matricule : ${esc(c.matricule)}<br>Téléphone : ${esc(c.telephone)}<br>`
+    + `Équipe : ${c.equipe === 'libreville' ? 'Libreville' : 'Site / route'}`;
+  $('#r-actif').checked = !!lsGet('loc.rappels', false);
+  const jours = ['', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+  const freq = frequenceRappel();
+  $('#r-info').textContent = `Fréquence : toutes les ${freq >= 60 && freq % 60 === 0 ? (freq / 60) + ' h' : freq + ' min'}, `
+    + `de ${param('heure_debut_service')} à ${param('heure_fin_service')} (heure du Gabon), `
+    + `${(param('jours_service') || []).map(j => jours[j]).join(', ')}. Réglé par la logistique.`;
+  const r = etat.ref;
+  $('#ref-info').textContent = r
+    ? `${r.lieux.length} quartiers et lieux enregistrés sur le téléphone (mis à jour ${ilYa(r.charge_le)}).`
+    : 'Liste pas encore chargée (nécessite du réseau).';
+  $('#version').textContent = 'Version ' + (CFG.VERSION || '');
+}
+
+$('#r-actif').addEventListener('change', async () => {
+  const actif = $('#r-actif').checked;
+  lsSet('loc.rappels', actif);
+  if (actif && 'Notification' in window && Notification.permission === 'default') {
+    try { await Notification.requestPermission(); } catch { /* ignoré */ }
+  }
+  if (actif && 'Notification' in window && Notification.permission === 'denied') {
+    toast('Notifications bloquées : seul le bandeau de rappel et la vibration seront utilisés.', 'attente', 6000);
+  } else if (actif) toast('Rappels activés ✓', 'succes');
+  verifierRappel();
+});
+
+$('#r-tester').addEventListener('click', async () => {
+  if ('Notification' in window && Notification.permission === 'default') {
+    try { await Notification.requestPermission(); } catch { /* ignoré */ }
+  }
+  notifier('Pensez à pointer', 'Ceci est un rappel de test.');
+  toast('⏰ Rappel de test envoyé.', '');
+});
+
+$('#btn-changer-pin').addEventListener('click', () => ouvrirChangementPin(false));
+
+$('#btn-ref').addEventListener('click', async () => {
+  const ok = await chargerReferentiel(true);
+  toast(ok ? 'Liste des quartiers mise à jour ✓' : 'Mise à jour impossible : vérifiez le réseau.', ok ? 'succes' : 'erreur');
+  rendreReglages();
+});
+
+$('#btn-voir-consentement').addEventListener('click', () => dialogue({
+  titre: 'Conditions de localisation',
+  html: `<div class="texte-consentement">${$('#texte-consentement').innerHTML}</div>`,
+}));
+
+$('#btn-retrait').addEventListener('click', async () => {
+  const c = await dialogue({
+    titre: 'Retirer mon accord ?',
+    html: '<p>Conséquences :</p><ul><li><b>Toutes vos positions enregistrées seront effacées.</b></li>'
+        + "<li>Vous ne pourrez plus pointer tant que vous n'aurez pas de nouveau accepté.</li>"
+        + '<li>Les pointages en attente sur ce téléphone seront supprimés.</li></ul>',
+    boutons: [
+      { libelle: 'Oui, retirer mon accord', valeur: 'oui', classe: 'danger' },
+      { libelle: 'Annuler', valeur: 'non', classe: 'secondaire' },
+    ],
+  });
+  if (c !== 'oui') return;
+  try {
+    const r = await rpc('loc_retirer_consentement', { p_jeton: etat.jeton, p_appareil: navigator.userAgent.slice(0, 300) });
+    if (!r.ok) {
+      if (r.erreur === 'session_invalide') return finSession(r.message);
+      return toast(r.message, 'erreur');
+    }
+    for (const p of await pointagesEnAttente()) await DB.del('file', p.id);
+    lsDel('loc.dernier');
+    etat.profil.consentement = false;
+    sauverSession();
+    await dialogue({ titre: 'Accord retiré', html: `<p>Votre accord est retiré et ${r.pointages_supprimes} position(s) ont été effacées.</p>` });
+    router();
+  } catch (e) {
+    toast(e instanceof ErreurReseau ? 'Pas de réseau : le retrait nécessite du réseau.' : 'Erreur : ' + e.message, 'erreur', 6000);
+  }
+});
+
+async function deconnexion() {
+  const n = (await pointagesEnAttente()).length;
+  const c = await dialogue({
+    titre: 'Se déconnecter ?',
+    html: n ? `<p>${n} pointage(s) ne sont pas encore envoyés. Ils restent sur le téléphone et seront envoyés à votre prochaine connexion.</p>` : '<p>Vous devrez saisir à nouveau votre numéro et votre PIN.</p>',
+    boutons: [{ libelle: 'Se déconnecter', valeur: 'oui' }, { libelle: 'Annuler', valeur: 'non', classe: 'secondaire' }],
+  });
+  if (c !== 'oui') return;
+  const jeton = etat.jeton;
+  etat.ecran = null;
+  await finSession(null);
+  rpc('loc_deconnexion', { p_jeton: jeton }).catch(() => { /* hors ligne : la session expirera seule */ });
+}
+$('#btn-deconnexion').addEventListener('click', deconnexion);
+
+/* ===========================================================================
+   NAVIGATION, RÉSEAU ET TÂCHES PÉRIODIQUES
+   =========================================================================== */
+document.querySelectorAll('#nav button').forEach(b => b.addEventListener('click', () => afficher(b.dataset.ecran)));
+
+window.addEventListener('online', async () => {
+  majReseau(true);
+  const r = await synchroniser();
+  if (r.statut === 'ok') afficherResultatSync(r);
+});
+window.addEventListener('offline', () => majReseau(false));
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !etat.jeton) return;
+  synchroniser();
+  verifierRappel();
+  if (etat.ecran === 'principal') rendrePrincipal();
+});
+
+// Toutes les minutes : renvoi de la file, rappel, mise à jour des « il y a… »
+setInterval(async () => {
+  if (!etat.jeton) return;
+  if ((await pointagesEnAttente()).length) await synchroniser();
+  verifierRappel();
+  if (etat.ecran === 'principal' && !etat.pointageEnCours) rendrePrincipal();
+}, 60 * 1000);
+
+/* ===========================================================================
+   MODE HORS LIGNE (service worker) ET INSTALLATION SUR LE TÉLÉPHONE
+   =========================================================================== */
+let invitationInstallation = null;   // proposée par Chrome quand l'appli est installable
+
+function majBlocInstallation() {
+  const installee = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const possible = !!invitationInstallation && !installee;
+  $('#btn-installer-2').hidden = !possible;
+  $('#aide-installer').hidden = possible || installee;
+  $('#bandeau-installer').hidden = !possible || lsGet('loc.installerPlusTard', 0) > Date.now();
+}
+
+async function installer() {
+  if (!invitationInstallation) return;
+  invitationInstallation.prompt();
+  const choix = await invitationInstallation.userChoice.catch(() => null);
+  invitationInstallation = null;
+  if (choix && choix.outcome === 'accepted') toast('Application installée ✓', 'succes');
+  majBlocInstallation();
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();               // on affiche notre propre bouton, plus clair
+  invitationInstallation = e;
+  majBlocInstallation();
+});
+window.addEventListener('appinstalled', () => { invitationInstallation = null; majBlocInstallation(); });
+$('#btn-installer').addEventListener('click', installer);
+$('#btn-installer-2').addEventListener('click', installer);
+$('#btn-installer-non').addEventListener('click', () => {
+  lsSet('loc.installerPlusTard', Date.now() + 7 * 24 * 3600 * 1000);   // redemander dans 7 jours
+  majBlocInstallation();
+});
+
+async function enregistrerServiceWorker() {
+  const info = $('#etat-hors-ligne');
+  if (!('serviceWorker' in navigator)) {
+    info.textContent = '⚠️ Ce navigateur ne permet pas le mode hors ligne. Utilisez Chrome sur Android.';
+    return;
+  }
+  try {
+    await navigator.serviceWorker.register('service-worker.js');
+    await navigator.serviceWorker.ready;
+    info.textContent = '✓ Mode hors ligne prêt : l\'application s\'ouvre même sans réseau.';
+  } catch (e) {
+    info.textContent = '⚠️ Mode hors ligne indisponible (' + e.message + ').';
+  }
+  // Message du service worker : file envoyée en arrière-plan
+  navigator.serviceWorker.addEventListener('message', (ev) => {
+    if (!ev.data || ev.data.type !== 'sync-termine') return;
+    lsSet('loc.dernierEnvoi', Date.now());
+    majEtatEnvoi();
+    if (ev.data.envoyes) toast(`${ev.data.envoyes} pointage(s) en attente envoyé(s) ✓`, 'succes');
+  });
+}
+
+/* ===========================================================================
+   DÉMARRAGE
+   =========================================================================== */
+async function demarrer() {
+  majReseau(navigator.onLine);
+  construireStatuts();
+  construireProvinces();
+  construireLieuxDispo();
+  etat.jeton = lsGet('loc.jeton');
+  etat.profil = lsGet('loc.profil');
+  etat.statut = lsGet('loc.statut');
+  try { etat.ref = (await DB.get('kv', 'referentiel')) || null; } catch { etat.ref = null; }
+  // Envoi fait par le service worker pendant que l'application était fermée
+  try {
+    const envoiSw = await DB.get('kv', 'dernierEnvoi');
+    if (envoiSw && envoiSw > lsGet('loc.dernierEnvoi', 0)) lsSet('loc.dernierEnvoi', envoiSw);
+  } catch { /* ignoré */ }
+  if (etat.jeton && etat.profil) sauverSession();   // copie de session pour le service worker
+  enregistrerServiceWorker();
+  majBlocInstallation();
+  router();                               // affichage immédiat, même hors ligne
+  if (etat.jeton) {
+    await rafraichirProfil();             // vérifie la session si réseau
+    await chargerReferentiel();
+    synchroniser();
+  }
+}
+demarrer();
+</script>
+</body>
+</html>
