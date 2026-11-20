@@ -7,7 +7,8 @@
  * 2. Les données (Supabase), les cartes et l'interface logistique ne sont
  *    JAMAIS mises en cache ici : aucune position n'est stockée par ce fichier.
  * 3. Envoi en arrière-plan (« Background Sync », Android / Chrome) : au retour
- *    du réseau, les pointages en attente partent même si l'application est fermée.
+ *    du réseau, les alertes Panne / Urgence (en premier) et les pointages en
+ *    attente partent même si l'application est fermée.
  * 4. Un toucher sur une notification de rappel ouvre l'application.
  *
  * Pour publier une nouvelle version : changer VERSION ci-dessous.
@@ -16,7 +17,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.2.0';   // 1.2.0 : couleurs Fortescue Belinga (vert et blanc), nouvelle adresse
+const VERSION = 'v1.3.0';   // 1.3.0 : Panne / Urgence, véhicule conduit, boutons de statut plus grands
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',
@@ -135,8 +136,47 @@ function versServeur(i) {
     quartier_detecte_id: i.quartier_detecte_id ?? null, distance_detecte_m: i.distance_detecte_m ?? null,
     quartier_confirme_id: i.quartier_confirme_id ?? null, repere: i.repere || null,
     province: i.province || null, ville: i.ville || null, lieu_dispo: i.lieu_dispo || null,
+    vehicule_id: i.vehicule_id ?? null,
     hors_ligne: Date.now() - (i.cree_ms || Date.now()) > 2 * 60 * 1000,
   };
+}
+
+/** Même préparation des alertes que dans l'application. */
+function alerteVersServeur(a) {
+  return {
+    id: a.id, motif: a.motif, message: a.message || null, horodatage: a.horodatage,
+    latitude: a.latitude ?? null, longitude: a.longitude ?? null, precision_m: a.precision_m ?? null,
+    vehicule_id: a.vehicule_id ?? null, hors_ligne: Date.now() - (a.cree_ms || Date.now()) > 2 * 60 * 1000,
+  };
+}
+
+/**
+ * Envoie les alertes Panne / Urgence en attente (clé « alertesFile »).
+ * Renvoie la liste des identifiants acceptés par le serveur.
+ */
+async function envoyerAlertes(db, CFG, session, relancerSiEchec) {
+  const file = (await operation(db, 'kv', 'readonly', (s) => s.get('alertesFile'))) || [];
+  const miennes = file.filter((a) => a.chauffeur_id === session.chauffeur_id).slice(0, 20);
+  if (!miennes.length) return [];
+  let rep;
+  try {
+    rep = await fetch(`${CFG.SUPABASE_URL}/rest/v1/rpc/loc_signaler_alertes`, {
+      method: 'POST',
+      headers: { apikey: CFG.SUPABASE_CLE, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_jeton: session.jeton, p_alertes: miennes.map(alerteVersServeur) }),
+    });
+  } catch (e) {
+    if (relancerSiEchec) throw e;   // pas de réseau : nouvel essai plus tard
+    return [];
+  }
+  if (!rep.ok) { if (relancerSiEchec && rep.status >= 500) throw new Error('serveur ' + rep.status); return []; }
+  const r = await rep.json();
+  if (!r.ok) return [];             // session expirée : la file est gardée
+  const traites = new Set([...r.acceptes, ...r.rejetes.map((x) => x.id)]);
+  // Relecture juste avant l'écriture : une nouvelle alerte a pu être ajoutée entre-temps
+  const aJour = (await operation(db, 'kv', 'readonly', (s) => s.get('alertesFile'))) || [];
+  await operation(db, 'kv', 'readwrite', (s) => s.put(aJour.filter((a) => !traites.has(a.id)), 'alertesFile'));
+  return r.acceptes;
 }
 
 /**
@@ -149,10 +189,17 @@ async function envoyerFile(relancerSiEchec) {
   const db = await ouvrirBase();
   const session = await operation(db, 'kv', 'readonly', (s) => s.get('session'));
   if (!session || !session.jeton || !CFG) return;
+  // 1. Les alertes d'urgence d'abord
+  const alertes = await envoyerAlertes(db, CFG, session, relancerSiEchec);
+  const prevenir = async (envoyes, rejets) => {
+    const fenetres = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    fenetres.forEach((c) => c.postMessage({ type: 'sync-termine', envoyes, rejets, alertes }));
+  };
+  // 2. Puis les pointages
   const items = (await operation(db, 'file', 'readonly', (s) => s.getAll()))
     .filter((i) => i.chauffeur_id === session.chauffeur_id)
     .sort((a, b) => a.horodatage.localeCompare(b.horodatage));
-  if (!items.length) return;
+  if (!items.length) { if (alertes.length) await prevenir(0, []); return; }
 
   let envoyes = 0;
   const rejets = [];
@@ -181,8 +228,7 @@ async function envoyerFile(relancerSiEchec) {
   }
   await operation(db, 'kv', 'readwrite', (s) => s.put(Date.now(), 'dernierEnvoi'));
   // Prévenir l'application si elle est ouverte
-  const fenetres = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-  fenetres.forEach((c) => c.postMessage({ type: 'sync-termine', envoyes, rejets }));
+  await prevenir(envoyes, rejets);
 }
 
 /* ---------------------------------------------------------------------------

@@ -11,6 +11,11 @@
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<!-- Regroupement des points proches sur la carte (version 1.3) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+      integrity="sha256-YU3qCpj/P06tdPBJGPax0bm6Q1wltfwjsho5TR4+TYc=" crossorigin="">
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"
+        integrity="sha256-Hk4dIpcqOSb0hZjgyvFOP+cEmDXUKKNE/tT542ZbNQg=" crossorigin=""></script>
 <!-- Supabase (connexion sécurisée e-mail + mot de passe) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <!-- Configuration Supabase (URL + clé publishable) : uniquement dans config.js -->
@@ -118,11 +123,45 @@ td.num, th.num { text-align: right; }
 .leaflet-container a.btn.sec { color: var(--primaire); }
 .marqueur-ancien { opacity: .55; }
 
-/* --- Connexion --- */
-.connexion { max-width: 420px; margin: 8vh auto; background: #fff; border: 1px solid var(--bord); border-radius: 14px; padding: 24px; }
-.connexion h1 { font-size: 22px; margin: 0 0 4px; color: var(--primaire); }
-.connexion input { width: 100%; }
-.connexion .btn { width: 100%; margin-top: 16px; min-height: 44px; }
+/* --- Connexion (version 1.3 : page soignée vert et blanc) --- */
+#e-connexion { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: linear-gradient(160deg, #00703C 0%, #004F2A 55%, #00331B 100%); }
+.connexion { width: 100%; max-width: 420px; background: #fff; border-radius: 18px; padding: 28px 26px 22px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .35); }
+.connexion .logo { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.connexion .logo img { width: 58px; height: 58px; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,112,60,.35); }
+.connexion h1 { font-size: 22px; margin: 0; color: var(--primaire); line-height: 1.15; }
+.connexion .sous-titre { margin: 2px 0 0; color: var(--doux); font-size: 14px; font-weight: 600; }
+.connexion input { width: 100%; min-height: 44px; font-size: 16px; }
+.connexion .btn { width: 100%; margin-top: 16px; min-height: 46px; font-size: 16px; }
+.connexion .btn.lien { background: none; border: 0; color: var(--primaire); text-decoration: underline; margin-top: 8px; min-height: 36px; font-weight: 600; }
+.connexion .pied { margin: 18px 0 0; padding-top: 12px; border-top: 1px solid var(--bord); font-size: 12px; color: var(--doux); text-align: center; }
+
+/* --- Urgences Panne / Accident (version 1.3) --- */
+.urgence { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 16px; background: var(--danger); color: #fff; font-weight: 700; font-size: 16px; animation: clignote 1.2s ease-in-out infinite; }
+.urgence .btn { background: #fff; color: var(--danger); border-color: #fff; }
+@keyframes clignote { 50% { background: #7F1D1D; } }
+@media (prefers-reduced-motion: reduce) { .urgence, .pulse { animation: none !important; } }
+.pulse { width: 26px; height: 26px; border-radius: 50%; background: var(--danger); border: 3px solid #fff; box-shadow: 0 0 0 0 rgba(185,28,28,.7); animation: pulse 1.4s infinite; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+@keyframes pulse { 70% { box-shadow: 0 0 0 18px rgba(185,28,28,0); } 100% { box-shadow: 0 0 0 0 rgba(185,28,28,0); } }
+tr.urgence-ouverte td { background: #FEF2F2; }
+
+/* --- Compteurs cliquables (version 1.3) --- */
+.compteurs { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.compteur { border: 2px solid var(--bord); border-left: 6px solid var(--c); background: #fff; border-radius: 10px; padding: 8px 10px; text-align: left; }
+.compteur b { display: block; font-size: 24px; line-height: 1.1; color: var(--c); }
+.compteur span { font-size: 13px; font-weight: 600; color: var(--doux); }
+.compteur[aria-pressed=true] { background: var(--c); }
+.compteur[aria-pressed=true] b, .compteur[aria-pressed=true] span { color: #fff; }
+.compteur.rouge-actif { animation: clignote-bord 1.2s infinite; }
+@keyframes clignote-bord { 50% { border-color: var(--danger); } }
+
+/* --- Points de la carte et groupes (version 1.3) --- */
+.pt { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.45); }
+.pt.ancien { opacity: .5; border-style: dashed; }
+.groupe-carte { width: 38px; height: 38px; border-radius: 50%; background: rgba(0,112,60,.92); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+.groupe-carte.grand { width: 46px; height: 46px; font-size: 16px; }
+.btn.wa { background: #128C7E; border-color: #128C7E; }
 
 /* --- Fenêtre modale --- */
 .voile { position: fixed; inset: 0; background: rgba(15,23,42,.55); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -150,17 +189,43 @@ td.num, th.num { text-align: right; }
      ÉCRAN DE CONNEXION
      ======================================================================= -->
 <section id="e-connexion" hidden>
-  <form class="connexion" id="f-connexion" novalidate>
-    <h1>Belinga Localisation</h1>
-    <p class="doux">Espace logistique — accès réservé</p>
-    <label class="champ" for="l-email">E-mail</label>
-    <input id="l-email" type="email" autocomplete="username" required>
-    <label class="champ" for="l-mdp">Mot de passe</label>
-    <input id="l-mdp" type="password" autocomplete="current-password" required>
+  <div class="connexion">
+    <div class="logo">
+      <img src="icones/icone-192.png" alt="">
+      <div><h1>Belinga Localisation</h1><p class="sous-titre">Espace logistique · accès réservé</p></div>
+    </div>
     <div id="l-msg" class="message ko" role="alert" hidden></div>
-    <button class="btn" id="l-btn" type="submit">Se connecter</button>
-    <p class="doux" style="margin-top:14px">Mot de passe oublié : l'administrateur peut le réinitialiser dans Supabase (Authentication › Users).</p>
-  </form>
+
+    <!-- 1. Connexion -->
+    <form id="f-connexion" novalidate>
+      <label class="champ" for="l-email">E-mail</label>
+      <input id="l-email" type="email" autocomplete="username" required>
+      <label class="champ" for="l-mdp">Mot de passe</label>
+      <input id="l-mdp" type="password" autocomplete="current-password" required>
+      <button class="btn" id="l-btn" type="submit">Se connecter</button>
+      <button class="btn lien" id="l-oubli" type="button">Mot de passe oublié ?</button>
+    </form>
+
+    <!-- 2. Mot de passe oublié : envoi du lien -->
+    <form id="f-oubli" novalidate hidden>
+      <p class="doux">Saisissez votre e-mail : vous recevrez un lien pour choisir un nouveau mot de passe.</p>
+      <label class="champ" for="o-email">E-mail</label>
+      <input id="o-email" type="email" autocomplete="username" required>
+      <button class="btn" id="o-btn" type="submit">Recevoir le lien</button>
+      <button class="btn lien" id="o-retour" type="button">← Retour à la connexion</button>
+    </form>
+
+    <!-- 3. Nouveau mot de passe (après le lien reçu par e-mail) -->
+    <form id="f-nouveau" novalidate hidden>
+      <p class="doux">Choisissez votre nouveau mot de passe (8 caractères au minimum).</p>
+      <label class="champ" for="n-mdp">Nouveau mot de passe</label>
+      <input id="n-mdp" type="password" autocomplete="new-password" minlength="8" required>
+      <label class="champ" for="n-mdp2">Confirmer le mot de passe</label>
+      <input id="n-mdp2" type="password" autocomplete="new-password" minlength="8" required>
+      <button class="btn" id="n-btn" type="submit">Enregistrer et me connecter</button>
+    </form>
+    <p class="pied">Logistique Fortescue Belinga · données personnelles protégées · chaque consultation est enregistrée</p>
+  </div>
 </section>
 
 <!-- =======================================================================
@@ -177,15 +242,23 @@ td.num, th.num { text-align: right; }
       <span id="maj">—</span>
       <button class="btn sec" id="btn-actualiser" type="button">⟳ Actualiser</button>
       <span id="utilisateur"></span>
+      <button class="btn sec" id="btn-mdp" type="button" title="Changer mon mot de passe">🔑 Mot de passe</button>
       <button class="btn sec" id="btn-deconnexion" type="button">Déconnexion</button>
     </div>
   </header>
+
+  <!-- Bandeau rouge : alertes Panne / Urgence non prises en charge -->
+  <div id="bandeau-urgence" class="urgence" role="alert" hidden>
+    <span id="bandeau-urgence-texte">🚨</span>
+    <button class="btn petit" id="btn-voir-urgences" type="button">Voir et prendre en charge</button>
+  </div>
 
   <nav class="onglets" role="tablist" aria-label="Sections">
     <button role="tab" data-vue="carte" aria-selected="true">🗺️ Carte</button>
     <button role="tab" data-vue="libreville">🏙️ Libreville</button>
     <button role="tab" data-vue="chauffeurs">👥 Chauffeurs</button>
     <button role="tab" data-vue="alertes">⚠️ Alertes <span id="badge-alertes" class="badge zero">0</span></button>
+    <button role="tab" data-vue="vehicules">🚙 Véhicules</button>
     <button role="tab" data-vue="synthese">📊 Synthèse</button>
     <button role="tab" data-vue="lieux">📍 Lieux et zones</button>
     <button role="tab" data-vue="journal">📜 Journal</button>
@@ -194,6 +267,7 @@ td.num, th.num { text-align: right; }
 
   <!-- ===================== VUE CARTE ===================== -->
   <section class="vue" id="v-carte">
+    <div class="compteurs" id="compteurs" role="group" aria-label="Compteurs (cliquer pour filtrer la carte)"></div>
     <div class="split">
       <div class="panneau">
         <div class="ligne">
@@ -204,6 +278,7 @@ td.num, th.num { text-align: right; }
           <span class="point" style="background:#15803D"></span>Disponible : chez lui, base MARIA, INFRATEC, fin de course<br>
           <span class="point" style="background:#D97706"></span>Disponible, à vérifier (autre endroit, GPS éloigné ou hors de Libreville)
         </p>
+        <button class="btn wa petit" id="btn-copier-dispo" type="button" style="margin-top:8px">💬 Liste des disponibles pour WhatsApp</button>
         <div class="ligne" style="margin-top:8px">
           <select id="f-zone" aria-label="Filtrer par zone"><option value="">Toutes les zones</option></select>
           <select id="f-quartier" aria-label="Filtrer par quartier"><option value="">Tous les quartiers</option></select>
@@ -260,11 +335,38 @@ td.num, th.num { text-align: right; }
   <!-- ===================== VUE ALERTES ===================== -->
   <section class="vue" id="v-alertes" hidden>
     <div class="bloc">
-      <h2>Alertes en cours</h2>
+      <div class="ligne"><h2 style="margin:0">🚨 Pannes et urgences signalées par les chauffeurs</h2>
+        <button class="btn sec petit" id="btn-urgences-recharger" type="button">⟳ Recharger</button></div>
+      <p class="doux">Alertes en cours, et alertes traitées des 7 derniers jours. Prendre en charge une alerte prévient le chauffeur sur son téléphone.</p>
+      <table>
+        <thead><tr><th>Reçue</th><th>Chauffeur</th><th>Motif</th><th>Véhicule</th><th>Position</th><th>Prise en charge</th><th>Actions</th></tr></thead>
+        <tbody id="tab-urgences"></tbody>
+      </table>
+    </div>
+    <div class="bloc">
+      <h2>Alertes de suivi (pointages)</h2>
       <p class="doux" id="alertes-regles"></p>
       <table>
         <thead><tr><th>Type</th><th>Chauffeur</th><th>Détail</th><th>Dernier pointage</th><th>Actions</th></tr></thead>
         <tbody id="tab-alertes"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== VUE VÉHICULES (version 1.3) ===================== -->
+  <section class="vue" id="v-vehicules" hidden>
+    <div class="bloc">
+      <div class="ligne">
+        <button class="btn" id="btn-ajout-vehicule" type="button">➕ Ajouter un véhicule</button>
+        <button class="btn sec" id="btn-coller-vehicules" type="button">📋 Coller une liste</button>
+        <label class="ligne" style="margin-left:auto"><input type="checkbox" id="veh-inactifs"> Afficher les véhicules retirés</label>
+      </div>
+      <p class="doux">Les chauffeurs choisissent leur véhicule dans cette liste au moment de pointer. Un véhicule retiré n'est plus proposé, mais l'historique est conservé.</p>
+    </div>
+    <div class="bloc">
+      <table class="tab-edit">
+        <thead><tr><th>Immatriculation / n° de parc</th><th>Modèle</th><th>Actif</th><th>Dernier chauffeur</th><th>Dernière position</th><th>Actions</th></tr></thead>
+        <tbody id="tab-vehicules"></tbody>
       </table>
     </div>
   </section>
@@ -348,7 +450,9 @@ td.num, th.num { text-align: right; }
           <div><label class="champ" for="pa-debut">Début du service (heure du Gabon)</label><input id="pa-debut" type="time" required></div>
           <div><label class="champ" for="pa-fin">Fin du service (heure du Gabon)</label><input id="pa-fin" type="time" required></div>
           <div><label class="champ" for="pa-precision">Précision GPS maximale conseillée (m)</label><input id="pa-precision" type="number" min="20" max="5000" required></div>
+          <div><label class="champ" for="pa-tel-logistique">📞 Téléphone de la logistique (bouton d'urgence des chauffeurs)</label><input id="pa-tel-logistique" type="text" inputmode="tel" placeholder="077 12 34 56"></div>
         </div>
+        <p class="doux">Ce numéro est composé quand un chauffeur touche « Appeler la logistique » après une panne ou un accident. Choisissez un téléphone joignable en permanence (permanence, chef de quart).</p>
         <label class="champ">Jours de service</label>
         <div class="puces" id="pa-jours"></div>
         <div id="pa-msg"></div>
@@ -408,6 +512,15 @@ const LIEUX_DISPO = {
 };
 const COULEUR_A_VERIFIER = '#D97706';
 
+/* Motifs des alertes Panne / Urgence (version 1.3, mêmes codes que la base) */
+const MOTIFS = {
+  panne:     { libelle: 'Panne',         ico: '🔧' },
+  crevaison: { libelle: 'Crevaison',     ico: '🛞' },
+  accident:  { libelle: 'Accident',      ico: '💥' },
+  malaise:   { libelle: 'Malaise',       ico: '🚑' },
+  autre:     { libelle: 'Autre urgence', ico: '⚠️' },
+};
+
 /* Villes de référence pour estimer la province hors des zones (approximatif) */
 const VILLES_PROVINCES = [
   ['Estuaire', 0.39, 9.45], ['Estuaire', 0.39, 9.76], ['Estuaire', 1.00, 9.58], ['Estuaire', 0.17, 10.12],
@@ -427,6 +540,7 @@ const ACTIONS_JOURNAL = {
   deblocage: 'Compte débloqué', import_chauffeurs: 'Import CSV', blocage_pin: 'Blocage (erreurs de PIN)',
   retrait_consentement: 'Retrait du consentement', purge_automatique: 'Purge automatique (30 jours)',
   modification_chauffeur: 'Chauffeur modifié', ajout_chauffeur: 'Chauffeur ajouté', suppression_chauffeur: 'Chauffeur supprimé',
+  consultation_alertes: 'Consultation des alertes Panne / Urgence', alerte_traitee: 'Alerte Panne / Urgence prise en charge',
 };
 
 /* État en mémoire */
@@ -434,7 +548,15 @@ const etat = {
   user: null, chauffeurs: [], lieux: [], zones: [], params: {}, maj: null,
   vue: 'carte', cartes: {}, couches: {}, filtreStatuts: new Set(), chargement: false,
   modeCarte: null,  // 'pc' (prise en charge), 'lieu', 'zone'
+  vehicules: [],    // version 1.3 : liste des véhicules
+  urgences: [],     // version 1.3 : alertes Panne / Urgence (en cours + traitées récentes)
+  urgencesEtat: { ouvertes: 0, derniere: null },
+  filtreSpecial: null,  // compteurs : 'dispo' | 'verifier' | 'sans_nouvelles'
 };
+
+/* Retour depuis le lien « Mot de passe oublié » reçu par e-mail (lu AVANT la création du client,
+   qui efface l'adresse) : on affichera le formulaire « nouveau mot de passe ». */
+const RETOUR_RECUPERATION = /type=recovery/.test(location.hash) || /type=recovery/.test(location.search);
 
 const sb = (window.supabase && CFG) ? window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_CLE, {
   auth: { persistSession: true, autoRefreshToken: true, storageKey: 'loc-logistique-auth' },
@@ -537,12 +659,98 @@ const rpc = (nom, params = {}) => api(sb.rpc(nom, params));
 /* ===========================================================================
    CONNEXION / DÉCONNEXION
    =========================================================================== */
-function afficherConnexion(message, type = 'ko') {
+function afficherConnexion(message, type = 'ko', formulaire = 'connexion') {
   $('#app').hidden = true; $('#e-connexion').hidden = false;
-  const m = $('#l-msg');
-  if (message) { m.textContent = message; m.className = 'message ' + type; m.hidden = false; } else m.hidden = true;
-  etat.chauffeurs = []; // aucune position ne reste affichée
+  formulaireConnexion(formulaire);
+  messageConnexion(message, type);
+  etat.chauffeurs = []; etat.urgences = []; // aucune position ne reste affichée
+  arreterSignalUrgence();
 }
+
+/** Affiche l'un des trois formulaires de la page de connexion. */
+function formulaireConnexion(nom) {
+  ['connexion', 'oubli', 'nouveau'].forEach(f => { $('#f-' + f).hidden = f !== nom; });
+  const champ = { connexion: '#l-email', oubli: '#o-email', nouveau: '#n-mdp' }[nom];
+  setTimeout(() => $(champ)?.focus(), 30);
+}
+function messageConnexion(texte, type = 'ko') {
+  const m = $('#l-msg');
+  if (!texte) { m.hidden = true; return; }
+  m.textContent = texte; m.className = 'message ' + type; m.hidden = false;
+}
+$('#l-oubli').addEventListener('click', () => {
+  $('#o-email').value = $('#l-email').value.trim();
+  messageConnexion(null); formulaireConnexion('oubli');
+});
+$('#o-retour').addEventListener('click', () => { messageConnexion(null); formulaireConnexion('connexion'); });
+
+/* Mot de passe oublié : Supabase envoie un lien qui ramène sur CETTE page.
+   (L'adresse de la page doit figurer dans Supabase > Authentication > URL Configuration > Redirect URLs.) */
+$('#f-oubli').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const email = $('#o-email').value.trim();
+  if (!/^\S+@\S+\.\S+$/.test(email)) return messageConnexion('Saisissez une adresse e-mail valide.');
+  const btn = $('#o-btn'); btn.disabled = true; btn.textContent = 'Envoi…';
+  try {
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    if (error && /rate limit|security purposes/i.test(error.message)) throw new Error('Trop de demandes : patientez une minute avant de redemander un lien.');
+    if (error) throw new Error(messageErreur(error));
+    messageConnexion(`Si un compte existe pour ${email}, un e-mail vient d'être envoyé. Ouvrez le lien qu'il contient (pensez aux courriers indésirables).`, 'ok');
+    formulaireConnexion('connexion');
+  } catch (e) { messageConnexion(e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Recevoir le lien'; }
+});
+
+/** Contrôle d'un nouveau mot de passe ; renvoie un message d'erreur ou null. */
+function motDePasseInvalide(m1, m2) {
+  if (m1.length < 8) return 'Le mot de passe doit contenir au moins 8 caractères.';
+  if (m1 !== m2) return 'Les deux mots de passe ne sont pas identiques.';
+  return null;
+}
+async function changerMotDePasse(nouveau) {
+  const { error } = await sb.auth.updateUser({ password: nouveau });
+  if (!error) return;
+  if (/different from the old|same as/i.test(error.message)) throw new Error("Le nouveau mot de passe doit être différent de l'ancien.");
+  if (/weak|at least|characters/i.test(error.message)) throw new Error('Mot de passe trop faible : au moins 8 caractères, mélangez lettres et chiffres.');
+  if (/reauthenticat|nonce/i.test(error.message)) throw new Error('Pour des raisons de sécurité, déconnectez-vous puis utilisez « Mot de passe oublié ».');
+  throw new Error(messageErreur(error));
+}
+
+/* Lien reçu par e-mail : choix du nouveau mot de passe */
+$('#f-nouveau').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const err = motDePasseInvalide($('#n-mdp').value, $('#n-mdp2').value);
+  if (err) return messageConnexion(err);
+  const btn = $('#n-btn'); btn.disabled = true; btn.textContent = 'Enregistrement…';
+  try {
+    const { data } = await sb.auth.getSession();
+    if (!data || !data.session) throw new Error('Lien expiré : redemandez un lien « Mot de passe oublié ».');
+    await changerMotDePasse($('#n-mdp').value);
+    $('#n-mdp').value = ''; $('#n-mdp2').value = '';
+    history.replaceState(null, '', location.pathname);
+    formulaireConnexion('connexion');
+    await ouvrirApplication(data.session.user);
+    toast('Nouveau mot de passe enregistré ✓', 'ok', 6000);
+  } catch (e) { messageConnexion(e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Enregistrer et me connecter'; }
+});
+
+/* Bouton « 🔑 Mot de passe » de la barre du haut */
+$('#btn-mdp').addEventListener('click', async () => {
+  const choix = await modale('Changer mon mot de passe', `
+      <label class="champ" for="cm-1">Nouveau mot de passe (8 caractères au minimum)</label>
+      <input id="cm-1" class="champ-l" type="password" autocomplete="new-password">
+      <label class="champ" for="cm-2">Confirmer le nouveau mot de passe</label>
+      <input id="cm-2" class="champ-l" type="password" autocomplete="new-password">`,
+    [{ libelle: 'Enregistrer', valeur: 'ok' }, { libelle: 'Annuler', valeur: 'annuler', classe: 'sec' }],
+    async () => {
+      const err = motDePasseInvalide($('#cm-1').value, $('#cm-2').value);
+      if (err) throw new Error(err);
+      await changerMotDePasse($('#cm-1').value);
+      return true;
+    });
+  if (choix === 'ok') toast('Mot de passe changé ✓ Utilisez-le à votre prochaine connexion.', 'ok', 6000);
+});
 
 async function sessionExpiree() {
   try { await sb.auth.signOut({ scope: 'local' }); } catch { /* ignoré */ }
@@ -553,7 +761,7 @@ $('#f-connexion').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const email = $('#l-email').value.trim(), mdp = $('#l-mdp').value;
   const m = $('#l-msg'); m.hidden = true;
-  if (!email || !mdp) { m.textContent = 'Saisissez votre e-mail et votre mot de passe.'; m.className = 'message ko'; m.hidden = false; return; }
+  if (!email || !mdp) { messageConnexion('Saisissez votre e-mail et votre mot de passe.'); return; }
   const btn = $('#l-btn'); btn.disabled = true; btn.textContent = 'Connexion…';
   try {
     const { data, error } = await sb.auth.signInWithPassword({ email, password: mdp });
@@ -566,7 +774,7 @@ $('#f-connexion').addEventListener('submit', async (ev) => {
     $('#l-mdp').value = '';
     await ouvrirApplication(data.user);
   } catch (e) {
-    m.textContent = e.message; m.className = 'message ko'; m.hidden = false;
+    messageConnexion(e.message);
   } finally { btn.disabled = false; btn.textContent = 'Se connecter'; }
 });
 
@@ -583,6 +791,7 @@ async function ouvrirApplication(user) {
   initialiserFiltres();
   afficherVue(etat.vue);
   await chargerTout();
+  await verifierUrgences(true);
 }
 
 $('#btn-deconnexion').addEventListener('click', async () => {
@@ -600,13 +809,14 @@ async function chargerTout() {
   etat.rechargerApres = false;
   $('#btn-actualiser').disabled = true;
   try {
-    const [positions, lieux, zones, params] = await Promise.all([
+    const [positions, lieux, zones, params, vehicules] = await Promise.all([
       rpc('loc_positions_actuelles'),           // consultation AUDITÉE
       api(sb.from('loc_lieux').select('id,nom,type,ville,latitude,longitude,rayon_m,approximatif,actif,code').order('nom')),
       api(sb.from('loc_zones').select('id,nom,type,latitude,longitude,rayon_m,ordre,couleur,approximatif,actif').order('ordre')),
       api(sb.from('loc_parametres').select('cle,valeur')),
+      api(sb.from('loc_vehicules').select('id,immatriculation,modele,actif').order('immatriculation')),
     ]);
-    etat.lieux = lieux; etat.zones = zones;
+    etat.lieux = lieux; etat.zones = zones; etat.vehicules = vehicules;
     etat.params = Object.fromEntries(params.map(p => [p.cle, p.valeur]));
     etat.chauffeurs = positions.map(enrichir);
     etat.maj = new Date();
@@ -716,6 +926,9 @@ function enrichir(c) {
   }
   c._dispo = !!(c.actif && c._consent && d && STATUTS_DISPONIBLES.includes(d.statut) && c._recent);
   evaluerDisponibilite(c);
+  // Version 1.3 : véhicule du dernier pointage et alerte Panne / Urgence en cours
+  c._vehicule = d && d.vehicule ? d.vehicule + (d.vehicule_modele ? ' · ' + d.vehicule_modele : '') : null;
+  c._urgence = etat.urgences.find(u => u.chauffeur_id === c.id && !u.traitee_le) || null;
 
   // Alertes (chauffeurs actifs uniquement)
   c._alertes = [];
@@ -753,6 +966,7 @@ function afficherVue(vue) {
   if (vue === 'libreville') { initCarte('lbv', 'map-lbv', [0.41, 9.47], 12); }
   if (vue === 'lieux') { initCarte('lieux', 'map-lieux', [0.41, 9.47], 12); chargerStatsLieux(); }
   if (vue === 'journal') chargerJournal();
+  if (vue === 'alertes' && etat.user) chargerUrgences();
   rendreVue(vue);
   Object.values(etat.cartes).forEach(m => setTimeout(() => m.invalidateSize(), 50));
 }
@@ -760,13 +974,14 @@ document.querySelectorAll('.onglets button').forEach(b => b.addEventListener('cl
 
 function rendreTout() {
   rendreFiltresOptions();
-  const nbAlertes = etat.chauffeurs.reduce((n, c) => n + c._alertes.filter(a => a.niveau === 'ko').length, 0);
+  const nbAlertes = etat.chauffeurs.reduce((n, c) => n + c._alertes.filter(a => a.niveau === 'ko').length, 0) + urgencesOuvertes().length;
   const b = $('#badge-alertes'); b.textContent = nbAlertes; b.className = 'badge' + (nbAlertes ? '' : ' zero');
   rendreVue(etat.vue);
 }
 function rendreVue(vue) {
   if (!etat.maj) return;
-  ({ carte: rendreCarte, libreville: rendreLibreville, chauffeurs: rendreChauffeurs, alertes: rendreAlertes,
+  ({ carte: rendreCarte, libreville: rendreLibreville, chauffeurs: rendreChauffeurs,
+     alertes: () => { rendreUrgences(); rendreAlertes(); }, vehicules: rendreVehicules,
      synthese: rendreSynthese, lieux: rendreLieux, parametres: rendreParametres }[vue] || (() => {}))();
 }
 
@@ -786,9 +1001,10 @@ function initCarte(cle, id, centre, zoom) {
 
 /** Marqueur coloré selon le statut (plus pâle si le pointage est ancien). */
 function marqueurChauffeur(c) {
-  const mk = L.circleMarker(c._pos, {
-    radius: 9, color: '#fff', weight: 2, fillColor: couleurChauffeur(c), fillOpacity: c._recent ? 0.95 : 0.4,
-    dashArray: c._recent ? null : '3',
+  const mk = L.marker(c._pos, {
+    title: c._nom,
+    icon: L.divIcon({ className: '', iconSize: [18, 18], iconAnchor: [9, 9],
+      html: `<div class="pt${c._recent ? '' : ' ancien'}" style="background:${couleurChauffeur(c)}"></div>` }),
   });
   mk.bindTooltip(`${esc(c._nom)} — ${esc(ilYa(c.dernier.horodatage))}`);
   mk.bindPopup(() => popupChauffeur(c));
@@ -809,8 +1025,10 @@ function popupChauffeur(c) {
     + (c._provinceDeclaree ? `Province déclarée : <b>${esc(texteProvince(d.province, d.ville))}</b>`
         + (c._zone ? ` <span class="doux">(GPS : ${esc(c._zone.nom)})</span>` : '') + '<br>' : '')
     + (d && d.precision_m != null ? `<span class="doux">Précision ± ${Math.round(d.precision_m)} m</span><br>` : '')
+    + (c._vehicule ? `Véhicule : 🚙 <b>${esc(c._vehicule)}</b><br>` : '')
+    + (c._urgence ? `<span class="etiq ko">🚨 ${esc((MOTIFS[c._urgence.motif] || {}).libelle || 'Urgence')} en cours</span><br>` : '')
     + (b ? `Binôme : ${esc(nomComplet(b))} <a href="tel:${esc(b.telephone)}">${esc(b.telephone)}</a><br>` : '')
-    + `<a class="btn appel petit" href="tel:${esc(c.telephone)}">📞 Appeler ${esc(c.telephone)}</a> `
+    + `<a class="btn appel petit" href="tel:${esc(c.telephone)}">📞 Appeler ${esc(c.telephone)}</a> ${boutonWhatsApp(c)} `
     + `<button class="btn sec petit" type="button" data-action="historique" data-id="${esc(c.id)}">🕘 Historique 7 j</button>`;
 }
 
@@ -851,22 +1069,102 @@ function chauffeursFiltres() {
     && (!dispo || c._dispo)
     && (!zone || c._zoneNom === zone)
     && (!q || c._quartier === q)
-    && (!etat.filtreStatuts.size || (c.dernier && etat.filtreStatuts.has(c.dernier.statut))));
+    && (!etat.filtreStatuts.size || (c.dernier && etat.filtreStatuts.has(c.dernier.statut)))
+    && (!etat.filtreSpecial || COMPTEURS.find(k => k.cle === etat.filtreSpecial).test(c)));
 }
+
+/* ---------------------------------------------------------------------------
+   Compteurs cliquables en haut de la carte (version 1.3)
+   --------------------------------------------------------------------------- */
+const COMPTEURS = [
+  { cle: 'dispo', libelle: 'Disponibles', couleur: '#15803D', test: c => c._dispo && c._dispoEtat !== 'orange' },
+  { cle: 'verifier', libelle: 'Dispo à vérifier', couleur: COULEUR_A_VERIFIER, test: c => c._dispoEtat === 'orange' },
+  { cle: 'en_mission', libelle: 'En mission', couleur: '#1D4ED8', test: c => !!c.dernier && c.dernier.statut === 'en_mission' },
+  { cle: 'en_course', libelle: 'En course', couleur: '#7C3AED', test: c => !!c.dernier && c.dernier.statut === 'en_course' },
+  { cle: 'sur_site', libelle: 'Sur site', couleur: '#B45309', test: c => !!c.dernier && c.dernier.statut === 'sur_site' },
+  { cle: 'sans_nouvelles', libelle: 'Sans nouvelles', couleur: '#64748B', test: c => c._consent && (!c.dernier || (!c._prive && !c._recent)) },
+];
+function rendreCompteurs() {
+  const actifs = etat.chauffeurs.filter(c => c.actif);
+  const nbUrgences = urgencesOuvertes().length;
+  $('#compteurs').innerHTML = COMPTEURS.map(k => `<button type="button" class="compteur" data-compteur="${k.cle}" style="--c:${k.couleur}" aria-pressed="${etat.filtreSpecial === k.cle}">`
+      + `<b>${actifs.filter(k.test).length}</b><span>${esc(k.libelle)}</span></button>`).join('')
+    + `<button type="button" class="compteur${nbUrgences ? ' rouge-actif' : ''}" data-compteur="urgences" style="--c:#B91C1C" aria-pressed="false">`
+    + `<b>${nbUrgences}</b><span>🚨 Urgences en cours</span></button>`;
+}
+$('#compteurs').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-compteur]');
+  if (!b) return;
+  const cle = b.dataset.compteur;
+  if (cle === 'urgences') return afficherVue('alertes');
+  etat.filtreSpecial = etat.filtreSpecial === cle ? null : cle;
+  rendreCarte();
+});
+
+/* ---------------------------------------------------------------------------
+   WhatsApp (version 1.3) : numéro international +241 sans le 0 de tête
+   --------------------------------------------------------------------------- */
+function telInternational(t) {
+  const v = normaliserTel(t);
+  if (/^0\d{8}$/.test(v)) return '241' + v.slice(1);
+  if (/^\d{8}$/.test(v)) return '241' + v;
+  return null;
+}
+function lienWhatsApp(t, texte = '') {
+  const n = telInternational(t);
+  return n ? `https://wa.me/${n}${texte ? '?text=' + encodeURIComponent(texte) : ''}` : null;
+}
+function boutonWhatsApp(c, texte) {
+  const u = lienWhatsApp(c.telephone, texte || `Bonjour ${c.prenom || c.nom}, ici la logistique Fortescue Belinga. `);
+  return u ? `<a class="btn wa petit" href="${esc(u)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">💬 WhatsApp</a>` : '';
+}
+
+/** Texte de la liste des chauffeurs disponibles, prêt à coller dans un groupe WhatsApp. */
+function texteDisponibles() {
+  const liste = etat.chauffeurs.filter(c => c.actif && c._dispo)
+    .sort((a, b) => (a._dispoEtat === 'orange') - (b._dispoEtat === 'orange') || a._zoneNom.localeCompare(b._zoneNom, 'fr') || a._nom.localeCompare(b._nom, 'fr'));
+  const lignes = liste.map(c => {
+    const ou = c.dernier.statut === 'sur_site' ? 'Sur site'
+      : (c._dispoEtat === 'orange' ? 'à vérifier' : (LIEUX_DISPO[c.dernier.lieu_dispo] || {}).libelle || 'Libreville');
+    return `• ${c._nom} — ${c.telephone} — ${ou}${c._quartier ? ' (' + c._quartier.replace(' (calculé)', '') + ')' : ''}`
+      + `${c._vehicule ? ' — 🚙 ' + c._vehicule : ''} — pointé ${ilYa(c.dernier.horodatage)}`;
+  });
+  return `*Chauffeurs disponibles — ${dateHeure(new Date())} (heure du Gabon)*\n`
+    + (lignes.length ? lignes.join('\n') : 'Aucun chauffeur disponible pour le moment.')
+    + `\n\n${liste.length} disponible(s). Logistique Fortescue Belinga.`;
+}
+async function copierTexte(t) {
+  try { await navigator.clipboard.writeText(t); return true; } catch { /* repli ci-dessous */ }
+  const z = document.createElement('textarea'); z.value = t; document.body.appendChild(z); z.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch { /* ignoré */ }
+  z.remove(); return ok;
+}
+$('#btn-copier-dispo').addEventListener('click', async () => {
+  if (!etat.maj) return;
+  const t = texteDisponibles();
+  const copie = await copierTexte(t);
+  modale('Liste des disponibles pour WhatsApp',
+    `<p class="doux">${copie ? '✓ Texte copié : collez-le dans le groupe WhatsApp (appui long › Coller).' : 'Sélectionnez le texte ci-dessous et copiez-le.'}</p>`
+    + `<textarea class="champ-l" rows="10" readonly style="width:100%;font-family:inherit">${esc(t)}</textarea>`
+    + `<p><a class="btn wa" href="https://wa.me/?text=${esc(encodeURIComponent(t))}" target="_blank" rel="noopener">💬 Ouvrir WhatsApp pour l'envoyer</a></p>`);
+});
 
 function carteChauffeurHtml(c) {
   const d = c.dernier, s = d ? STATUTS[d.statut] : null;
   return `<div class="carte-ch" data-action="localiser" data-id="${esc(c.id)}">`
     + `<div class="t"><b>${s ? `<span class="point" style="background:${couleurChauffeur(c)}"></span>` : ''}${esc(c._nom)}</b>`
     + `<span class="doux">${d ? esc(ilYa(d.horodatage)) : 'jamais'}</span></div>`
-    + `<div class="doux">${s ? esc(s.libelle) : 'Aucun pointage'} · ${esc(c._zoneNom)}${c._quartier ? ' · ' + esc(c._quartier) : ''}</div>`
+    + `<div class="doux">${s ? esc(s.libelle) : 'Aucun pointage'} · ${esc(c._zoneNom)}${c._quartier ? ' · ' + esc(c._quartier) : ''}${c._vehicule ? ' · 🚙 ' + esc(c._vehicule) : ''}</div>`
     + `<div class="ligne" style="margin-top:4px"><a class="btn appel petit" href="tel:${esc(c.telephone)}" onclick="event.stopPropagation()">📞 ${esc(c.telephone)}</a>`
+    + boutonWhatsApp(c)
+    + (c._urgence ? `<span class="etiq ko">🚨 ${esc((MOTIFS[c._urgence.motif] || {}).libelle || 'urgence')}</span>` : '')
     + (c._alertes.some(a => a.niveau === 'ko') ? '<span class="etiq ko">⚠ alerte</span>' : '')
     + (c._dispoEtat === 'orange' ? '<span class="etiq att">dispo à vérifier</span>' : (c._dispo ? '<span class="etiq ok">disponible</span>' : ''))
     + '</div>' + (c._dispoEtat ? `<div class="doux">${esc(c._dispoMotif)}</div>` : '') + '</div>';
 }
 
 function rendreCarte() {
+  rendreCompteurs();
   const liste = chauffeursFiltres();
   $('#nb-liste').textContent = liste.length;
   $('#liste-carte').innerHTML = liste.length ? liste.map(carteChauffeurHtml).join('') : '<p class="vide">Aucun chauffeur ne correspond aux filtres.</p>';
@@ -874,7 +1172,24 @@ function rendreCarte() {
   if (!couche) return;
   couche.clearLayers();
   etat.marqueurs = {};
-  liste.filter(c => c._pos).forEach(c => { etat.marqueurs[c.id] = marqueurChauffeur(c).addTo(couche); });
+  // Version 1.3 : les points proches se regroupent en une bulle chiffrée (zoom pour le détail)
+  const groupe = L.markerClusterGroup ? L.markerClusterGroup({
+    maxClusterRadius: 40, showCoverageOnHover: false, disableClusteringAtZoom: 16, spiderfyOnMaxZoom: true,
+    iconCreateFunction: (g) => {
+      const n = g.getChildCount(), t = n >= 10 ? 46 : 38;
+      return L.divIcon({ className: '', iconSize: [t, t], iconAnchor: [t / 2, t / 2], html: `<div class="groupe-carte${n >= 10 ? ' grand' : ''}">${n}</div>` });
+    },
+  }) : L.layerGroup();
+  liste.filter(c => c._pos).forEach(c => { etat.marqueurs[c.id] = marqueurChauffeur(c); groupe.addLayer(etat.marqueurs[c.id]); });
+  groupe.addTo(couche);
+  etat.groupeCarte = groupe;
+  // Alertes Panne / Urgence en cours : point rouge clignotant, toujours visible (hors regroupement)
+  etat.marqueursUrgence = {};
+  urgencesOuvertes().filter(u => u.latitude != null).forEach(u => {
+    etat.marqueursUrgence[u.id] = L.marker([u.latitude, u.longitude], { zIndexOffset: 1000, title: 'Urgence : ' + nomComplet(u),
+      icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: '<div class="pulse">🚨</div>' }) })
+      .bindPopup(() => popupUrgence(u)).addTo(couche);
+  });
   // Zones en arrière-plan
   zonesActives().forEach(z => L.circle([z.latitude, z.longitude], { radius: z.rayon_m, color: z.couleur, weight: 1, fill: false, dashArray: '4', interactive: false }).addTo(couche));
 }
@@ -894,8 +1209,9 @@ function localiserChauffeur(id) {
     etat.filtreStatuts.clear(); document.querySelectorAll('#f-statuts .puce').forEach(p => p.setAttribute('aria-pressed', 'false'));
     rendreCarte();
   }
-  etat.cartes.carte.setView(c._pos, 14);
-  etat.marqueurs[id]?.openPopup();
+  const mk = etat.marqueurs[id];
+  if (mk && etat.groupeCarte && etat.groupeCarte.zoomToShowLayer) etat.groupeCarte.zoomToShowLayer(mk, () => mk.openPopup());
+  else { etat.cartes.carte.setView(c._pos, 14); mk?.openPopup(); }
 }
 
 /* ===========================================================================
@@ -983,13 +1299,15 @@ $('#recherche').addEventListener('input', () => {
   const zone = $('#resultats');
   if (q.length < 2) { zone.hidden = true; return; }
   const res = etat.chauffeurs.filter(c => normaliser(c._nom).includes(q) || normaliser(c.nom + ' ' + (c.prenom || '')).includes(q)
-    || normaliser(c.matricule).includes(q) || (qTel.length >= 3 && c.telephone.includes(qTel))).slice(0, 10);
+    || normaliser(c.matricule).includes(q) || (qTel.length >= 3 && c.telephone.includes(qTel))
+    || (c._vehicule && normaliser(c._vehicule).replace(/[\s-]/g, '').includes(q.replace(/[\s-]/g, '')))).slice(0, 10);
   zone.innerHTML = res.length ? res.map(c => {
     const s = c.dernier ? STATUTS[c.dernier.statut] : null;
     return `<div class="resultat"><div class="q"><b>${esc(c._nom)}</b> <span class="doux">${esc(c.matricule)} · ${esc(c.telephone)}</span><br>`
       + `<span class="doux">${s ? `<span class="point" style="background:${s.couleur}"></span>${esc(s.libelle)} · ${esc(ilYa(c.dernier.horodatage))}` : 'Aucun pointage'} · ${esc(c._zoneNom)}${c._quartier ? ' · ' + esc(c._quartier) : ''}</span>`
+      + (c._vehicule ? `<br><span class="doux">🚙 ${esc(c._vehicule)}</span>` : '')
       + (c.binome ? `<br><span class="doux">Binôme : ${esc(nomComplet(c.binome))} (${esc(c.binome.telephone)})</span>` : '') + '</div>'
-      + `<a class="btn appel petit" href="tel:${esc(c.telephone)}">📞 Appeler</a>`
+      + `<a class="btn appel petit" href="tel:${esc(c.telephone)}">📞 Appeler</a>` + boutonWhatsApp(c)
       + `<button class="btn sec petit" type="button" data-action="localiser" data-id="${esc(c.id)}">🗺️ Voir</button></div>`;
   }).join('') : '<div class="resultat doux">Aucun chauffeur trouvé.</div>';
   zone.hidden = false;
@@ -1011,6 +1329,10 @@ document.addEventListener('click', (e) => {
     'lieu-voir': () => voirLieu(Number(id)),
     'zone-enregistrer': () => enregistrerLigneZone(Number(id)),
     'repere-creer': () => creerLieuDepuisRepere(Number(el.dataset.index)),
+    'urgence-traiter': () => traiterUrgence(id),
+    'urgence-voir': () => voirUrgence(id),
+    'veh-enregistrer': () => enregistrerVehicule(Number(id)),
+    'veh-supprimer': () => supprimerVehicule(Number(id)),
   };
   if (actions[el.dataset.action]) { e.preventDefault(); actions[el.dataset.action](); }
 });
@@ -1026,7 +1348,7 @@ async function afficherHistorique(id) {
       const s = STATUTS[p.statut] || { libelle: p.statut, couleur: '#555' };
       const ld = p.lieu_dispo && LIEUX_DISPO[p.lieu_dispo];
       return `<tr><td>${esc(dateHeure(p.horodatage))}</td><td><span class="point" style="background:${s.couleur}"></span>${esc(s.libelle)}${p.destination ? ' → ' + esc(p.destination) : ''}`
-        + `${ld ? `<br><span class="doux">${ld.ico} ${esc(ld.libelle)}</span>` : ''}</td>`
+        + `${ld ? `<br><span class="doux">${ld.ico} ${esc(ld.libelle)}</span>` : ''}${p.vehicule ? `<br><span class="doux">🚙 ${esc(p.vehicule)}</span>` : ''}</td>`
         + `<td>${p.province ? '<b>' + esc(texteProvince(p.province, p.ville)) + '</b> <span class="doux">(déclarée)</span><br>' : ''}`
         + `${p.latitude != null ? esc(zoneDe(p.latitude, p.longitude).nom) : '<span class="doux">sans position</span>'}</td>`
         + `<td>${esc(p.quartier_confirme || p.quartier_detecte || '')}${p.quartier_detecte && p.quartier_confirme && p.quartier_detecte !== p.quartier_confirme ? ` <span class="doux">(proposé : ${esc(p.quartier_detecte)})</span>` : ''}${p.repere ? '<br>« ' + esc(p.repere) + ' »' : ''}</td>`
@@ -1068,7 +1390,7 @@ function rendreChauffeurs() {
     return `<tr class="${c.actif ? '' : 'inactif'}"><td>${esc(c.matricule)}</td><td><b>${esc(c._nom)}</b></td>`
       + `<td><a href="tel:${esc(c.telephone)}">${esc(c.telephone)}</a></td><td>${c.equipe === 'libreville' ? 'Libreville' : 'Site'}</td>`
       + `<td>${c.binome ? esc(nomComplet(c.binome)) + `<br><a class="doux" href="tel:${esc(c.binome.telephone)}">${esc(c.binome.telephone)}</a>` : '<span class="doux">—</span>'}</td>`
-      + `<td>${s ? `<span class="point" style="background:${s.couleur}"></span>${esc(s.libelle)}<br><span class="doux">${esc(c._zoneNom)}${c._quartier ? ' · ' + esc(c._quartier) : ''}</span>` : '<span class="doux">—</span>'}</td>`
+      + `<td>${s ? `<span class="point" style="background:${s.couleur}"></span>${esc(s.libelle)}<br><span class="doux">${esc(c._zoneNom)}${c._quartier ? ' · ' + esc(c._quartier) : ''}${c._vehicule ? '<br>🚙 ' + esc(c._vehicule) : ''}</span>` : '<span class="doux">—</span>'}</td>`
       + `<td>${d ? esc(dateHeure(d.horodatage)) + '<br><span class="doux">' + esc(ilYa(d.horodatage)) + '</span>' : '<span class="doux">jamais</span>'}</td>`
       + `<td>${compte}</td>`
       + `<td><div class="ligne"><button class="btn sec petit" data-action="modifier" data-id="${esc(c.id)}">Modifier</button>`
@@ -1264,10 +1586,251 @@ function rendreAlertes() {
   $('#tab-alertes').innerHTML = lignes.length ? lignes.map(({ c, a }) => `<tr><td><span class="etiq ${a.niveau}">${esc(a.type)}</span></td>`
     + `<td><b>${esc(c._nom)}</b><br><span class="doux">${esc(c.matricule)} · ${c.equipe === 'libreville' ? 'Libreville' : 'Site'}</span></td>`
     + `<td>${esc(a.detail)}</td><td>${c.dernier ? esc(dateHeure(c.dernier.horodatage)) + '<br><span class="doux">' + esc(ilYa(c.dernier.horodatage)) + '</span>' : '—'}</td>`
-    + `<td><div class="ligne"><a class="btn appel petit" href="tel:${esc(c.telephone)}">📞 Appeler</a>`
+    + `<td><div class="ligne"><a class="btn appel petit" href="tel:${esc(c.telephone)}">📞 Appeler</a>` + boutonWhatsApp(c)
     + (c.binome ? `<a class="btn sec petit" href="tel:${esc(c.binome.telephone)}" title="${esc(nomComplet(c.binome))}">📞 Binôme</a>` : '')
     + (c._pos ? `<button class="btn sec petit" data-action="localiser" data-id="${esc(c.id)}">🗺️ Voir</button>` : '') + '</div></td></tr>').join('')
     : '<tr><td colspan="5" class="vide">Aucune alerte. ✓</td></tr>';
+}
+
+/* ===========================================================================
+   PANNES / URGENCES (version 1.3)
+   - Toutes les 30 s : loc_alertes_etat() (nombre d'alertes ouvertes, AUCUNE position,
+     rien n'est écrit au journal).
+   - Quand quelque chose change : loc_alertes_liste() (consultation journalisée).
+   - Nouvelle alerte : bandeau rouge clignotant, son, titre de l'onglet qui clignote.
+   =========================================================================== */
+const urgencesOuvertes = () => etat.urgences.filter(u => !u.traitee_le);
+
+let audioCtx = null;
+// Les navigateurs n'autorisent le son qu'après un premier clic dans la page
+document.addEventListener('click', () => {
+  try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); } catch { /* sans son */ }
+}, { capture: true });
+function sonnerUrgence() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = audioCtx.currentTime;
+    [0, 0.35, 0.7, 1.4, 1.75, 2.1].forEach(t => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'square'; o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, t0 + t);
+      g.gain.exponentialRampToValueAtTime(0.2, t0 + t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + t + 0.25);
+      o.connect(g).connect(audioCtx.destination);
+      o.start(t0 + t); o.stop(t0 + t + 0.3);
+    });
+  } catch { /* navigateur sans son : le bandeau suffit */ }
+}
+
+let minuteurTitre = null;
+const TITRE = document.title;
+function majSignalUrgence() {
+  const ouvertes = urgencesOuvertes();
+  const n = ouvertes.length || etat.urgencesEtat.ouvertes || 0;
+  const bandeau = $('#bandeau-urgence');
+  bandeau.hidden = !n;
+  if (!n) { arreterSignalUrgence(); return; }
+  const detail = ouvertes.slice(0, 3).map(u => `${(MOTIFS[u.motif] || {}).libelle || u.motif} — ${nomComplet(u)} (${ilYa(u.horodatage)})`).join(' · ');
+  $('#bandeau-urgence-texte').textContent = `🚨 ${n} alerte${n > 1 ? 's' : ''} Panne / Urgence à prendre en charge${detail ? ' : ' + detail : ''}`;
+  if (!minuteurTitre) {
+    let bascule = false;
+    minuteurTitre = setInterval(() => { bascule = !bascule; document.title = bascule ? `🚨 (${urgencesOuvertes().length || etat.urgencesEtat.ouvertes}) URGENCE` : TITRE; }, 1000);
+  }
+}
+function arreterSignalUrgence() {
+  clearInterval(minuteurTitre); minuteurTitre = null; document.title = TITRE;
+  const b = $('#bandeau-urgence'); if (b) b.hidden = true;
+}
+$('#btn-voir-urgences').addEventListener('click', () => afficherVue('alertes'));
+$('#btn-urgences-recharger').addEventListener('click', () => chargerUrgences());
+
+/** Vérification légère (sans position) ; recharge la liste si quelque chose a changé. */
+async function verifierUrgences(forcer = false) {
+  if (!etat.user || !sb) return;
+  let e;
+  try { e = await rpc('loc_alertes_etat'); } catch { return; }
+  if (!e) return;
+  const avant = etat.urgencesEtat;
+  etat.urgencesEtat = { ouvertes: Number(e.ouvertes) || 0, derniere: e.derniere || null, initialise: true };
+  const change = e.ouvertes !== avant.ouvertes || (e.derniere || null) !== (avant.derniere || null);
+  // Nouvelle alerte (ou alertes déjà ouvertes à l'ouverture de la page) : son
+  const nouvelle = e.derniere && (!avant.initialise ? e.ouvertes > 0
+    : (!avant.derniere || new Date(e.derniere) > new Date(avant.derniere)));
+  if (forcer || change) await chargerUrgences();
+  else majSignalUrgence();
+  if (nouvelle && e.ouvertes > 0) {
+    sonnerUrgence();
+    if (avant.initialise) toast('🚨 Nouvelle alerte Panne / Urgence !', 'ko', 8000);
+  }
+}
+setInterval(() => verifierUrgences(), 30000);
+
+/** Liste détaillée des alertes (ouvertes + traitées depuis 7 jours) — consultation journalisée. */
+async function chargerUrgences() {
+  if (!etat.user) return;
+  try {
+    etat.urgences = await rpc('loc_alertes_liste', { p_jours: 7 }) || [];
+    etat.urgencesEtat.ouvertes = urgencesOuvertes().length;
+    etat.chauffeurs.forEach(enrichir);
+    majSignalUrgence();
+    rendreTout();
+  } catch (e) { toast('Alertes : ' + e.message, 'ko', 6000); }
+}
+
+function popupUrgence(u) {
+  const m = MOTIFS[u.motif] || { ico: '⚠️', libelle: u.motif };
+  const c = etat.chauffeurs.find(x => x.id === u.chauffeur_id);
+  return `<b style="color:var(--danger)">🚨 ${m.ico} ${esc(m.libelle)}</b><br><b>${esc(nomComplet(u))}</b> <span class="doux">(${esc(u.matricule)})</span><br>`
+    + (u.message ? `« ${esc(u.message)} »<br>` : '')
+    + `<span class="doux">${esc(dateHeure(u.horodatage))} · <b>${esc(ilYa(u.horodatage))}</b></span><br>`
+    + (u.vehicule ? `🚙 ${esc(u.vehicule)}${u.vehicule_modele ? ' · ' + esc(u.vehicule_modele) : ''}<br>` : '')
+    + (u.latitude != null ? `<span class="doux">${esc(zoneDe(u.latitude, u.longitude).nom)}${u.precision_m != null ? ' · ± ' + Math.round(u.precision_m) + ' m' : ''}</span><br>` : '')
+    + `<a class="btn appel petit" href="tel:${esc(u.telephone)}">📞 Appeler</a> ${boutonWhatsApp(u)} `
+    + (c && c.binome ? `<a class="btn sec petit" href="tel:${esc(c.binome.telephone)}">📞 Binôme</a> ` : '')
+    + (u.traitee_le ? '' : `<button class="btn danger petit" type="button" data-action="urgence-traiter" data-id="${esc(u.id)}">✓ Prendre en charge</button>`);
+}
+
+function rendreUrgences() {
+  const zone = $('#tab-urgences');
+  if (!zone) return;
+  zone.innerHTML = etat.urgences.length ? etat.urgences.map(u => {
+    const m = MOTIFS[u.motif] || { ico: '⚠️', libelle: u.motif };
+    const c = etat.chauffeurs.find(x => x.id === u.chauffeur_id);
+    return `<tr class="${u.traitee_le ? '' : 'urgence-ouverte'}">`
+      + `<td>${esc(dateHeure(u.horodatage))}<br><b>${esc(ilYa(u.horodatage))}</b>${u.hors_ligne ? '<br><span class="etiq att">envoyée en différé (sans réseau)</span>' : ''}</td>`
+      + `<td><b>${esc(nomComplet(u))}</b><br><span class="doux">${esc(u.matricule)} · ${esc(u.telephone)}</span></td>`
+      + `<td><b>${m.ico} ${esc(m.libelle)}</b>${u.message ? `<br>« ${esc(u.message)} »` : ''}</td>`
+      + `<td>${u.vehicule ? '🚙 ' + esc(u.vehicule) + (u.vehicule_modele ? `<br><span class="doux">${esc(u.vehicule_modele)}</span>` : '') : '<span class="doux">—</span>'}</td>`
+      + `<td>${u.latitude != null ? `${esc(zoneDe(u.latitude, u.longitude).nom)}${u.precision_m != null ? `<br><span class="doux">± ${Math.round(u.precision_m)} m</span>` : ''}` : '<span class="etiq att">sans position</span>'}</td>`
+      + `<td>${u.traitee_le ? `<span class="etiq ok">✓ prise en charge</span><br><span class="doux">${esc(dateHeure(u.traitee_le))} par ${esc(u.traitee_par_email || '—')}</span>${u.commentaire ? `<br>« ${esc(u.commentaire)} »` : ''}` : '<span class="etiq ko">EN COURS</span>'}</td>`
+      + `<td><div class="ligne"><a class="btn appel petit" href="tel:${esc(u.telephone)}">📞 Appeler</a>${boutonWhatsApp(u)}`
+      + (c && c.binome ? `<a class="btn sec petit" href="tel:${esc(c.binome.telephone)}" title="${esc(nomComplet(c.binome))}">📞 Binôme</a>` : '')
+      + (u.latitude != null ? `<button class="btn sec petit" data-action="urgence-voir" data-id="${esc(u.id)}">🗺️ Voir</button>` : '')
+      + (u.traitee_le ? '' : `<button class="btn danger petit" data-action="urgence-traiter" data-id="${esc(u.id)}">✓ Prendre en charge</button>`)
+      + '</div></td></tr>';
+  }).join('') : '<tr><td colspan="7" class="vide">Aucune panne ni urgence signalée ces 7 derniers jours. ✓</td></tr>';
+}
+
+/** Prise en charge : le chauffeur voit « Prise en charge » et le commentaire sur son téléphone. */
+async function traiterUrgence(id) {
+  const u = etat.urgences.find(x => x.id === id);
+  if (!u) return;
+  const m = MOTIFS[u.motif] || { libelle: u.motif };
+  const choix = await modale(`Prendre en charge — ${m.libelle} de ${nomComplet(u)}`,
+    `<p>Le chauffeur verra sur son téléphone que son alerte est prise en charge, avec votre message.</p>
+     <label class="champ" for="ug-com">Message pour le chauffeur (facultatif, 200 caractères)</label>
+     <textarea id="ug-com" class="champ-l" rows="3" maxlength="200" style="width:100%" placeholder="Ex. Dépanneuse envoyée, arrivée vers 15 h"></textarea>
+     <div class="puces" style="margin-top:6px">${['Dépanneuse envoyée', 'Un véhicule vient vous chercher', 'Secours prévenus', 'Rappelez la logistique']
+       .map(t => `<button type="button" class="puce" data-texte="${esc(t)}">${esc(t)}</button>`).join('')}</div>`,
+    [{ libelle: '✓ Prendre en charge', valeur: 'ok', classe: 'danger' }, { libelle: 'Annuler', valeur: 'annuler', classe: 'sec' }],
+    async () => {
+      await rpc('loc_traiter_alerte', { p_alerte: id, p_commentaire: $('#ug-com').value.trim() || null });
+      return true;
+    });
+  if (choix === 'ok') { toast('Alerte prise en charge ✓ Le chauffeur est prévenu.', 'ok', 6000); await chargerUrgences(); }
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('#modale-corps .puce[data-texte]');
+  if (b) $('#ug-com').value = b.dataset.texte;
+});
+
+function voirUrgence(id) {
+  const u = etat.urgences.find(x => x.id === id);
+  if (!u || u.latitude == null) return;
+  afficherVue('carte');
+  etat.cartes.carte?.setView([u.latitude, u.longitude], 13);
+  setTimeout(() => (etat.marqueursUrgence && etat.marqueursUrgence[id])?.openPopup(), 300);
+}
+
+/* ===========================================================================
+   VUE VÉHICULES (version 1.3)
+   =========================================================================== */
+$('#veh-inactifs').addEventListener('change', rendreVehicules);
+/** Immatriculation normalisée comme dans la base : majuscules, espaces simples. */
+const normaliserImmat = (t) => String(t || '').toUpperCase().replace(/\s+/g, ' ').trim().slice(0, 20);
+
+function rendreVehicules() {
+  const tous = $('#veh-inactifs').checked;
+  const liste = etat.vehicules.filter(v => tous || v.actif);
+  $('#tab-vehicules').innerHTML = liste.map(v => {
+    // Dernier chauffeur ayant déclaré ce véhicule (dernier pointage de chaque chauffeur)
+    const c = etat.chauffeurs.filter(x => x.dernier && x.dernier.vehicule_id === v.id)
+      .sort((a, b) => new Date(b.dernier.horodatage) - new Date(a.dernier.horodatage))[0];
+    return `<tr class="${v.actif ? '' : 'inactif'}" data-vehicule="${v.id}">`
+      + `<td><input type="text" data-champ="immatriculation" value="${esc(v.immatriculation)}" maxlength="20"></td>`
+      + `<td><input type="text" data-champ="modele" value="${esc(v.modele || '')}" maxlength="60" placeholder="Ex. Hilux GUN125"></td>`
+      + `<td><input type="checkbox" data-champ="actif"${v.actif ? ' checked' : ''} aria-label="Actif"></td>`
+      + `<td>${c ? `<b>${esc(c._nom)}</b><br><span class="doux">${esc(ilYa(c.dernier.horodatage))}</span>` : '<span class="doux">—</span>'}</td>`
+      + `<td>${c ? esc(c._zoneNom) + (c._quartier ? `<br><span class="doux">${esc(c._quartier)}</span>` : '') : '<span class="doux">—</span>'}</td>`
+      + `<td><div class="ligne"><button class="btn petit" data-action="veh-enregistrer" data-id="${v.id}">Enregistrer</button>`
+      + (c && c._pos ? `<button class="btn sec petit" data-action="localiser" data-id="${esc(c.id)}">🗺️</button>` : '')
+      + `<button class="btn sec petit" data-action="veh-supprimer" data-id="${v.id}">Supprimer</button></div></td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="vide">Aucun véhicule. Ajoutez-les un par un ou collez une liste.</td></tr>';
+}
+
+async function rechargerVehicules() {
+  try { etat.vehicules = await api(sb.from('loc_vehicules').select('id,immatriculation,modele,actif').order('immatriculation')); }
+  catch (e) { toast(e.message, 'ko', 6000); }
+  rendreVehicules();
+}
+
+$('#btn-ajout-vehicule').addEventListener('click', async () => {
+  const choix = await modale('Ajouter un véhicule', `<div class="grille2" style="grid-template-columns:1fr 1fr">
+      <div><label class="champ" for="nv-immat">Immatriculation ou n° de parc *</label><input id="nv-immat" class="champ-l" type="text" maxlength="20" placeholder="Ex. BEL 46"></div>
+      <div><label class="champ" for="nv-modele">Modèle</label><input id="nv-modele" class="champ-l" type="text" maxlength="60" placeholder="Ex. Hilux GUN125"></div></div>`,
+    [{ libelle: 'Ajouter', valeur: 'ok' }, { libelle: 'Annuler', valeur: 'annuler', classe: 'sec' }],
+    async () => {
+      const immatriculation = normaliserImmat($('#nv-immat').value);
+      if (immatriculation.length < 2) throw new Error("Saisissez l'immatriculation (2 caractères au minimum).");
+      await api(sb.from('loc_vehicules').insert({ immatriculation, modele: $('#nv-modele').value.trim() || null }));
+      return true;
+    });
+  if (choix === 'ok') { toast('Véhicule ajouté ✓ Il sera proposé aux chauffeurs (au plus tard 3 h).', 'ok', 6000); rechargerVehicules(); }
+});
+
+/** Lit une liste collée (Excel, WhatsApp…) : « immatriculation ; modèle » ou « immatriculation (tabulation) modèle ». */
+function analyserListeVehicules(texte) {
+  const vus = new Set();
+  return texte.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => {
+    const [immat, ...reste] = l.split(/\t|;|\s[-–]\s/);
+    return { immatriculation: normaliserImmat(immat), modele: reste.join(' ').trim().slice(0, 60) || null };
+  }).filter(v => v.immatriculation.length >= 2 && !/^IMMAT/.test(v.immatriculation) && !vus.has(v.immatriculation) && vus.add(v.immatriculation));
+}
+$('#btn-coller-vehicules').addEventListener('click', async () => {
+  let ajoutes = 0, deja = 0;
+  const choix = await modale('Coller une liste de véhicules',
+    `<p class="doux">Un véhicule par ligne : <b>immatriculation ; modèle</b> (le modèle est facultatif). Vous pouvez copier deux colonnes depuis Excel.</p>
+     <textarea id="nv-liste" class="champ-l" rows="10" style="width:100%" placeholder="BEL 46 ; Hilux GUN125&#10;BEL 47 ; Hilux GUN125&#10;KK-796-AA ; Land Cruiser 79"></textarea>`,
+    [{ libelle: 'Ajouter ces véhicules', valeur: 'ok' }, { libelle: 'Annuler', valeur: 'annuler', classe: 'sec' }],
+    async () => {
+      const lignes = analyserListeVehicules($('#nv-liste').value);
+      if (!lignes.length) throw new Error('Aucun véhicule reconnu dans le texte.');
+      const existants = new Set(etat.vehicules.map(v => v.immatriculation));
+      const nouveaux = lignes.filter(v => !existants.has(v.immatriculation));
+      deja = lignes.length - nouveaux.length;
+      if (nouveaux.length) await api(sb.from('loc_vehicules').upsert(nouveaux, { onConflict: 'immatriculation', ignoreDuplicates: true }));
+      ajoutes = nouveaux.length;
+      return true;
+    });
+  if (choix === 'ok') { toast(`${ajoutes} véhicule(s) ajouté(s)${deja ? `, ${deja} déjà présent(s)` : ''} ✓`, 'ok', 6000); rechargerVehicules(); }
+});
+
+async function enregistrerVehicule(id) {
+  const o = lireLigne(document.querySelector(`tr[data-vehicule="${id}"]`));
+  o.immatriculation = normaliserImmat(o.immatriculation);
+  o.modele = o.modele || null;
+  if (o.immatriculation.length < 2) return toast("L'immatriculation est obligatoire.", 'ko');
+  try { await api(sb.from('loc_vehicules').update(o).eq('id', id)); toast('Véhicule enregistré ✓', 'ok'); rechargerVehicules(); }
+  catch (e) { toast(e.message, 'ko', 6000); }
+}
+async function supprimerVehicule(id) {
+  const v = etat.vehicules.find(x => x.id === id);
+  if (!v) return;
+  const c = await modale('Supprimer ce véhicule ?', `<p>Supprimer <b>${esc(v.immatriculation)}</b> ? Les pointages déjà faits avec ce véhicule sont conservés, sans véhicule.</p><p>Pour un véhicule simplement immobilisé ou vendu, préférez décocher « Actif ».</p>`,
+    [{ libelle: 'Supprimer', valeur: 'oui', classe: 'danger' }, { libelle: 'Annuler', valeur: 'annuler', classe: 'sec' }]);
+  if (c !== 'oui') return;
+  try { await api(sb.from('loc_vehicules').delete().eq('id', id)); toast('Véhicule supprimé.', 'ok'); rechargerVehicules(); }
+  catch (e) { toast(e.message, 'ko', 6000); }
 }
 
 /* ===========================================================================
@@ -1297,6 +1860,7 @@ function contenuSynthese() {
       ['Disponibles à vérifier (orange)', dispoOranges],
       ['Pointage récent (dans le seuil)', actifs.filter(c => c._recent).length],
       ['Alertes', actifs.reduce((n, c) => n + c._alertes.filter(a => a.niveau === 'ko').length, 0)],
+      ['Pannes / urgences en cours', urgencesOuvertes().length],
       ['Sans consentement', actifs.filter(c => !c._consent).length]])
     + tableauSynthese('Par statut', ['Statut', 'Chauffeurs'], parStatut)
     + tableauSynthese('Par zone', ['Zone', 'Chauffeurs'], parZone)
@@ -1315,7 +1879,7 @@ function lignesExport() {
       'Province déclarée': c._provinceDeclaree || '', 'Ville déclarée': c._provinceDeclaree && d.ville || '',
       'Disponibilité': c._dispoEtat ? `${c._dispoEtat === 'vert' ? 'Vert' : 'À vérifier'} — ${c._dispoMotif}` : '',
       Quartier: c._quartier || '', 'Repère': d && d.repere || '',
-      Destination: d && d.destination || '', 'Dernier pointage (heure du Gabon)': d ? dateHeure(d.horodatage) : '',
+      Destination: d && d.destination || '', 'Véhicule': c._vehicule || '', 'Dernier pointage (heure du Gabon)': d ? dateHeure(d.horodatage) : '',
       'Ancienneté': d ? ilYa(d.horodatage) : '', 'Précision (m)': d && d.precision_m != null ? Math.round(d.precision_m) : '',
       Latitude: d && d.latitude != null ? d.latitude.toFixed(5) : '', Longitude: d && d.longitude != null ? d.longitude.toFixed(5) : '',
       'Binôme': c.binome ? nomComplet(c.binome) : '', 'Tél. binôme': c.binome ? c.binome.telephone : '',
@@ -1338,7 +1902,7 @@ $('#btn-export-csv').addEventListener('click', () => {
 
 $('#btn-export-pdf').addEventListener('click', () => {
   const lignes = lignesExport();
-  const cols = ['Matricule', 'Nom', 'Prénom', 'Téléphone', 'Statut', 'Zone', 'Quartier', 'Dernier pointage (heure du Gabon)', 'Ancienneté', 'Binôme', 'Alertes'];
+  const cols = ['Matricule', 'Nom', 'Prénom', 'Téléphone', 'Statut', 'Zone', 'Quartier', 'Véhicule', 'Dernier pointage (heure du Gabon)', 'Ancienneté', 'Binôme', 'Alertes'];
   $('#impression').innerHTML = `<h1>Belinga Localisation — situation des chauffeurs</h1>`
     + `<p>Édité le ${esc(dateHeure(new Date()))} (heure du Gabon) par ${esc(etat.user.email)}. Document interne — données personnelles.</p>`
     + contenuSynthese().replace(/class="bloc"/g, '')
@@ -1549,6 +2113,7 @@ function rendreParametres() {
   $('#pa-rappel').value = p.rappel_minutes; $('#pa-rappel-lbv').value = p.rappel_libreville_minutes;
   $('#pa-debut').value = p.heure_debut_service; $('#pa-fin').value = p.heure_fin_service;
   $('#pa-precision').value = p.precision_max_m;
+  $('#pa-tel-logistique').value = p.telephone_logistique || '';
   const jours = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
   $('#pa-jours').innerHTML = jours.map((j, i) => `<button type="button" class="puce" data-jour="${i + 1}" aria-pressed="${(p.jours_service || []).includes(i + 1)}">${j}</button>`).join('');
   $('#pa-jours').querySelectorAll('.puce').forEach(b => b.addEventListener('click', () => b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true'))));
@@ -1562,7 +2127,11 @@ $('#f-params').addEventListener('submit', async (e) => {
     heure_debut_service: $('#pa-debut').value, heure_fin_service: $('#pa-fin').value,
     precision_max_m: Number($('#pa-precision').value),
     jours_service: [...$('#pa-jours').querySelectorAll('[aria-pressed=true]')].map(b => Number(b.dataset.jour)),
+    telephone_logistique: normaliserTel($('#pa-tel-logistique').value),
   };
+  if (valeurs.telephone_logistique && !/^\d{8,10}$/.test(valeurs.telephone_logistique)) {
+    msg.innerHTML = '<div class="message ko">Téléphone de la logistique invalide : 8 à 10 chiffres (ex. 077 12 34 56).</div>'; return;
+  }
   if (!$('#f-params').checkValidity()) { $('#f-params').reportValidity(); return; }
   if (valeurs.heure_debut_service >= valeurs.heure_fin_service) { msg.innerHTML = '<div class="message ko">La fin du service doit être après le début.</div>'; return; }
   if (!valeurs.jours_service.length) { msg.innerHTML = '<div class="message ko">Choisissez au moins un jour de service.</div>'; return; }
@@ -1570,7 +2139,7 @@ $('#f-params').addEventListener('submit', async (e) => {
     for (const [cle, valeur] of Object.entries(valeurs)) {
       if (JSON.stringify(etat.params[cle]) !== JSON.stringify(valeur)) await api(sb.from('loc_parametres').update({ valeur }).eq('cle', cle));
     }
-    msg.innerHTML = '<div class="message ok">Paramètres enregistrés ✓ Les téléphones les reçoivent à leur prochaine mise à jour (au plus tard 12 h).</div>';
+    msg.innerHTML = '<div class="message ok">Paramètres enregistrés ✓ Les téléphones les reçoivent à leur prochaine mise à jour (au plus tard 3 h).</div>';
     await chargerTout();
   } catch (err) { msg.innerHTML = `<div class="message ko">${esc(err.message)}</div>`; }
 });
@@ -1585,10 +2154,13 @@ async function demarrer() {
   }
   sb.auth.onAuthStateChange((evt) => {
     if (evt === 'SIGNED_OUT' && etat.user) { etat.user = null; afficherConnexion('Vous êtes déconnecté.', 'att'); }
+    if (evt === 'PASSWORD_RECOVERY') afficherConnexion('Lien valide : choisissez votre nouveau mot de passe.', 'ok', 'nouveau');
   });
   try {
     const { data } = await sb.auth.getSession();
-    if (data && data.session) await ouvrirApplication(data.session.user);
+    if (RETOUR_RECUPERATION && data && data.session) afficherConnexion('Lien valide : choisissez votre nouveau mot de passe.', 'ok', 'nouveau');
+    else if (RETOUR_RECUPERATION) afficherConnexion('Ce lien a expiré ou a déjà servi. Redemandez un lien « Mot de passe oublié ».', 'att');
+    else if (data && data.session) await ouvrirApplication(data.session.user);
     else afficherConnexion();
   } catch (e) {
     afficherConnexion(e.message);

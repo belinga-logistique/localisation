@@ -114,16 +114,35 @@ input:focus-visible, button:focus-visible { outline: 3px solid #F59E0B; outline-
 }
 .btn-pointer.prive { background: #374151; box-shadow: 0 4px 0 #1F2937; }
 
-/* --- Grille des statuts --- */
-.statuts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* --- Grille des statuts (version 1.3 : boutons plus grands, faciles à toucher) --- */
+.statuts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .statut {
-  min-height: 72px; padding: 10px 8px; border-radius: 12px; border: 3px solid var(--bord);
-  background: #fff; font-weight: 700; font-size: 16px; line-height: 1.2;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  min-height: 96px; padding: 12px 8px; border-radius: 14px; border: 3px solid var(--bord);
+  border-left: 8px solid var(--c);
+  background: #fff; font-weight: 800; font-size: 17px; line-height: 1.2;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
 }
-.statut .ico { font-size: 22px; }
-.statut[aria-pressed=true] { color: #fff; border-color: transparent; background: var(--c); }
+.statut .ico { font-size: 30px; }
+.statut[aria-pressed=true] { color: #fff; border-color: transparent; background: var(--c); box-shadow: 0 3px 0 rgba(0,0,0,.25); }
 .statut[aria-pressed=true]::after { content: "✓ choisi"; font-size: 13px; }
+
+/* --- Bouton Panne / Urgence (version 1.3) --- */
+.btn-urgence {
+  min-height: 64px; margin: 0 0 14px; font-size: 20px; letter-spacing: .03em; border-radius: 16px;
+  background: var(--danger); box-shadow: 0 4px 0 #7F1D1D;
+}
+.motifs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0 4px; }
+.motif {
+  min-height: 76px; border-radius: 12px; border: 3px solid var(--danger); background: #fff; color: var(--danger);
+  font-weight: 800; font-size: 17px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+}
+.motif .ico { font-size: 26px; }
+.motif:last-child:nth-child(odd) { grid-column: 1 / -1; }
+textarea { width: 100%; min-height: 70px; padding: 10px 12px; border: 2px solid var(--bord); border-radius: 12px; font-size: 17px; resize: vertical; }
+a.btn { text-decoration: none; }
+.alerte-suivi { border-left: 6px solid var(--danger); padding: 8px 0 8px 12px; margin: 8px 0; }
+.alerte-suivi.traitee { border-left-color: var(--succes); }
+.alerte-suivi.attente { border-left-color: #B45309; }
 
 /* --- Bandeaux d'état --- */
 .bandeau { border-radius: 12px; padding: 12px 14px; font-weight: 700; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
@@ -252,7 +271,8 @@ input:focus-visible, button:focus-visible { outline: 3px solid #F59E0B; outline-
       <p>Permettre au département logistique de Fortescue Belinga de savoir où trouver rapidement un chauffeur disponible (missions, courses, remplacements, sécurité et urgences).</p>
       <h3>Quelles données ?</h3>
       <ul>
-        <li>Uniquement quand <b>vous</b> appuyez sur « Pointer » : position GPS, précision, heure et statut.</li>
+        <li>Uniquement quand <b>vous</b> appuyez sur « Pointer » : position GPS, précision, heure, statut et véhicule conduit.</li>
+        <li>Quand <b>vous</b> appuyez sur « Panne / Urgence » : le motif, votre message et votre position GPS, pour vous porter secours.</li>
         <li>À Libreville : le quartier proposé, le quartier que vous confirmez et un repère facultatif.</li>
         <li><b>Aucun suivi en continu</b>, aucune localisation en arrière-plan.</li>
         <li>Repos, congé, maladie : <b>aucune position</b> n'est envoyée.</li>
@@ -277,6 +297,12 @@ input:focus-visible, button:focus-visible { outline: 3px solid #F59E0B; outline-
        ===================================================================== -->
   <section id="e-principal" class="ecran" hidden>
     <h2 id="bonjour">Bonjour</h2>
+
+    <button id="btn-urgence" class="btn btn-urgence" type="button">🚨 PANNE / URGENCE</button>
+    <div class="carte" id="carte-alertes" hidden>
+      <h3>Mes alertes</h3>
+      <div id="liste-alertes" aria-live="polite"></div>
+    </div>
 
     <div id="etat-envoi" class="bandeau neutre" role="status" aria-live="polite">—</div>
     <div id="bandeau-rappel" class="bandeau attente message" role="alert" hidden>⏰ Pensez à pointer votre position.</div>
@@ -308,6 +334,14 @@ input:focus-visible, button:focus-visible { outline: 3px solid #F59E0B; outline-
         <input id="ville" type="text" maxlength="60" placeholder="Ex. Mouila, Lambaréné, Franceville…">
       </div>
       <p id="note-prive" class="aide" hidden>🔒 Pour ce statut, <b>aucune position</b> n'est envoyée.</p>
+    </div>
+
+    <div class="carte" id="carte-vehicule" hidden>
+      <h3>2. Mon véhicule</h3>
+      <label for="vehicule" class="aide" style="font-weight:600;margin-top:0">Véhicule que je conduis (facultatif)</label>
+      <select id="vehicule">
+        <option value="">— Aucun véhicule —</option>
+      </select>
     </div>
 
     <button id="btn-pointer" class="btn btn-pointer" type="button">📍 POINTER MA POSITION</button>
@@ -367,7 +401,7 @@ input:focus-visible, button:focus-visible { outline: 3px solid #F59E0B; outline-
     </div>
 
     <div class="carte">
-      <h3>Liste des quartiers</h3>
+      <h3>Quartiers et véhicules</h3>
       <p id="ref-info" class="petit"></p>
       <button id="btn-ref" class="btn secondaire" type="button">Mettre à jour la liste</button>
     </div>
@@ -498,11 +532,20 @@ const LIEUX_DISPO = {
   ailleurs:   { libelle: 'Autre endroit',           ico: '📍' },
 };
 
+/* Motifs d'alerte Panne / Urgence (version 1.3, mêmes codes que la base) */
+const MOTIFS = {
+  panne:     { libelle: 'Panne',     ico: '🔧' },
+  crevaison: { libelle: 'Crevaison', ico: '🛞' },
+  accident:  { libelle: 'Accident',  ico: '💥' },
+  malaise:   { libelle: 'Malaise',   ico: '🚑' },
+  autre:     { libelle: 'Autre urgence', ico: '⚠️' },
+};
+
 /* Valeurs par défaut si la liste des paramètres n'a pas encore été chargée */
 const PARAMS_DEFAUT = {
   precision_max_m: 200, rappel_minutes: 240, rappel_libreville_minutes: 120,
   heure_debut_service: '06:00', heure_fin_service: '18:00', jours_service: [1, 2, 3, 4, 5, 6],
-  version_consentement: 'v1',
+  version_consentement: 'v1', telephone_logistique: '',
 };
 
 /* État de l'application en mémoire */
@@ -930,14 +973,16 @@ $('#cs-refuser').addEventListener('click', async () => {
 async function chargerReferentiel(force = false) {
   if (!etat.jeton) return false;
   const age = etat.ref ? Date.now() - (etat.ref.charge_le || 0) : Infinity;
-  if (!force && age < 12 * 3600 * 1000) return true; // frais de moins de 12 h
+  // Frais de moins de 3 h (et déjà au format 1.3, avec la liste des véhicules) : rien à faire
+  if (!force && age < 3 * 3600 * 1000 && Array.isArray(etat.ref.vehicules)) return true;
   try {
     const r = await rpc('loc_referentiel', { p_jeton: etat.jeton });
     if (!r.ok) {
       if (r.erreur === 'session_invalide') finSession(r.message);
       return false;
     }
-    etat.ref = { lieux: r.lieux, zones: r.zones, parametres: r.parametres, charge_le: Date.now() };
+    etat.ref = { lieux: r.lieux, zones: r.zones, vehicules: r.vehicules || [], parametres: r.parametres, charge_le: Date.now() };
+    if (etat.ecran === 'principal') construireVehicules();
     await DB.put('kv', etat.ref, 'referentiel');
     return true;
   } catch { return false; }
@@ -993,6 +1038,7 @@ function choisirStatut(code, mettreFocus = true) {
   $('#bloc-province').hidden = code !== 'autre_province';
   $('#bloc-lieu-dispo').hidden = code !== 'dispo_libreville';
   $('#note-prive').hidden = def.position;
+  majCarteVehicule();
   const btn = $('#btn-pointer');
   btn.textContent = def.position ? '📍 POINTER MA POSITION' : '📤 ENVOYER MON STATUT';
   btn.classList.toggle('prive', !def.position);
@@ -1029,6 +1075,36 @@ function construireProvinces() {
   });
 }
 
+/* ---------------------------------------------------------------------------
+   Véhicule conduit (version 1.3) : liste tenue par la logistique
+   --------------------------------------------------------------------------- */
+function vehiculesConnus() { return (etat.ref && etat.ref.vehicules) || []; }
+
+/** Immatriculation (et modèle) lisible : « BEL 46 · Hilux GUN125 ». */
+function texteVehicule(v) { return v ? v.immatriculation + (v.modele ? ' · ' + v.modele : '') : ''; }
+function vehiculeParId(id) { return vehiculesConnus().find(v => v.id === Number(id)) || null; }
+
+/** Remplit la liste des véhicules et resélectionne le dernier utilisé. */
+function construireVehicules() {
+  const sel = $('#vehicule');
+  const memo = lsGet('loc.vehicule', null);
+  sel.innerHTML = '<option value="">— Aucun véhicule —</option>'
+    + vehiculesConnus().map(v => `<option value="${v.id}">${esc(texteVehicule(v))}</option>`).join('');
+  sel.value = vehiculeParId(memo) ? String(memo) : '';
+  majCarteVehicule();
+}
+/** La carte « Mon véhicule » n'apparaît que s'il y a des véhicules et un statut avec position. */
+function majCarteVehicule() {
+  const def = etat.statut && STATUTS[etat.statut];
+  $('#carte-vehicule').hidden = !vehiculesConnus().length || !def || !def.position;
+}
+/** Véhicule choisi (identifiant) ou null. */
+function vehiculeChoisi() {
+  const v = vehiculeParId($('#vehicule').value);
+  return v ? v.id : null;
+}
+$('#vehicule').addEventListener('change', () => lsSet('loc.vehicule', vehiculeChoisi()));
+
 /** Province (et ville) en texte lisible : « Ngounié (Mouila) ». */
 function texteProvince(province, ville) {
   if (!province) return '';
@@ -1045,6 +1121,8 @@ function rendrePrincipal() {
   $('#province').value = PROVINCES.includes(provinceMemo) ? provinceMemo : '';
   $('#ville').value = lsGet('loc.ville', '');
   choisirLieuDispo(lsGet('loc.lieuDispo', null));
+  construireVehicules();
+  rendreAlertes();
 
   // Dernier pointage
   const d = lsGet('loc.dernier');
@@ -1056,6 +1134,7 @@ function rendrePrincipal() {
       + (d.destination ? ` — vers ${esc(d.destination)}` : '')
       + (d.province ? ` — ${esc(texteProvince(d.province, d.ville))}` : '')
       + (d.lieu_dispo && LIEUX_DISPO[d.lieu_dispo] ? ` — ${LIEUX_DISPO[d.lieu_dispo].ico} ${esc(LIEUX_DISPO[d.lieu_dispo].libelle)}` : '')
+      + (d.vehicule ? ` — 🚙 ${esc(d.vehicule)}` : '')
       + `<br>${esc(dateHeure(d.horodatage))} (${esc(ilYa(d.horodatage))})`
       + (d.sans_position ? '<br><span class="etiquette">sans position</span>' : '');
   } else {
@@ -1163,7 +1242,9 @@ async function pointer() {
   etat.pointageEnCours = true;
   $('#btn-pointer').disabled = true;
   try {
-    const p = { statut, destination, province, ville, lieu_dispo: lieuDispo };
+    // Véhicule : seulement pour les statuts avec position (jamais en repos / congé / maladie)
+    const p = { statut, destination, province, ville, lieu_dispo: lieuDispo,
+                vehicule_id: def.position ? vehiculeChoisi() : null };
     let lieuNom = null;
 
     if (def.position) {
@@ -1440,6 +1521,7 @@ async function enregistrerPointage(p, lieuNom) {
   lsSet('loc.dernier', {
     chauffeur_id: c.id, statut: p.statut, horodatage: item.horodatage, lieu: lieuNom,
     destination: p.destination, province: p.province, ville: p.ville, lieu_dispo: p.lieu_dispo,
+    vehicule: p.vehicule_id ? (vehiculeParId(p.vehicule_id) || {}).immatriculation || null : null,
     sans_position: STATUTS[p.statut].position && p.latitude == null,
   });
   lsSet('loc.dernierRappel', Date.now());
@@ -1463,6 +1545,7 @@ function versServeur(i) {
     quartier_detecte_id: i.quartier_detecte_id ?? null, distance_detecte_m: i.distance_detecte_m ?? null,
     quartier_confirme_id: i.quartier_confirme_id ?? null, repere: i.repere || null,
     province: i.province || null, ville: i.ville || null, lieu_dispo: i.lieu_dispo || null,
+    vehicule_id: i.vehicule_id ?? null,
     hors_ligne: Date.now() - (i.cree_ms || Date.now()) > 2 * 60 * 1000, // envoyé en différé
   };
 }
@@ -1528,6 +1611,233 @@ function afficherResultatSync(r) {
 }
 
 /* ===========================================================================
+   PANNE / URGENCE (version 1.3)
+   - L'alerte est d'abord rangée sur le téléphone (IndexedDB, clé « alertesFile »),
+     puis envoyée. Sans réseau, elle part dès le retour du réseau, même
+     application fermée (service worker). Le serveur ignore les doublons.
+   - Le suivi (« reçue », « prise en charge ») est gardé dans « loc.alertes ».
+   =========================================================================== */
+let urgenceEnCours = false;
+
+async function fileAlertes() {
+  try { return (await DB.get('kv', 'alertesFile')) || []; } catch { return []; }
+}
+async function ecrireFileAlertes(liste) { await DB.put('kv', liste, 'alertesFile'); }
+
+/** Alertes suivies du chauffeur connecté. */
+function suiviAlertes() {
+  const id = etat.profil && etat.profil.chauffeur.id;
+  return (lsGet('loc.alertes', []) || []).filter(a => a.chauffeur_id === id);
+}
+function majSuivi(id, champs) {
+  const l = lsGet('loc.alertes', []) || [];
+  const a = l.find(x => x.id === id);
+  if (a) { Object.assign(a, champs); lsSet('loc.alertes', l); }
+}
+/** On garde : les alertes non traitées (7 jours), les traitées ou refusées des dernières 24 h. */
+function nettoyerSuivi() {
+  const maintenant = Date.now(), J = 24 * 3600 * 1000;
+  const l = (lsGet('loc.alertes', []) || []).filter(a => {
+    if (a.etat === 'traitee') return maintenant - new Date(a.traitee_le || a.horodatage).getTime() < J;
+    if (a.etat === 'refusee') return maintenant - new Date(a.horodatage).getTime() < J;
+    return maintenant - new Date(a.horodatage).getTime() < 7 * J;
+  });
+  lsSet('loc.alertes', l);
+}
+
+/** Numéro de la logistique (réglé dans l'onglet Paramètres du tableau de bord). */
+function telLogistique() { return String(param('telephone_logistique') || '').replace(/[^\d+]/g, ''); }
+function lienAppel(tel, libelle, classe = 'danger') {
+  return `<a class="btn ${classe}" href="tel:${esc(tel)}">${libelle}</a>`;
+}
+/** Boutons d'appel : logistique (si le numéro est réglé) puis binôme. */
+function liensAppelUrgence() {
+  const tel = telLogistique();
+  const b = etat.profil && etat.profil.chauffeur.binome;
+  return (tel ? lienAppel(tel, `📞 Appeler la logistique (${esc(tel)})`) : '')
+    + (b && b.telephone ? lienAppel(b.telephone, `📞 Appeler mon binôme ${esc(b.prenom || b.nom)}`, 'secondaire') : '');
+}
+
+$('#btn-urgence').addEventListener('click', signalerUrgence);
+
+async function signalerUrgence() {
+  if (urgenceEnCours || !etat.profil) return;
+  const tel = telLogistique();
+  const motif = await dialogue({
+    titre: '🚨 Panne / Urgence',
+    html: (tel ? `<p class="aide" style="margin-top:0">Danger immédiat ? Appelez tout de suite :</p>${lienAppel(tel, '📞 Appeler la logistique')}` : '')
+      + '<label for="u-message">Précisions (facultatif)</label>'
+      + '<textarea id="u-message" maxlength="200" placeholder="Ex. PK 120 après Ndjolé, moteur coupé, pas de blessé"></textarea>'
+      + '<p style="margin:14px 0 0"><b>Touchez le motif</b> : l\'alerte part aussitôt avec votre position.</p>',
+    boutons: [
+      ...Object.entries(MOTIFS).map(([code, m]) => ({ libelle: `${m.ico}  ${m.libelle}`, valeur: code, classe: 'danger-contour' })),
+      { libelle: 'Annuler', valeur: 'annuler', classe: 'lien' },
+    ],
+  });
+  if (!MOTIFS[motif]) return;
+  const message = (($('#u-message') && $('#u-message').value) || '').trim().slice(0, 200) || null;
+
+  urgenceEnCours = true;
+  $('#btn-urgence').disabled = true;
+  try {
+    const pos = await positionUrgence();
+    const c = etat.profil.chauffeur;
+    const item = {
+      id: uuid(), chauffeur_id: c.id, motif, message,
+      horodatage: new Date().toISOString(), cree_ms: Date.now(),
+      latitude: pos ? pos.lat : null, longitude: pos ? pos.lon : null,
+      precision_m: pos ? Math.round(pos.precision) : null,
+      vehicule_id: vehiculeChoisi(),
+    };
+    try {
+      await ecrireFileAlertes([...(await fileAlertes()), item]);
+    } catch (e) {
+      // Stockage impossible : on tente quand même l'envoi direct
+      console.warn('File des alertes indisponible', e);
+    }
+    const suivi = lsGet('loc.alertes', []) || [];
+    suivi.push({ id: item.id, chauffeur_id: c.id, motif, message, horodatage: item.horodatage, etat: 'attente', avec_position: !!pos });
+    lsSet('loc.alertes', suivi);
+    rendreAlertes();
+    try { if (navigator.vibrate) navigator.vibrate(200); } catch { /* ignoré */ }
+
+    let r = await envoyerAlertes();
+    // File locale indisponible : envoi direct de cette alerte
+    if (r.statut === 'vide') r = await envoyerAlertes([item]);
+    const etatFinal = (suiviAlertes().find(a => a.id === item.id) || {}).etat;
+    let titre, html;
+    if (etatFinal === 'envoyee') {
+      titre = '✅ Alerte envoyée';
+      html = `<p>La logistique a reçu votre alerte <b>${esc(MOTIFS[motif].libelle)}</b>`
+        + (pos ? ' avec votre position.' : ', <b>sans position GPS</b>. Indiquez où vous êtes en appelant.') + '</p>';
+    } else if (etatFinal === 'refusee') {
+      titre = '❌ Alerte refusée';
+      html = `<div class="bandeau erreur">${esc((suiviAlertes().find(a => a.id === item.id) || {}).raison || r.message || 'Refus du serveur')}</div><p><b>Appelez directement.</b></p>`;
+    } else {
+      titre = '⏳ Alerte enregistrée sur le téléphone';
+      html = '<div class="bandeau attente">Pas de réseau : l\'alerte partira automatiquement dès le retour du réseau.</div>'
+        + '<p><b>Si un appel passe, appelez maintenant.</b></p>';
+    }
+    await dialogue({
+      titre,
+      html: html + liensAppelUrgence() + '<p class="aide">Vous verrez sur l\'écran principal quand la logistique aura pris en charge votre alerte.</p>',
+      boutons: [{ libelle: 'Fermer', valeur: 'ok', classe: 'secondaire' }],
+    });
+  } finally {
+    urgenceEnCours = false;
+    $('#btn-urgence').disabled = false;
+  }
+}
+
+/**
+ * Position pour une alerte : 15 secondes au maximum, une position récente (2 min) est acceptée.
+ * Le chauffeur peut envoyer sans attendre. Renvoie { lat, lon, precision } ou null.
+ */
+function positionUrgence() {
+  if (!('geolocation' in navigator)) return Promise.resolve(null);
+  const sansAttendre = dialogue({
+    titre: '📡 Envoi de l\'alerte…',
+    html: '<div class="radar" aria-hidden="true"></div><p style="text-align:center">Recherche de votre position (15 secondes au maximum).</p>',
+    boutons: [{ libelle: 'Envoyer sans attendre la position', valeur: 'sans', classe: 'secondaire' }],
+  }).then(() => null);
+  const gps = new Promise(resolve => {
+    try {
+      navigator.geolocation.getCurrentPosition(
+        p => resolve({ lat: p.coords.latitude, lon: p.coords.longitude, precision: p.coords.accuracy }),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 120000 });
+    } catch { resolve(null); }
+  });
+  return Promise.race([gps, sansAttendre]).then(pos => { $('#modale').hidden = true; return pos; });
+}
+
+/** Prépare une alerte pour l'envoi (retire les champs internes au téléphone). */
+function alerteVersServeur(a) {
+  return {
+    id: a.id, motif: a.motif, message: a.message || null, horodatage: a.horodatage,
+    latitude: a.latitude ?? null, longitude: a.longitude ?? null, precision_m: a.precision_m ?? null,
+    vehicule_id: a.vehicule_id ?? null, hors_ligne: Date.now() - (a.cree_ms || Date.now()) > 2 * 60 * 1000,
+  };
+}
+
+/**
+ * Envoie les alertes en attente du chauffeur connecté.
+ * Renvoie { statut: 'ok' | 'vide' | 'hors_ligne' | 'refus' | 'erreur' | 'ignore', message }
+ */
+async function envoyerAlertes(direct = null) {
+  if (!etat.jeton || !etat.profil) return { statut: 'ignore' };
+  const id = etat.profil.chauffeur.id;
+  const miennes = direct || (await fileAlertes()).filter(a => a.chauffeur_id === id);
+  if (!miennes.length) return { statut: 'vide' };
+  try {
+    const r = await rpc('loc_signaler_alertes', { p_jeton: etat.jeton, p_alertes: miennes.slice(0, 20).map(alerteVersServeur) });
+    if (!r.ok) {
+      if (r.erreur === 'session_invalide') finSession('Votre session a expiré. Reconnectez-vous : votre alerte sera envoyée ensuite.');
+      return { statut: 'refus', message: r.message };
+    }
+    const traites = new Set([...r.acceptes, ...r.rejetes.map(x => x.id)]);
+    try { await ecrireFileAlertes((await fileAlertes()).filter(a => !traites.has(a.id))); } catch { /* ignoré */ }
+    r.acceptes.forEach(i => majSuivi(i, { etat: 'envoyee' }));
+    r.rejetes.forEach(x => { if (x.id) majSuivi(x.id, { etat: 'refusee', raison: x.raison }); });
+    rendreAlertes();
+    return { statut: 'ok' };
+  } catch (e) {
+    if (e instanceof ErreurReseau) { demanderEnvoiArrierePlan(); return { statut: 'hors_ligne' }; }
+    return { statut: 'erreur', message: e.message };
+  }
+}
+
+/** Demande au serveur si la logistique a pris en charge les alertes en cours. */
+async function suivreAlertes() {
+  if (!etat.jeton || !etat.profil) return;
+  if (!suiviAlertes().some(a => a.etat === 'attente' || a.etat === 'envoyee')) return;
+  let r;
+  try { r = await rpc('loc_mes_alertes', { p_jeton: etat.jeton }); } catch { return; }
+  if (!r || !r.ok) return;
+  let priseEnCharge = false;
+  for (const a of r.alertes) {
+    const local = suiviAlertes().find(x => x.id === a.id);
+    if (!local) continue;
+    if (a.traitee_le && local.etat !== 'traitee') {
+      majSuivi(a.id, { etat: 'traitee', traitee_le: a.traitee_le, commentaire: a.commentaire });
+      priseEnCharge = true;
+    } else if (!a.traitee_le && local.etat === 'attente') {
+      majSuivi(a.id, { etat: 'envoyee' });   // envoyée en arrière-plan par le service worker
+    }
+  }
+  rendreAlertes();
+  if (priseEnCharge) {
+    toast('✅ La logistique a pris en charge votre alerte.', 'succes', 8000);
+    notifier('Alerte prise en charge', 'Belinga Localisation : la logistique a pris en charge votre alerte.');
+  }
+}
+
+/** Carte « Mes alertes » de l'écran principal. */
+function rendreAlertes() {
+  if (!etat.profil) return;
+  nettoyerSuivi();
+  const l = suiviAlertes().sort((a, b) => b.horodatage.localeCompare(a.horodatage));
+  $('#carte-alertes').hidden = !l.length;
+  if (!l.length) return;
+  const etats = {
+    attente:  { cls: 'attente', txt: '⏳ <b>Pas encore envoyée</b> : en attente de réseau' },
+    envoyee:  { cls: '',        txt: '📨 <b>Reçue par la logistique</b> : en attente de prise en charge' },
+    refusee:  { cls: '',        txt: '❌ <b>Refusée</b>' },
+    traitee:  { cls: 'traitee', txt: '✅ <b>Prise en charge</b>' },
+  };
+  $('#liste-alertes').innerHTML = l.map(a => {
+    const m = MOTIFS[a.motif] || { ico: '⚠️', libelle: a.motif };
+    const e = etats[a.etat] || etats.attente;
+    let detail = e.txt;
+    if (a.etat === 'traitee') detail += ` à ${esc(heure(a.traitee_le))}` + (a.commentaire ? ` : « ${esc(a.commentaire)} »` : '');
+    if (a.etat === 'refusee' && a.raison) detail += ` : ${esc(a.raison)}`;
+    return `<div class="alerte-suivi ${e.cls}"><b>${m.ico} ${esc(m.libelle)}</b> <span class="petit">— ${esc(dateHeure(a.horodatage))}</span>`
+      + (a.message ? `<br><span class="petit">« ${esc(a.message)} »</span>` : '')
+      + `<br>${detail}</div>`;
+  }).join('') + (l.some(a => a.etat !== 'traitee') ? liensAppelUrgence() : '');
+}
+
+/* ===========================================================================
    HISTORIQUE
    =========================================================================== */
 function ligneHistorique(p, enAttente) {
@@ -1538,6 +1848,8 @@ function ligneHistorique(p, enAttente) {
   if (p.destination) details.push('vers ' + esc(p.destination));
   if (p.province) details.push('📍 ' + esc(texteProvince(p.province, p.ville)));
   if (p.lieu_dispo && LIEUX_DISPO[p.lieu_dispo]) details.push(LIEUX_DISPO[p.lieu_dispo].ico + ' ' + esc(LIEUX_DISPO[p.lieu_dispo].libelle));
+  const vehicule = p.vehicule || (p.vehicule_id ? (vehiculeParId(p.vehicule_id) || {}).immatriculation : null);
+  if (vehicule) details.push('🚙 ' + esc(vehicule));
   if (p.precision_m != null) details.push('± ' + Math.round(p.precision_m) + ' m');
   if (s.position === false) details.push('🔒 sans position');
   else if (p.latitude == null) details.push('sans position');
@@ -1635,7 +1947,7 @@ function rendreReglages() {
     + `${(param('jours_service') || []).map(j => jours[j]).join(', ')}. Réglé par la logistique.`;
   const r = etat.ref;
   $('#ref-info').textContent = r
-    ? `${r.lieux.length} quartiers et lieux enregistrés sur le téléphone (mis à jour ${ilYa(r.charge_le)}).`
+    ? `${r.lieux.length} quartiers et lieux, ${(r.vehicules || []).length} véhicule(s) enregistrés sur le téléphone (mis à jour ${ilYa(r.charge_le)}).`
     : 'Liste pas encore chargée (nécessite du réseau).';
   $('#version').textContent = 'Version ' + (CFG.VERSION || '');
 }
@@ -1664,7 +1976,7 @@ $('#btn-changer-pin').addEventListener('click', () => ouvrirChangementPin(false)
 
 $('#btn-ref').addEventListener('click', async () => {
   const ok = await chargerReferentiel(true);
-  toast(ok ? 'Liste des quartiers mise à jour ✓' : 'Mise à jour impossible : vérifiez le réseau.', ok ? 'succes' : 'erreur');
+  toast(ok ? 'Quartiers et véhicules mis à jour ✓' : 'Mise à jour impossible : vérifiez le réseau.', ok ? 'succes' : 'erreur');
   rendreReglages();
 });
 
@@ -1724,6 +2036,8 @@ document.querySelectorAll('#nav button').forEach(b => b.addEventListener('click'
 
 window.addEventListener('online', async () => {
   majReseau(true);
+  await envoyerAlertes();                  // les alertes d'urgence partent en premier
+  suivreAlertes();
   const r = await synchroniser();
   if (r.statut === 'ok') afficherResultatSync(r);
 });
@@ -1731,6 +2045,7 @@ window.addEventListener('offline', () => majReseau(false));
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible' || !etat.jeton) return;
+  envoyerAlertes().then(suivreAlertes);
   synchroniser();
   verifierRappel();
   if (etat.ecran === 'principal') rendrePrincipal();
@@ -1739,6 +2054,8 @@ document.addEventListener('visibilitychange', () => {
 // Toutes les minutes : renvoi de la file, rappel, mise à jour des « il y a… »
 setInterval(async () => {
   if (!etat.jeton) return;
+  if ((await fileAlertes()).length) await envoyerAlertes();
+  await suivreAlertes();                   // seulement s'il y a une alerte en cours
   if ((await pointagesEnAttente()).length) await synchroniser();
   verifierRappel();
   if (etat.ecran === 'principal' && !etat.pointageEnCours) rendrePrincipal();
@@ -1795,6 +2112,8 @@ async function enregistrerServiceWorker() {
   // Message du service worker : file envoyée en arrière-plan
   navigator.serviceWorker.addEventListener('message', (ev) => {
     if (!ev.data || ev.data.type !== 'sync-termine') return;
+    (ev.data.alertes || []).forEach(id => majSuivi(id, { etat: 'envoyee' }));
+    rendreAlertes();
     lsSet('loc.dernierEnvoi', Date.now());
     majEtatEnvoi();
     if (ev.data.envoyes) toast(`${ev.data.envoyes} pointage(s) en attente envoyé(s) ✓`, 'succes');
@@ -1824,7 +2143,9 @@ async function demarrer() {
   router();                               // affichage immédiat, même hors ligne
   if (etat.jeton) {
     await rafraichirProfil();             // vérifie la session si réseau
+    await envoyerAlertes();               // alertes d'urgence en attente : en premier
     await chargerReferentiel();
+    suivreAlertes();
     synchroniser();
   }
 }
