@@ -23,7 +23,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.8.0';   // 1.8.0 : nombre de passagers par course
+const VERSION = 'v1.9.0';   // 1.9.0 : rotations (séjour sur site, repos, congé, maladie)
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',
@@ -144,7 +144,7 @@ function versServeur(i) {
     quartier_confirme_id: i.quartier_confirme_id ?? null, repere: i.repere || null,
     province: i.province || null, ville: i.ville || null, lieu_dispo: i.lieu_dispo || null,
     vehicule_id: i.vehicule_id ?? null, contestation: i.contestation || null, site: i.site || null,
-    passagers: i.passagers ?? null,
+    passagers: i.passagers ?? null, jours_maladie: i.jours_maladie ?? null,
     hors_ligne: Date.now() - (i.cree_ms || Date.now()) > 2 * 60 * 1000,
   };
 }

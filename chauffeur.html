@@ -150,6 +150,12 @@ input:focus-visible, button:focus-visible { outline: 3px solid #F59E0B; outline-
 .compteur-passagers { display: grid; grid-template-columns: 64px 1fr 64px; gap: 8px; align-items: center; }
 .compteur-passagers .btn { margin-top: 0; min-height: 56px; font-size: 30px; line-height: 1; padding: 0; }
 .compteur-passagers input { text-align: center; font-size: 26px; font-weight: 800; }
+/* --- Décompte des rotations (version 1.9) --- */
+.carte-periode { border-left: 6px solid var(--couleur, #B45309); }
+.carte-periode .grand { font-size: 22px; font-weight: 800; margin: 4px 0; }
+.carte-periode .barre { height: 10px; background: #E5E7EB; border-radius: 6px; overflow: hidden; margin-top: 8px; }
+.carte-periode .barre > span { display: block; height: 100%; background: var(--couleur, #B45309); }
+.carte-periode.fin { --couleur: #15803D; background: var(--succes-fond); color: var(--succes); }
 .btn-suivi { min-height: 64px; font-size: 19px; background: #1D4ED8; box-shadow: 0 4px 0 #1E3A8A; }
 
 /* --- Bouton Panne / Urgence (version 1.3) --- */
@@ -335,6 +341,7 @@ a.btn { text-decoration: none; }
   <section id="e-principal" class="ecran" hidden>
     <h2 id="bonjour">Bonjour</h2>
 
+    <div class="carte carte-periode" id="carte-periode" hidden role="status" aria-live="polite"></div>
     <button id="btn-urgence" class="btn btn-urgence" type="button">🚨 PANNE / URGENCE</button>
     <div class="carte" id="carte-alertes" hidden>
       <h3>Mes alertes</h3>
@@ -380,6 +387,15 @@ a.btn { text-decoration: none; }
         </select>
         <label for="ville">Ville ou localité (facultatif)</label>
         <input id="ville" type="text" maxlength="60" placeholder="Ex. Mouila, Lambaréné, Franceville…">
+      </div>
+      <div id="bloc-maladie" hidden>
+        <label for="jours-maladie">Nombre de jours de repos maladie accordés *</label>
+        <div class="compteur-passagers">
+          <button id="mal-moins" class="btn secondaire" type="button" aria-label="Un jour de moins">−</button>
+          <input id="jours-maladie" type="number" inputmode="numeric" min="1" max="365" step="1" placeholder="?">
+          <button id="mal-plus" class="btn secondaire" type="button" aria-label="Un jour de plus">+</button>
+        </div>
+        <p class="aide">Indiquez le nombre de jours écrit sur votre arrêt maladie.</p>
       </div>
       <p id="note-prive" class="aide" hidden>🔒 Pour ce statut, <b>aucune position</b> n'est envoyée.</p>
     </div>
@@ -969,7 +985,10 @@ async function rafraichirProfil() {
       return;
     }
     const avant = JSON.stringify(etat.profil);
-    etat.profil = { chauffeur: r.chauffeur, consentement: r.consentement, consentement_version: r.consentement_version || null, pin_a_changer: r.pin_a_changer };
+    etat.profil = { chauffeur: r.chauffeur, consentement: r.consentement, consentement_version: r.consentement_version || null, pin_a_changer: r.pin_a_changer,
+                    duree_site: r.duree_site || 14, periode: r.periode || null };
+    // Pointages pas encore envoyés : le décompte du téléphone est plus récent que celui du serveur
+    for (const q of await pointagesEnAttente()) etat.profil.periode = periodeApres(etat.profil.periode, q.statut, q.horodatage, q.jours_maladie, etat.profil.duree_site);
     sauverSession();
     if (avant !== JSON.stringify(etat.profil)) router();
   } catch { /* hors ligne : on garde le profil enregistré */ }
@@ -1225,6 +1244,7 @@ function choisirStatut(code, mettreFocus = true) {
   $('#bloc-province').hidden = code !== 'autre_province';
   $('#bloc-lieu-dispo').hidden = code !== 'dispo_libreville';
   $('#bloc-site').hidden = code !== 'sur_site';
+  $('#bloc-maladie').hidden = code !== 'malade';
   $('#note-prive').hidden = def.position;
   majCarteVehicule();
   const btn = $('#btn-pointer');
@@ -1318,10 +1338,88 @@ function texteProvince(province, ville) {
   return province + (ville ? ` (${ville})` : '');
 }
 
+
+/* ===========================================================================
+   ROTATIONS (version 1.9) : séjour sur site, repos, congé, maladie
+   Mêmes règles que la base (loc__maj_periode) :
+   - séjour sur site : 14 ou 21 jours (fixé par la logistique), compté dès le 1er pointage « Sur site » ;
+   - repos : 7 jours après 14 jours de site, 14 jours après 21 jours ;
+   - congé : 30 jours ; maladie : jours accordés indiqués par le chauffeur.
+   Jours comptés en jours calendaires, heure du Gabon.
+   =========================================================================== */
+const PERIODES = {
+  site:    { statut: 'sur_site', libelle: 'Séjour sur site', ico: '⛏️', couleur: '#B45309', fin: 'Fin du séjour sur site' },
+  repos:   { statut: 'repos',    libelle: 'Repos',           ico: '🏠', couleur: '#6B7280', fin: 'Fin de repos' },
+  conge:   { statut: 'conge',    libelle: 'Congé',           ico: '🌴', couleur: '#4B5563', fin: 'Fin de congé' },
+  maladie: { statut: 'malade',   libelle: 'Repos maladie',   ico: '🤒', couleur: '#B91C1C', fin: 'Fin de repos maladie' },
+};
+const TYPE_PERIODE = { sur_site: 'site', repos: 'repos', conge: 'conge', malade: 'maladie' };
+
+/** Date du jour (AAAA-MM-JJ) à l'heure du Gabon. */
+function jourGabon(d) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Libreville', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(d));
+}
+/** Nombre de jours calendaires écoulés depuis le début de la période (0 le premier jour). */
+function joursEcoules(debut, maintenant = Date.now()) {
+  return Math.round((Date.parse(jourGabon(maintenant)) - Date.parse(jourGabon(debut))) / 86400000);
+}
+/** Période qui suit un nouveau pointage (même calcul que le serveur). */
+function periodeApres(ancienne, statut, horodatage, joursMaladie, dureeSite) {
+  const type = TYPE_PERIODE[statut] || null;
+  if (ancienne && ancienne.type === type) {
+    if (type === 'maladie' && joursMaladie) return { ...ancienne, duree_jours: joursMaladie };
+    return ancienne;
+  }
+  if (!type) return null;
+  let duree = null;
+  if (type === 'site') duree = dureeSite || 14;
+  else if (type === 'conge') duree = 30;
+  else if (type === 'maladie') duree = joursMaladie || null;
+  else if (ancienne && ancienne.type === 'site') duree = ancienne.duree_jours >= 21 ? 14 : 7;
+  return { type, debut: horodatage, duree_jours: duree };
+}
+/** Décompte d'une période : jour N sur D, jours restants, terminée ou non. */
+function decompte(per, maintenant = Date.now()) {
+  const ecoules = joursEcoules(per.debut, maintenant);
+  const d = per.duree_jours;
+  return { ecoules, jour: ecoules + 1, duree: d, reste: d ? Math.max(0, d - ecoules) : null, fini: !!d && ecoules >= d };
+}
+const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
+
+function rendrePeriode() {
+  const zone = $('#carte-periode');
+  const per = etat.profil && etat.profil.periode;
+  const def = per && PERIODES[per.type];
+  if (!def) { zone.hidden = true; return; }
+  const k = decompte(per);
+  zone.hidden = false;
+  zone.style.setProperty('--couleur', k.fini && per.type !== 'site' ? '#15803D' : def.couleur);
+  zone.classList.toggle('fin', k.fini && per.type !== 'site');
+  if (k.fini && per.type !== 'site') {
+    zone.innerHTML = `<div class="grand">✅ ${esc(def.fin)}</div>`
+      + `<p style="margin:4px 0 0">Vous êtes de nouveau <b>disponible</b>. Pointez votre nouveau statut.</p>`;
+    return;
+  }
+  if (k.fini) {
+    zone.innerHTML = `<div class="grand">${def.ico} ${esc(def.fin)}</div>`
+      + `<p style="margin:4px 0 0">Vos ${k.duree} jours sur site sont terminés. Voyez la logistique pour votre relève.</p>`;
+    return;
+  }
+  const depuis = new Date(per.debut).toLocaleDateString('fr-FR', { timeZone: 'Africa/Libreville', day: 'numeric', month: 'long' });
+  zone.innerHTML = `<h3 style="margin:0">${def.ico} ${esc(def.libelle)}</h3>`
+    + (k.duree
+      ? `<div class="grand">Jour ${k.jour} sur ${k.duree}</div>`
+        + `<p style="margin:0">Il reste <b>${pluriel(k.reste, 'jour')}</b> (depuis le ${esc(depuis)}).</p>`
+        + `<div class="barre" aria-hidden="true"><span style="width:${Math.min(100, Math.round(100 * k.ecoules / k.duree))}%"></span></div>`
+      : `<div class="grand">Jour ${k.jour}</div><p style="margin:0">Depuis le ${esc(depuis)}.</p>`);
+}
+
 function rendrePrincipal() {
   const c = etat.profil && etat.profil.chauffeur;
   if (!c) return;
   $('#bonjour').textContent = `Bonjour ${c.prenom || c.nom}`;
+  rendrePeriode();
+  $('#jours-maladie').value = lsGet('loc.joursMaladie', '');
   if (etat.statut) choisirStatut(etat.statut, false);
   $('#destination').value = lsGet('loc.destination', '');
   const provinceMemo = lsGet('loc.province', '');
@@ -1405,6 +1503,17 @@ function ajusterPassagers(delta) {
 }
 $('#pass-moins').addEventListener('click', () => ajusterPassagers(-1));
 $('#pass-plus').addEventListener('click', () => ajusterPassagers(+1));
+// Version 1.9 : jours de repos maladie accordés (1 à 365)
+function ajusterJoursMaladie(delta) {
+  const champ = $('#jours-maladie');
+  const v = Number(champ.value) || 0;
+  champ.value = Math.min(365, Math.max(1, champ.value === '' ? (delta > 0 ? 1 : 1) : v + delta));
+  champ.classList.remove('a-remplir');
+  lsSet('loc.joursMaladie', champ.value);
+}
+$('#mal-moins').addEventListener('click', () => ajusterJoursMaladie(-1));
+$('#mal-plus').addEventListener('click', () => ajusterJoursMaladie(+1));
+$('#jours-maladie').addEventListener('input', () => lsSet('loc.joursMaladie', $('#jours-maladie').value));
 $('#province').addEventListener('change', () => lsSet('loc.province', $('#province').value));
 $('#ville').addEventListener('input', () => lsSet('loc.ville', $('#ville').value));
 
@@ -1449,6 +1558,17 @@ async function pointer() {
       return;
     }
   }
+  // Version 1.9 : nombre de jours de repos maladie obligatoire
+  let joursMaladie = null;
+  if (statut === 'malade') {
+    const v = $('#jours-maladie').value.trim();
+    joursMaladie = /^\d{1,3}$/.test(v) ? Number(v) : NaN;
+    if (!(joursMaladie >= 1 && joursMaladie <= 365)) {
+      signalerChamp('#jours-maladie');
+      toast('Indiquez le nombre de jours de repos maladie accordés.', 'erreur');
+      return;
+    }
+  }
   let province = null, ville = null;
   if (statut === 'autre_province') {
     province = $('#province').value;
@@ -1487,7 +1607,7 @@ async function pointer() {
   try {
     // Véhicule : seulement pour les statuts avec position (jamais en repos / congé / maladie)
     const p = { statut, destination, province, ville, lieu_dispo: lieuDispo, site, passagers,
-                vehicule_id: def.position ? vehiculeChoisi() : null };
+                jours_maladie: joursMaladie, vehicule_id: def.position ? vehiculeChoisi() : null };
     let lieuNom = null;
 
     if (def.position) {
@@ -1766,6 +1886,9 @@ async function enregistrerPointage(p, lieuNom) {
     sans_position: STATUTS[p.statut].position && p.latitude == null,
   });
   lsSet('loc.dernierRappel', Date.now());
+  // Version 1.9 : décompte mis à jour tout de suite (même sans réseau), comme le fera le serveur
+  etat.profil.periode = periodeApres(etat.profil.periode, p.statut, item.horodatage, p.jours_maladie, etat.profil.duree_site);
+  sauverSession();
   $('#bandeau-rappel').hidden = true;
   rendrePrincipal();
 
@@ -1787,7 +1910,7 @@ function versServeur(i) {
     quartier_confirme_id: i.quartier_confirme_id ?? null, repere: i.repere || null,
     province: i.province || null, ville: i.ville || null, lieu_dispo: i.lieu_dispo || null,
     vehicule_id: i.vehicule_id ?? null, contestation: i.contestation || null, site: i.site || null,
-    passagers: i.passagers ?? null,
+    passagers: i.passagers ?? null, jours_maladie: i.jours_maladie ?? null,
     hors_ligne: Date.now() - (i.cree_ms || Date.now()) > 2 * 60 * 1000, // envoyé en différé
   };
 }

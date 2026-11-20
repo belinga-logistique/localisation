@@ -299,7 +299,7 @@ tr.urgence-ouverte td { background: #FEF2F2; }
           <span class="doux" title="Statut « Disponible à Libreville » ou « Sur site », pointage récent, accord donné">ⓘ</span>
         </div>
         <p class="doux" style="margin:6px 0 0">
-          <span class="point" style="background:#15803D"></span>Disponible : chez lui, base MARIA, INFRATEC, fin de course<br>
+          <span class="point" style="background:#15803D"></span>Disponible : chez lui, base MARIA, INFRATEC, fin de course, fin de repos / congé / maladie<br>
           <span class="point" style="background:#D97706"></span>Disponible, à vérifier (autre endroit, GPS éloigné ou hors de Libreville)
         </p>
         <button class="btn wa petit" id="btn-copier-dispo" type="button" style="margin-top:8px">💬 Liste des disponibles pour WhatsApp</button>
@@ -534,7 +534,53 @@ const STATUTS = {
   conge:            { libelle: 'Congé',                   couleur: '#4B5563', position: false },
   malade:           { libelle: 'Malade',                  couleur: '#B91C1C', position: false },
 };
-const STATUTS_DISPONIBLES = ['dispo_libreville', 'sur_site'];
+// Version 1.9 : « Sur site » n'est PLUS disponible pour Libreville (séjour de 14 ou 21 jours)
+const STATUTS_DISPONIBLES = ['dispo_libreville'];
+
+/* ---------------------------------------------------------------------------
+   Rotations (version 1.9) : mêmes règles que la base (loc__maj_periode)
+   - séjour sur site 14 ou 21 jours (fixé par la logistique), compté dès le 1er pointage « Sur site » ;
+     le décompte « reste N jours » s'affiche à partir du 7e jour ;
+   - repos : 7 jours après 14 jours de site, 14 jours après 21 jours ;
+   - congé : 30 jours ; maladie : jours accordés indiqués par le chauffeur.
+   À la fin d'un repos, d'un congé ou d'une maladie, le chauffeur repasse en VERT (disponible).
+   Jours calendaires, heure du Gabon.
+   --------------------------------------------------------------------------- */
+const PERIODES = {
+  site:    { libelle: 'Sur site', ico: '⛏️', fin: 'Séjour sur site terminé' },
+  repos:   { libelle: 'Repos',    ico: '🏠', fin: 'Fin de repos' },
+  conge:   { libelle: 'Congé',    ico: '🌴', fin: 'Fin de congé' },
+  maladie: { libelle: 'Maladie',  ico: '🤒', fin: 'Fin de repos maladie' },
+};
+const AFFICHER_RESTE_DES = 7;   // jours sur site avant d'afficher le décompte
+function jourGabon(d) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Libreville', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(d));
+}
+function joursEcoules(debut, maintenant = Date.now()) {
+  return Math.round((Date.parse(jourGabon(maintenant)) - Date.parse(jourGabon(debut))) / 86400000);
+}
+/** Décompte d'une période : { type, jour, duree, reste, fini } ou null. */
+function decompte(per, maintenant = Date.now()) {
+  if (!per || !PERIODES[per.type]) return null;
+  const ecoules = joursEcoules(per.debut, maintenant), d = per.duree_jours || null;
+  return { type: per.type, ecoules, jour: ecoules + 1, duree: d, reste: d ? Math.max(0, d - ecoules) : null, fini: !!d && ecoules >= d };
+}
+/** Petit texte affiché à côté du chauffeur (ou '' si rien à montrer). */
+function texteDecompte(k) {
+  if (!k) return '';
+  const def = PERIODES[k.type];
+  if (k.fini) return `${def.ico} ${def.fin}`;
+  if (!k.duree) return `${def.ico} ${def.libelle} · jour ${k.jour}`;
+  if (k.type === 'site' && k.ecoules < AFFICHER_RESTE_DES) return `${def.ico} Jour ${k.jour}/${k.duree}`;
+  return `${def.ico} ${k.type === 'site' ? 'Jour' : def.libelle + ' · jour'} ${k.jour}/${k.duree} · reste ${k.reste} j`;
+}
+/** Étiquette HTML du décompte (vert à la fin d'un repos / congé / maladie, orange à la fin du séjour). */
+function etiquetteDecompte(c) {
+  const k = c._decompte, t = texteDecompte(k);
+  if (!t) return '';
+  const cls = c._finPeriode ? 'ok' : (k.fini ? 'att' : '');
+  return `<span class="etiq ${cls}" data-decompte="${esc(k.type)}"${cls ? '' : ' style="background:#F1F5F9;color:#334155"'}>${esc(t)}</span>`;
+}
 
 /* « Disponible à Libreville » : lieu déclaré par le chauffeur (mêmes codes que la base).
    VERT : chez lui, fin de course, ou base MARIA / INFRATEC confirmées par le GPS.
@@ -586,6 +632,7 @@ const ACTIONS_JOURNAL = {
   modification_chauffeur: 'Chauffeur modifié', ajout_chauffeur: 'Chauffeur ajouté', suppression_chauffeur: 'Chauffeur supprimé',
   consultation_alertes: 'Consultation des alertes Panne / Urgence', alerte_traitee: 'Alerte Panne / Urgence prise en charge',
   export_courses: 'Export des courses et passagers', consultation_courses_direct: 'Consultation des courses en direct', consultation_trajet: "Consultation du trajet d'une course",
+  duree_site: 'Durée du séjour sur site modifiée',
   photo_envoyee: "Photo d'identité envoyée par le chauffeur", photo_refusee: "Photo d'identité refusée", photo_supprimee: "Photo d'identité supprimée par le chauffeur",
 };
 
@@ -951,8 +998,11 @@ function evaluerDisponibilite(c) {
   return orange('Lieu de disponibilité non précisé');
 }
 
+const dateCourte = (d) => new Date(d).toLocaleDateString('fr-FR', { timeZone: 'Africa/Libreville', day: 'numeric', month: 'short' });
+
 /** Couleur d'un chauffeur : celle du statut, ou orange si sa disponibilité est à vérifier. */
-const couleurChauffeur = (c) => c._dispoEtat === 'orange' ? COULEUR_A_VERIFIER : (c.dernier ? STATUTS[c.dernier.statut].couleur : '#94A3B8');
+const couleurChauffeur = (c) => c._dispoEtat === 'orange' ? COULEUR_A_VERIFIER
+  : (c._finPeriode ? '#15803D' : (c.dernier ? STATUTS[c.dernier.statut].couleur : '#94A3B8'));
 
 /** Ajoute à chaque chauffeur les informations calculées (préfixe « _ »). */
 function enrichir(c) {
@@ -975,8 +1025,13 @@ function enrichir(c) {
     const p = lieuLePlusProche(c._pos[0], c._pos[1]);
     if (p) c._quartier = p.l.nom + ' (calculé)';
   }
-  c._dispo = !!(c.actif && c._consent && d && STATUTS_DISPONIBLES.includes(d.statut) && c._recent);
+  // Version 1.9 : décompte de la période en cours ; fin de repos / congé / maladie = de nouveau disponible
+  c._decompte = d ? decompte(c.periode) : null;
+  if (c._decompte && d && (d.statut === 'sur_site') !== (c._decompte.type === 'site')) c._decompte = null;   // période d'un autre statut
+  c._finPeriode = !!(c._decompte && c._decompte.fini && c._decompte.type !== 'site') ? PERIODES[c._decompte.type].fin : null;
+  c._dispo = !!(c.actif && c._consent && d && ((STATUTS_DISPONIBLES.includes(d.statut) && c._recent) || c._finPeriode));
   evaluerDisponibilite(c);
+  if (c._finPeriode) { c._dispoEtat = 'vert'; c._dispoMotif = `✅ ${c._finPeriode} — de nouveau disponible`; }
   // Version 1.3 : véhicule du dernier pointage et alerte Panne / Urgence en cours
   c._vehicule = d && d.vehicule ? d.vehicule + (d.vehicule_modele ? ' · ' + d.vehicule_modele : '') : null;
   c._urgence = etat.urgences.find(u => u.chauffeur_id === c.id && !u.traitee_le) || null;
@@ -1012,6 +1067,8 @@ function enrichir(c) {
     }
     // (hors de Libreville : déjà signalé par l'alerte rouge « Hors zone », pas de doublon)
     if (c._dispoEtat === 'orange' && !c._dispoHorsZone) c._alertes.push({ type: 'Disponibilité à vérifier', niveau: 'att', detail: c._dispoMotif });
+    if (c._decompte && c._decompte.fini && c._decompte.type === 'site') c._alertes.push({ type: 'Relève à prévoir', niveau: 'att',
+      detail: `${c._decompte.duree} jours sur site atteints (depuis le ${dateCourte(c.periode.debut)})` });
     if (!c.pin_defini) c._alertes.push({ type: 'PIN non défini', niveau: 'att', detail: 'Le chauffeur ne peut pas se connecter' });
     if (c._contestation) c._alertes.unshift({ type: 'Position contestée', niveau: 'ko',
     detail: `${c._contestation} — le chauffeur affirme que son GPS se trompe : appelez-le pour vérifier` });
@@ -1092,7 +1149,9 @@ function popupChauffeur(c) {
   return vignette(c.id, c._nom, true) + `<b>${esc(c._nom)}</b> <span class="doux">(${esc(c.matricule)})</span><br>`
     + (s ? `<span class="point" style="background:${couleurChauffeur(c)}"></span>${esc(libelleStatut(d))}` : 'Aucun pointage')
     + (d && d.destination ? ` → ${esc(d.destination)}` : '')
-    + (d && d.passagers != null ? ` · 👥 ${d.passagers} passager${d.passagers > 1 ? 's' : ''}` : '') + '<br>'
+    + (d && d.passagers != null ? ` · 👥 ${d.passagers} passager${d.passagers > 1 ? 's' : ''}` : '')
+    + (d && d.jours_maladie ? ` · ${d.jours_maladie} j accordés` : '') + '<br>'
+    + (c._decompte ? etiquetteDecompte(c) + (c.periode ? ` <span class="doux">depuis le ${esc(dateCourte(c.periode.debut))}</span>` : '') + '<br>' : '')
     + (c._dispoEtat ? `<span class="etiq ${c._dispoEtat === 'vert' ? 'ok' : 'att'}">${c._dispoEtat === 'vert' ? '✓' : '⚠ à vérifier'}</span> ${esc(c._dispoMotif)}<br>` : '')
     + (d ? `<span class="doux">${esc(dateHeure(d.horodatage))} · <b>${esc(ilYa(d.horodatage))}</b></span><br>` : '')
     + `Zone : ${esc(c._zoneNom)}<br>`
@@ -1208,7 +1267,7 @@ function texteDisponibles() {
   const liste = etat.chauffeurs.filter(c => c.actif && c._dispo)
     .sort((a, b) => (a._dispoEtat === 'orange') - (b._dispoEtat === 'orange') || a._zoneNom.localeCompare(b._zoneNom, 'fr') || a._nom.localeCompare(b._nom, 'fr'));
   const lignes = liste.map(c => {
-    const ou = c.dernier.statut === 'sur_site' ? 'Sur site'
+    const ou = c._finPeriode ? c._finPeriode
       : (c._dispoEtat === 'orange' ? 'à vérifier' : (LIEUX_DISPO[c.dernier.lieu_dispo] || {}).libelle || 'Libreville');
     return `• ${c._nom} — ${c.telephone} — ${ou}${c._quartier ? ' (' + c._quartier.replace(' (calculé)', '') + ')' : ''}`
       + `${c._vehicule ? ' — 🚙 ' + c._vehicule : ''} — pointé ${ilYa(c.dernier.horodatage)}`;
@@ -1244,6 +1303,7 @@ function carteChauffeurHtml(c) {
     + (c._urgence ? `<span class="etiq ko">🚨 ${esc((MOTIFS[c._urgence.motif] || {}).libelle || 'urgence')}</span>` : '')
     + (c._contestation ? '<span class="etiq ko">⚠ position contestée</span>' : '')
     + (c._alertes.some(a => a.niveau === 'ko') ? '<span class="etiq ko">⚠ alerte</span>' : '')
+    + etiquetteDecompte(c)
     + (c._dispoEtat === 'orange' ? '<span class="etiq att">dispo à vérifier</span>' : (c._dispo ? '<span class="etiq ok">disponible</span>' : ''))
     + '</div>' + (c._dispoEtat ? `<div class="doux">${esc(c._dispoMotif)}</div>` : '') + '</div>';
 }
@@ -1437,7 +1497,7 @@ async function afficherHistorique(id) {
     const lignes = h.map(p => {
       const s = STATUTS[p.statut] || { libelle: p.statut, couleur: '#555' };
       const ld = p.lieu_dispo && LIEUX_DISPO[p.lieu_dispo];
-      return `<tr><td>${esc(dateHeure(p.horodatage))}</td><td><span class="point" style="background:${s.couleur}"></span>${esc(libelleStatut(p))}${p.destination ? ' → ' + esc(p.destination) : ''}${p.passagers != null ? ` · 👥 ${p.passagers}` : ''}`
+      return `<tr><td>${esc(dateHeure(p.horodatage))}</td><td><span class="point" style="background:${s.couleur}"></span>${esc(libelleStatut(p))}${p.destination ? ' → ' + esc(p.destination) : ''}${p.passagers != null ? ` · 👥 ${p.passagers}` : ''}${p.jours_maladie ? ` · ${p.jours_maladie} j accordés` : ''}`
         + `${ld ? `<br><span class="doux">${ld.ico} ${esc(ld.libelle)}</span>` : ''}${p.vehicule ? `<br><span class="doux">🚙 ${esc(p.vehicule)}</span>` : ''}</td>`
         + `<td>${p.province ? '<b>' + esc(texteProvince(p.province, p.ville)) + '</b> <span class="doux">(déclarée)</span><br>' : ''}`
         + `${p.latitude != null ? esc(zoneDe(p.latitude, p.longitude).nom) : '<span class="doux">sans position</span>'}</td>`
@@ -1489,9 +1549,9 @@ function rendreChauffeurs() {
       c.actif ? '' : '<span class="etiq">inactif</span>',
     ].join(' ');
     return `<tr class="${c.actif ? '' : 'inactif'}"><td>${vignette(c.id, c._nom)}</td><td>${esc(c.matricule)}</td><td><b>${esc(c._nom)}</b></td>`
-      + `<td><a href="tel:${esc(c.telephone)}">${esc(c.telephone)}</a></td><td>${c.equipe === 'libreville' ? 'Libreville' : 'Site'}</td>`
+      + `<td><a href="tel:${esc(c.telephone)}">${esc(c.telephone)}</a></td><td>${c.equipe === 'libreville' ? 'Libreville' : 'Site'}<br><span class="doux">séjour ${c.duree_site || 14} j</span></td>`
       + `<td>${c.binome ? esc(nomComplet(c.binome)) + `<br><a class="doux" href="tel:${esc(c.binome.telephone)}">${esc(c.binome.telephone)}</a>` : '<span class="doux">—</span>'}</td>`
-      + `<td>${s ? `<span class="point" style="background:${s.couleur}"></span>${esc(libelleStatut(d))}<br><span class="doux">${esc(c._zoneNom)}${c._quartier ? ' · ' + esc(c._quartier) : ''}${c._vehicule ? '<br>🚙 ' + esc(c._vehicule) : ''}</span>` : '<span class="doux">—</span>'}</td>`
+      + `<td>${s ? `<span class="point" style="background:${couleurChauffeur(c)}"></span>${esc(libelleStatut(d))}${c._decompte ? '<br>' + etiquetteDecompte(c) : ''}<br><span class="doux">${esc(c._zoneNom)}${c._quartier ? ' · ' + esc(c._quartier) : ''}${c._vehicule ? '<br>🚙 ' + esc(c._vehicule) : ''}</span>` : '<span class="doux">—</span>'}</td>`
       + `<td>${d ? esc(dateHeure(d.horodatage)) + '<br><span class="doux">' + esc(ilYa(d.horodatage)) + '</span>' : '<span class="doux">jamais</span>'}</td>`
       + `<td>${compte}</td>`
       + `<td><div class="ligne"><button class="btn sec petit" data-action="modifier" data-id="${esc(c.id)}">Modifier</button>`
@@ -1515,6 +1575,7 @@ async function editerChauffeur(id) {
       <div><label class="champ" for="ce-prenom">Prénom</label><input id="ce-prenom" class="champ-l" type="text" maxlength="80" value="${esc(c ? c.prenom || '' : '')}"></div>
       <div><label class="champ" for="ce-equipe">Équipe</label><select id="ce-equipe" class="champ-l"><option value="site">Site / route</option><option value="libreville"${c && c.equipe === 'libreville' ? ' selected' : ''}>Libreville</option></select></div>
       <div><label class="champ" for="ce-binome">Binôme de remplacement</label><select id="ce-binome" class="champ-l"><option value="">— Aucun —</option>${options}</select></div>
+      <div><label class="champ" for="ce-duree">Durée du séjour sur site</label><select id="ce-duree" class="champ-l"><option value="14">14 jours (puis 7 jours de repos)</option><option value="21"${c && c.duree_site === 21 ? ' selected' : ''}>21 jours (puis 14 jours de repos)</option></select></div>
     </div>
     <label class="ligne" style="margin-top:12px"><input type="checkbox" id="ce-actif"${!c || c.actif ? ' checked' : ''}> Chauffeur actif</label>
     ${c ? '' : '<p class="doux">Après l\'ajout, définissez un PIN provisoire (bouton « PIN ») et communiquez-le au chauffeur.</p>'}`;
@@ -1531,12 +1592,15 @@ async function editerChauffeur(id) {
     };
     if (!donnees.matricule || !donnees.nom) throw new Error('Le matricule et le nom sont obligatoires.');
     if (!/^\d{8,10}$/.test(donnees.telephone)) throw new Error('Téléphone invalide : 8 à 10 chiffres (sans +241).');
+    const duree = Number($('#ce-duree').value);
     if (c) {
       await api(sb.from('loc_chauffeurs').update(donnees).eq('id', c.id));
+      if (duree !== (c.duree_site || 14)) await rpc('loc_definir_duree_site', { p_chauffeur: c.id, p_duree: duree });
       rpc('loc_journaliser', { p_action: 'modification_chauffeur', p_chauffeur: c.id, p_details: { matricule: donnees.matricule } }).catch(() => {});
       toast('Chauffeur modifié ✓', 'ok');
     } else {
       const r = await api(sb.from('loc_chauffeurs').insert(donnees).select('id'));
+      if (duree !== 14) await rpc('loc_definir_duree_site', { p_chauffeur: r[0].id, p_duree: duree });
       rpc('loc_journaliser', { p_action: 'ajout_chauffeur', p_chauffeur: r[0].id, p_details: { matricule: donnees.matricule } }).catch(() => {});
       toast('Chauffeur ajouté ✓ — pensez à définir son PIN.', 'ok', 6000);
     }
