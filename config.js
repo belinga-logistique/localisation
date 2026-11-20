@@ -14,5 +14,5 @@
 self.LOC_CONFIG = Object.freeze({
   SUPABASE_URL: 'https://pgoesbhdbmnjscmvsflv.supabase.co',
   SUPABASE_CLE: 'sb_publishable_QLqQLvr7DrGwfwXcM3EE2Q_x8vjMojB',
-  VERSION: '1.5.0'
+  VERSION: '1.6.0'
 });

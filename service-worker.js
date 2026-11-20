@@ -17,7 +17,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.5.0';   // 1.5.0 : suivi des courses en direct (trajet)
+const VERSION = 'v1.6.0';   // 1.6.0 : choix du site de travail (« Sur site »)
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',
@@ -136,7 +136,7 @@ function versServeur(i) {
     quartier_detecte_id: i.quartier_detecte_id ?? null, distance_detecte_m: i.distance_detecte_m ?? null,
     quartier_confirme_id: i.quartier_confirme_id ?? null, repere: i.repere || null,
     province: i.province || null, ville: i.ville || null, lieu_dispo: i.lieu_dispo || null,
-    vehicule_id: i.vehicule_id ?? null, contestation: i.contestation || null,
+    vehicule_id: i.vehicule_id ?? null, contestation: i.contestation || null, site: i.site || null,
     hors_ligne: Date.now() - (i.cree_ms || Date.now()) > 2 * 60 * 1000,
   };
 }

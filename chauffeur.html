@@ -333,6 +333,10 @@ a.btn { text-decoration: none; }
     <div class="carte" style="margin-top:14px">
       <h3>1. Mon statut</h3>
       <div id="grille-statuts" class="statuts" role="group" aria-label="Choix du statut"></div>
+      <div id="bloc-site" hidden>
+        <label id="site-titre">Sur quel site ? *</label>
+        <div id="grille-sites" class="lieux-dispo" role="radiogroup" aria-labelledby="site-titre"></div>
+      </div>
       <div id="bloc-destination" hidden>
         <label for="destination">Destination de la course</label>
         <input id="destination" type="text" maxlength="80" placeholder="Ex. Aéroport, Port d'Owendo…">
@@ -561,6 +565,12 @@ const VILLES_PROVINCES = [
   ['Ogooué-Maritime', -0.72, 8.78], ['Ogooué-Maritime', -1.57, 9.26], ['Ogooué-Maritime', -2.65, 10.00],
   ['Woleu-Ntem', 1.60, 11.58], ['Woleu-Ntem', 2.08, 11.50], ['Woleu-Ntem', 0.78, 11.55], ['Woleu-Ntem', 2.15, 12.13], ['Woleu-Ntem', 0.95, 10.79],
 ];
+
+/* Sites de travail (statut « Sur site », version 1.6), mêmes codes que la base */
+const SITES = {
+  belinga_village: 'BELINGA VILLAGE', batouala: 'BATOUALA', makokou: 'MAKOKOU',
+  ikei_boka_boka: 'IKEI BOKA BOKA', kobe_kobe: 'KOBE-KOBE', kango: 'KANGO',
+};
 
 /* Lieux de disponibilité (statut « Disponible à Libreville »), mêmes codes que la base */
 const LIEUX_DISPO = {
@@ -1013,7 +1023,8 @@ async function chargerReferentiel(force = false) {
   if (!etat.jeton) return false;
   const age = etat.ref ? Date.now() - (etat.ref.charge_le || 0) : Infinity;
   // Frais de moins de 3 h (et déjà au format 1.3, avec la liste des véhicules) : rien à faire
-  if (!force && age < 3 * 3600 * 1000 && Array.isArray(etat.ref.vehicules)) return true;
+  if (!force && age < 3 * 3600 * 1000 && Array.isArray(etat.ref.vehicules)
+      && (etat.ref.zones || []).some(z => 'code' in z)) return true;
   try {
     const r = await rpc('loc_referentiel', { p_jeton: etat.jeton });
     if (!r.ok) {
@@ -1060,7 +1071,7 @@ function provinceDe(lat, lon) {
    un chauffeur honnête à cause d'un GPS imprécis.
    Lieux MARIA / INFRATEC : contrôlés seulement une fois placés et « vérifiés » sur la carte.
    --------------------------------------------------------------------------- */
-function controleCoherence(statut, lieuDispo, province, pos) {
+function controleCoherence(statut, lieuDispo, province, pos, site = null) {
   if (!pos || !etat.ref) return null;
   const zones = etat.ref.zones || [];
   const prec = Math.min(Number(pos.precision) || 0, 500);
@@ -1069,13 +1080,17 @@ function controleCoherence(statut, lieuDispo, province, pos) {
   const lbv = zones.filter(z => z.type === 'libreville');
   const auxLbv = lbv.length && lbv.some(dans);
   const auSite = zones.some(z => z.type === 'site' && dans(z));
-  // Conseil : le statut qui correspond au GPS
-  const conseil = auSite ? '« Sur site »' : auxLbv ? '« Disponible à Libreville »'
+  // Conseil : le statut qui correspond au GPS (version 1.6 : avec le site de travail s'il est connu)
+  const siteIci = zones.find(z => z.type === 'site' && z.code && SITES[z.code] && z.code !== site && dans(z));
+  const conseil = siteIci ? `« Sur site : ${SITES[siteIci.code]} »` : auSite ? '« Sur site »' : auxLbv ? '« Disponible à Libreville »'
     : `« En mission » ou « Autre province » (${provinceDe(pos.lat, pos.lon)})`;
 
   if (statut === 'sur_site') {
-    const sites = zones.filter(z => z.type === 'site');
-    if (sites.length && !auSite) return { declare: 'Sur site', constate: ici, conseil };
+    // Version 1.6 : on contrôle le site CHOISI, seulement s'il est placé et vérifié sur la carte
+    const z = site && zones.find(x => x.code === site);
+    if (z && z.approximatif === false && !dans(z)) {
+      return { declare: `Sur site : ${SITES[site] || z.nom}`, constate: ici, conseil };
+    }
   }
   if (statut === 'dispo_libreville') {
     if (lbv.length && !auxLbv) return { declare: 'Disponible à Libreville', constate: ici, conseil };
@@ -1166,6 +1181,7 @@ function choisirStatut(code, mettreFocus = true) {
   $('#bloc-destination').hidden = code !== 'en_course';
   $('#bloc-province').hidden = code !== 'autre_province';
   $('#bloc-lieu-dispo').hidden = code !== 'dispo_libreville';
+  $('#bloc-site').hidden = code !== 'sur_site';
   $('#note-prive').hidden = def.position;
   majCarteVehicule();
   const btn = $('#btn-pointer');
@@ -1173,6 +1189,25 @@ function choisirStatut(code, mettreFocus = true) {
   btn.classList.toggle('prive', !def.position);
   if (code === 'en_course' && mettreFocus) setTimeout(() => $('#destination').focus(), 50);
   if (code === 'autre_province' && mettreFocus && !$('#province').value) setTimeout(() => $('#province').focus(), 50);
+}
+
+/** Crée les boutons « Sur quel site ? » (version 1.6). */
+function construireSites() {
+  const zone = $('#grille-sites');
+  Object.entries(SITES).forEach(([code, nom]) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'lieu-dispo'; b.dataset.site = code;
+    b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', 'false');
+    b.innerHTML = `<span aria-hidden="true">⛏️</span><span>${esc(nom)}</span>`;
+    b.addEventListener('click', () => choisirSite(code));
+    zone.appendChild(b);
+  });
+}
+function choisirSite(code) {
+  etat.site = SITES[code] ? code : null;
+  lsSet('loc.site', etat.site);
+  document.querySelectorAll('[data-site]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.site === etat.site)));
+  $('#grille-sites').classList.remove('a-remplir');
 }
 
 /** Crée les boutons « Où êtes-vous disponible ? ». */
@@ -1250,6 +1285,7 @@ function rendrePrincipal() {
   $('#province').value = PROVINCES.includes(provinceMemo) ? provinceMemo : '';
   $('#ville').value = lsGet('loc.ville', '');
   choisirLieuDispo(lsGet('loc.lieuDispo', null));
+  choisirSite(lsGet('loc.site', null));
   construireVehicules();
   rendreAlertes();
   majCarteSuivi();
@@ -1260,6 +1296,7 @@ function rendrePrincipal() {
   if (d && d.chauffeur_id === c.id) {
     const s = STATUTS[d.statut] || { libelle: d.statut, couleur: '#555' };
     zone.innerHTML = `<b style="color:${s.couleur}">${esc(s.libelle)}</b>`
+      + (d.site && SITES[d.site] ? ` — ⛏️ ${esc(SITES[d.site])}` : '')
       + (d.lieu ? ` — ${esc(d.lieu)}` : '')
       + (d.destination ? ` — vers ${esc(d.destination)}` : '')
       + (d.province ? ` — ${esc(texteProvince(d.province, d.ville))}` : '')
@@ -1358,6 +1395,17 @@ async function pointer() {
       return;
     }
   }
+  let site = null;
+  if (statut === 'sur_site') {
+    site = etat.site;
+    if (!SITES[site]) {
+      const grille = $('#grille-sites');
+      grille.classList.add('a-remplir');
+      grille.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toast('Indiquez sur quel site vous êtes.', 'erreur');
+      return;
+    }
+  }
   let lieuDispo = null;
   if (statut === 'dispo_libreville') {
     lieuDispo = etat.lieuDispo;
@@ -1374,7 +1422,7 @@ async function pointer() {
   $('#btn-pointer').disabled = true;
   try {
     // Véhicule : seulement pour les statuts avec position (jamais en repos / congé / maladie)
-    const p = { statut, destination, province, ville, lieu_dispo: lieuDispo,
+    const p = { statut, destination, province, ville, lieu_dispo: lieuDispo, site,
                 vehicule_id: def.position ? vehiculeChoisi() : null };
     let lieuNom = null;
 
@@ -1385,7 +1433,7 @@ async function pointer() {
         p.latitude = pos.lat; p.longitude = pos.lon; p.precision_m = Math.round(pos.precision);
         // Version 1.4 : le GPS doit correspondre au lieu déclaré, sinon le chauffeur corrige
         // (seule exception : « Mon GPS se trompe » -> pointage marqué « position contestée »)
-        const inc = controleCoherence(statut, lieuDispo, province, pos);
+        const inc = controleCoherence(statut, lieuDispo, province, pos, site);
         if (inc) {
           const motif = await signalerIncoherence(inc, pos);
           if (!motif) {
@@ -1649,7 +1697,7 @@ async function enregistrerPointage(p, lieuNom) {
     chauffeur_id: c.id, statut: p.statut, horodatage: item.horodatage, lieu: lieuNom,
     destination: p.destination, province: p.province, ville: p.ville, lieu_dispo: p.lieu_dispo,
     vehicule: p.vehicule_id ? (vehiculeParId(p.vehicule_id) || {}).immatriculation || null : null,
-    contestation: p.contestation || null,
+    contestation: p.contestation || null, site: p.site || null,
     sans_position: STATUTS[p.statut].position && p.latitude == null,
   });
   lsSet('loc.dernierRappel', Date.now());
@@ -1673,7 +1721,7 @@ function versServeur(i) {
     quartier_detecte_id: i.quartier_detecte_id ?? null, distance_detecte_m: i.distance_detecte_m ?? null,
     quartier_confirme_id: i.quartier_confirme_id ?? null, repere: i.repere || null,
     province: i.province || null, ville: i.ville || null, lieu_dispo: i.lieu_dispo || null,
-    vehicule_id: i.vehicule_id ?? null, contestation: i.contestation || null,
+    vehicule_id: i.vehicule_id ?? null, contestation: i.contestation || null, site: i.site || null,
     hors_ligne: Date.now() - (i.cree_ms || Date.now()) > 2 * 60 * 1000, // envoyé en différé
   };
 }
@@ -2201,6 +2249,7 @@ async function reprendreSuivi() {
 function ligneHistorique(p, enAttente) {
   const s = STATUTS[p.statut] || { libelle: p.statut, couleur: '#555' };
   const details = [];
+  if (p.site && SITES[p.site]) details.push('⛏️ ' + esc(SITES[p.site]));
   if (p.quartier) details.push(esc(p.quartier));
   if (p.repere) details.push('« ' + esc(p.repere) + ' »');
   if (p.destination) details.push('vers ' + esc(p.destination));
@@ -2494,6 +2543,7 @@ async function demarrer() {
   construireStatuts();
   construireProvinces();
   construireLieuxDispo();
+  construireSites();
   etat.jeton = lsGet('loc.jeton');
   etat.profil = lsGet('loc.profil');
   etat.statut = lsGet('loc.statut');
