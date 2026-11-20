@@ -163,6 +163,15 @@ tr.urgence-ouverte td { background: #FEF2F2; }
 .groupe-carte { width: 38px; height: 38px; border-radius: 50%; background: rgba(0,112,60,.92); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
 .groupe-carte.grand { width: 46px; height: 46px; font-size: 16px; }
 .btn.wa { background: #128C7E; border-color: #128C7E; }
+/* --- Photos d'identité (version 1.7) --- */
+.vignette { width: 36px; height: 48px; border-radius: 6px; object-fit: cover; border: 1px solid var(--bord); background: #E2E8F0;
+  flex: none; vertical-align: middle; cursor: zoom-in; }
+.vignette.grande { width: 72px; height: 96px; float: left; margin: 0 10px 4px 0; }
+.vignette.vide { display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--doux); cursor: default; }
+.carte-ch .t { align-items: center; }
+.identite { display: flex; gap: 8px; align-items: center; }
+.photo-grande { display: block; width: 300px; max-width: 100%; height: auto; margin: 0 auto 10px; border-radius: 12px; border: 3px solid var(--primaire); }
+
 /* --- Courses suivies en direct (version 1.5) --- */
 .tete-course { width: 22px; height: 22px; border-radius: 50%; background: #1D4ED8; border: 3px solid #fff; box-shadow: 0 0 0 0 rgba(29,78,216,.7); animation: pulse-bleu 1.6s infinite; }
 @keyframes pulse-bleu { 70% { box-shadow: 0 0 0 16px rgba(29,78,216,0); } 100% { box-shadow: 0 0 0 0 rgba(29,78,216,0); } }
@@ -337,7 +346,7 @@ tr.urgence-ouverte td { background: #FEF2F2; }
     </div>
     <div class="bloc">
       <table>
-        <thead><tr><th>Matricule</th><th>Nom</th><th>Téléphone</th><th>Équipe</th><th>Binôme</th><th>Statut / zone</th><th>Dernier pointage</th><th>Compte</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Photo</th><th>Matricule</th><th>Nom</th><th>Téléphone</th><th>Équipe</th><th>Binôme</th><th>Statut / zone</th><th>Dernier pointage</th><th>Compte</th><th>Actions</th></tr></thead>
         <tbody id="tab-chauffeurs"></tbody>
       </table>
     </div>
@@ -563,6 +572,7 @@ const ACTIONS_JOURNAL = {
   modification_chauffeur: 'Chauffeur modifié', ajout_chauffeur: 'Chauffeur ajouté', suppression_chauffeur: 'Chauffeur supprimé',
   consultation_alertes: 'Consultation des alertes Panne / Urgence', alerte_traitee: 'Alerte Panne / Urgence prise en charge',
   consultation_courses_direct: 'Consultation des courses en direct', consultation_trajet: "Consultation du trajet d'une course",
+  photo_envoyee: "Photo d'identité envoyée par le chauffeur", photo_refusee: "Photo d'identité refusée", photo_supprimee: "Photo d'identité supprimée par le chauffeur",
 };
 
 /* État en mémoire */
@@ -575,6 +585,7 @@ const etat = {
   urgencesEtat: { ouvertes: 0, derniere: null },
   filtreSpecial: null,  // compteurs : 'dispo' | 'verifier' | 'sans_nouvelles'
   courses: [],          // version 1.5 : courses suivies en direct (avec leur trajet)
+  photos: new Map(),    // version 1.7 : chauffeur_id -> { image, statut, motif, maj_le }
   suivre: null,         // identifiant de la course que la carte suit
 };
 
@@ -687,7 +698,7 @@ function afficherConnexion(message, type = 'ko', formulaire = 'connexion') {
   $('#app').hidden = true; $('#e-connexion').hidden = false;
   formulaireConnexion(formulaire);
   messageConnexion(message, type);
-  etat.chauffeurs = []; etat.urgences = []; etat.courses = []; etat.suivre = null; // aucune position ne reste affichée
+  etat.chauffeurs = []; etat.urgences = []; etat.courses = []; etat.suivre = null; etat.photos = new Map(); // rien ne reste affiché
   arreterSignalUrgence();
 }
 
@@ -817,6 +828,7 @@ async function ouvrirApplication(user) {
   await chargerTout();
   await verifierUrgences(true);
   await chargerCourses();
+  await chargerPhotos();
 }
 
 $('#btn-deconnexion').addEventListener('click', async () => {
@@ -1050,10 +1062,20 @@ function marqueurChauffeur(c) {
   return mk;
 }
 
+/** Vignette photo (ou initiales) d'un chauffeur ; un clic l'agrandit (version 1.7). */
+function vignette(id, nom, grande = false) {
+  const ph = etat.photos.get(id);
+  if (ph && ph.image && ph.statut === 'active') {
+    return `<img class="vignette${grande ? ' grande' : ''}" src="${ph.image}" alt="Photo de ${esc(nom)}" data-action="voir-photo" data-id="${esc(id)}" title="Agrandir la photo">`;
+  }
+  const ini = String(nom || '?').split(/\s+/).map(m => m[0] || '').join('').slice(0, 2).toUpperCase();
+  return `<span class="vignette vide${grande ? ' grande' : ''}" title="${ph && ph.statut === 'refusee' ? 'Photo refusée, en attente d\'une nouvelle' : 'Pas encore de photo'}">${esc(ini)}</span>`;
+}
+
 function popupChauffeur(c) {
   const d = c.dernier, s = d ? STATUTS[d.statut] : null;
   const b = c.binome;
-  return `<b>${esc(c._nom)}</b> <span class="doux">(${esc(c.matricule)})</span><br>`
+  return vignette(c.id, c._nom, true) + `<b>${esc(c._nom)}</b> <span class="doux">(${esc(c.matricule)})</span><br>`
     + (s ? `<span class="point" style="background:${couleurChauffeur(c)}"></span>${esc(libelleStatut(d))}` : 'Aucun pointage')
     + (d && d.destination ? ` → ${esc(d.destination)}` : '') + '<br>'
     + (c._dispoEtat ? `<span class="etiq ${c._dispoEtat === 'vert' ? 'ok' : 'att'}">${c._dispoEtat === 'vert' ? '✓' : '⚠ à vérifier'}</span> ${esc(c._dispoMotif)}<br>` : '')
@@ -1199,7 +1221,7 @@ $('#btn-copier-dispo').addEventListener('click', async () => {
 function carteChauffeurHtml(c) {
   const d = c.dernier, s = d ? STATUTS[d.statut] : null;
   return `<div class="carte-ch" data-action="localiser" data-id="${esc(c.id)}">`
-    + `<div class="t"><b>${s ? `<span class="point" style="background:${couleurChauffeur(c)}"></span>` : ''}${esc(c._nom)}</b>`
+    + `<div class="t"><span class="identite">${vignette(c.id, c._nom)}<b>${s ? `<span class="point" style="background:${couleurChauffeur(c)}"></span>` : ''}${esc(c._nom)}</b></span>`
     + `<span class="doux">${d ? esc(ilYa(d.horodatage)) : 'jamais'}</span></div>`
     + `<div class="doux">${s ? esc(libelleStatut(d)) : 'Aucun pointage'} · ${esc(c._zoneNom)}${c._quartier ? ' · ' + esc(c._quartier) : ''}${c._vehicule ? ' · 🚙 ' + esc(c._vehicule) : ''}</div>`
     + `<div class="ligne" style="margin-top:4px"><a class="btn appel petit" href="tel:${esc(c.telephone)}" onclick="event.stopPropagation()">📞 ${esc(c.telephone)}</a>`
@@ -1352,7 +1374,7 @@ $('#recherche').addEventListener('input', () => {
     || (c._vehicule && normaliser(c._vehicule).replace(/[\s-]/g, '').includes(q.replace(/[\s-]/g, '')))).slice(0, 10);
   zone.innerHTML = res.length ? res.map(c => {
     const s = c.dernier ? STATUTS[c.dernier.statut] : null;
-    return `<div class="resultat"><div class="q"><b>${esc(c._nom)}</b> <span class="doux">${esc(c.matricule)} · ${esc(c.telephone)}</span><br>`
+    return `<div class="resultat">${vignette(c.id, c._nom)}<div class="q"><b>${esc(c._nom)}</b> <span class="doux">${esc(c.matricule)} · ${esc(c.telephone)}</span><br>`
       + `<span class="doux">${s ? `<span class="point" style="background:${s.couleur}"></span>${esc(libelleStatut(c.dernier))} · ${esc(ilYa(c.dernier.horodatage))}` : 'Aucun pointage'} · ${esc(c._zoneNom)}${c._quartier ? ' · ' + esc(c._quartier) : ''}</span>`
       + (c._vehicule ? `<br><span class="doux">🚙 ${esc(c._vehicule)}</span>` : '')
       + (c.binome ? `<br><span class="doux">Binôme : ${esc(nomComplet(c.binome))} (${esc(c.binome.telephone)})</span>` : '') + '</div>'
@@ -1380,6 +1402,7 @@ document.addEventListener('click', (e) => {
     'repere-creer': () => creerLieuDepuisRepere(Number(el.dataset.index)),
     'urgence-traiter': () => traiterUrgence(id),
     'voir-trajet': () => voirTrajet(id),
+    'voir-photo': () => voirPhoto(id),
     'suivre-course': () => suivreCourse(id),
     'arreter-suivre': () => { etat.suivre = null; rendreListeCourses(); },
     'urgence-voir': () => voirUrgence(id),
@@ -1447,9 +1470,10 @@ function rendreChauffeurs() {
       c.pin_defini ? '' : '<span class="etiq ko">PIN non défini</span>',
       c.bloque ? '<span class="etiq ko">bloqué</span>' : '',
       c.est_demo ? '<span class="etiq">démo</span>' : '',
+      etat.photos.get(c.id)?.statut === 'refusee' ? '<span class="etiq att">photo refusée</span>' : (etat.photos.get(c.id)?.image ? '' : '<span class="etiq">sans photo</span>'),
       c.actif ? '' : '<span class="etiq">inactif</span>',
     ].join(' ');
-    return `<tr class="${c.actif ? '' : 'inactif'}"><td>${esc(c.matricule)}</td><td><b>${esc(c._nom)}</b></td>`
+    return `<tr class="${c.actif ? '' : 'inactif'}"><td>${vignette(c.id, c._nom)}</td><td>${esc(c.matricule)}</td><td><b>${esc(c._nom)}</b></td>`
       + `<td><a href="tel:${esc(c.telephone)}">${esc(c.telephone)}</a></td><td>${c.equipe === 'libreville' ? 'Libreville' : 'Site'}</td>`
       + `<td>${c.binome ? esc(nomComplet(c.binome)) + `<br><a class="doux" href="tel:${esc(c.binome.telephone)}">${esc(c.binome.telephone)}</a>` : '<span class="doux">—</span>'}</td>`
       + `<td>${s ? `<span class="point" style="background:${s.couleur}"></span>${esc(libelleStatut(d))}<br><span class="doux">${esc(c._zoneNom)}${c._quartier ? ' · ' + esc(c._quartier) : ''}${c._vehicule ? '<br>🚙 ' + esc(c._vehicule) : ''}</span>` : '<span class="doux">—</span>'}</td>`
@@ -1459,7 +1483,7 @@ function rendreChauffeurs() {
       + `<button class="btn sec petit" data-action="pin" data-id="${esc(c.id)}">PIN</button>`
       + (c.bloque ? `<button class="btn sec petit" data-action="debloquer" data-id="${esc(c.id)}">Débloquer</button>` : '')
       + `<button class="btn sec petit" data-action="historique" data-id="${esc(c.id)}">Historique</button></div></td></tr>`;
-  }).join('') || '<tr><td colspan="9" class="vide">Aucun chauffeur. Ajoutez-en ou importez un fichier CSV.</td></tr>';
+  }).join('') || '<tr><td colspan="10" class="vide">Aucun chauffeur. Ajoutez-en ou importez un fichier CSV.</td></tr>';
 }
 
 $('#btn-ajout-chauffeur').addEventListener('click', () => editerChauffeur(null));
@@ -1655,6 +1679,45 @@ function rendreAlertes() {
 }
 
 /* ===========================================================================
+   PHOTOS D'IDENTITÉ (version 1.7) : prises par les chauffeurs, affichées ici
+   =========================================================================== */
+async function chargerPhotos() {
+  if (!etat.user || !sb) return;
+  try {
+    const l = await rpc('loc_photos_liste') || [];
+    etat.photos = new Map(l.map(x => [x.chauffeur_id, x]));
+    if (etat.maj) rendreTout();
+  } catch { /* base sans photos : vignettes avec initiales */ }
+}
+// Nouvelles photos des chauffeurs : rechargées toutes les 10 minutes
+setInterval(() => { if (etat.user) chargerPhotos(); }, 10 * 60 * 1000);
+
+async function voirPhoto(id) {
+  const ph = etat.photos.get(id);
+  if (!ph || !ph.image) return;
+  const c = etat.chauffeurs.find(x => x.id === id);
+  const nom = c ? c._nom : '';
+  const choix = await modale(`Photo — ${nom}`,
+    `<img class="photo-grande" src="${ph.image}" alt="Photo de ${esc(nom)}">`
+    + `<p class="doux" style="text-align:center">${c ? esc(c.matricule) + ' · ' + esc(c.telephone) + ' · ' : ''}envoyée ${esc(dateHeure(ph.maj_le))}</p>`,
+    [{ libelle: 'Refuser cette photo', valeur: 'refuser', classe: 'danger' }, { libelle: 'Fermer', valeur: 'ok', classe: 'sec' }]);
+  if (choix !== 'refuser') return;
+  const r = await modale(`Refuser la photo — ${nom}`,
+    `<p>Le chauffeur verra le motif et devra reprendre sa photo.</p>
+     <label class="champ" for="ph-motif">Motif</label>
+     <textarea id="ph-motif" class="champ-l" rows="2" maxlength="160" style="width:100%">Photo floue ou mal cadrée : reprenez-la de face, bien éclairée</textarea>
+     <div class="puces" style="margin-top:6px">${['Visage non visible', 'Photo floue', 'Lunettes de soleil ou casquette', 'Ce n\'est pas vous']
+       .map(t => `<button type="button" class="puce" data-motif-photo="${esc(t)}">${esc(t)}</button>`).join('')}</div>`,
+    [{ libelle: 'Refuser la photo', valeur: 'ok', classe: 'danger' }, { libelle: 'Annuler', valeur: 'annuler', classe: 'sec' }],
+    async () => { await rpc('loc_photo_refuser', { p_chauffeur: id, p_motif: $('#ph-motif').value.trim() }); return true; });
+  if (r === 'ok') { toast('Photo refusée : le chauffeur est invité à la reprendre.', 'ok', 6000); await chargerPhotos(); }
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('#modale-corps .puce[data-motif-photo]');
+  if (b) $('#ph-motif').value = b.dataset.motifPhoto;
+});
+
+/* ===========================================================================
    COURSES SUIVIES EN DIRECT (version 1.5)
    - Toutes les 30 s : loc_courses_en_cours() (journalisée au plus toutes les 10 min).
    - Trajet en bleu sur la carte, position actuelle clignotante, bouton « Suivre ».
@@ -1681,7 +1744,7 @@ const dureeTexte = (ms) => { const m = Math.max(0, Math.round(ms / 60000)); retu
 
 function popupCourse(k) {
   const der = k.points[k.points.length - 1];
-  return `<b style="color:#1D4ED8">🚗 ${esc(STATUTS[k.statut]?.libelle || k.statut)} — suivi en direct</b><br>`
+  return vignette(k.chauffeur_id, nomComplet(k), true) + `<b style="color:#1D4ED8">🚗 ${esc(STATUTS[k.statut]?.libelle || k.statut)} — suivi en direct</b><br>`
     + `<b>${esc(nomComplet(k))}</b> <span class="doux">(${esc(k.matricule)})</span><br>`
     + (k.destination ? `Destination : <b>${esc(k.destination)}</b><br>` : '')
     + (k.vehicule ? `🚙 ${esc(k.vehicule)}<br>` : '')
@@ -1846,7 +1909,7 @@ async function chargerUrgences() {
 function popupUrgence(u) {
   const m = MOTIFS[u.motif] || { ico: '⚠️', libelle: u.motif };
   const c = etat.chauffeurs.find(x => x.id === u.chauffeur_id);
-  return `<b style="color:var(--danger)">🚨 ${m.ico} ${esc(m.libelle)}</b><br><b>${esc(nomComplet(u))}</b> <span class="doux">(${esc(u.matricule)})</span><br>`
+  return vignette(u.chauffeur_id, nomComplet(u), true) + `<b style="color:var(--danger)">🚨 ${m.ico} ${esc(m.libelle)}</b><br><b>${esc(nomComplet(u))}</b> <span class="doux">(${esc(u.matricule)})</span><br>`
     + (u.message ? `« ${esc(u.message)} »<br>` : '')
     + `<span class="doux">${esc(dateHeure(u.horodatage))} · <b>${esc(ilYa(u.horodatage))}</b></span><br>`
     + (u.vehicule ? `🚙 ${esc(u.vehicule)}${u.vehicule_modele ? ' · ' + esc(u.vehicule_modele) : ''}<br>` : '')
@@ -1864,7 +1927,7 @@ function rendreUrgences() {
     const c = etat.chauffeurs.find(x => x.id === u.chauffeur_id);
     return `<tr class="${u.traitee_le ? '' : 'urgence-ouverte'}">`
       + `<td>${esc(dateHeure(u.horodatage))}<br><b>${esc(ilYa(u.horodatage))}</b>${u.hors_ligne ? '<br><span class="etiq att">envoyée en différé (sans réseau)</span>' : ''}</td>`
-      + `<td><b>${esc(nomComplet(u))}</b><br><span class="doux">${esc(u.matricule)} · ${esc(u.telephone)}</span></td>`
+      + `<td><span class="identite">${vignette(u.chauffeur_id, nomComplet(u))}<span><b>${esc(nomComplet(u))}</b><br><span class="doux">${esc(u.matricule)} · ${esc(u.telephone)}</span></span></span></td>`
       + `<td><b>${m.ico} ${esc(m.libelle)}</b>${u.message ? `<br>« ${esc(u.message)} »` : ''}</td>`
       + `<td>${u.vehicule ? '🚙 ' + esc(u.vehicule) + (u.vehicule_modele ? `<br><span class="doux">${esc(u.vehicule_modele)}</span>` : '') : '<span class="doux">—</span>'}</td>`
       + `<td>${u.latitude != null ? `${esc(zoneDe(u.latitude, u.longitude).nom)}${u.precision_m != null ? `<br><span class="doux">± ${Math.round(u.precision_m)} m</span>` : ''}` : '<span class="etiq att">sans position</span>'}</td>`
@@ -2028,7 +2091,8 @@ function contenuSynthese() {
       ['Alertes', actifs.reduce((n, c) => n + c._alertes.filter(a => a.niveau === 'ko').length, 0)],
       ['Pannes / urgences en cours', urgencesOuvertes().length],
       ['Positions contestées', actifs.filter(c => c._contestation).length],
-      ['Sans consentement', actifs.filter(c => !c._consent).length]])
+      ['Sans consentement', actifs.filter(c => !c._consent).length],
+      ['Sans photo d\'identité', actifs.filter(c => !(etat.photos.get(c.id) && etat.photos.get(c.id).image)).length]])
     + tableauSynthese('Par statut', ['Statut', 'Chauffeurs'], parStatut)
     + tableauSynthese('Sur site — par site de travail', ['Site', 'Chauffeurs'],
         (() => { const l = compter(c => c.dernier && c.dernier.statut === 'sur_site' ? (SITES[c.dernier.site] || 'Site non précisé') : null).filter(([k]) => k !== null);

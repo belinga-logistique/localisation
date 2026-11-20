@@ -126,6 +126,12 @@ input:focus-visible, button:focus-visible { outline: 3px solid #F59E0B; outline-
 .statut[aria-pressed=true] { color: #fff; border-color: transparent; background: var(--c); box-shadow: 0 3px 0 rgba(0,0,0,.25); }
 .statut[aria-pressed=true]::after { content: "✓ choisi"; font-size: 13px; }
 
+/* --- Photo d'identité (version 1.7) --- */
+.photo-id { width: 96px; height: 128px; border-radius: 10px; object-fit: cover; border: 2px solid var(--bord); background: #E2E8F0; flex: none; }
+.photo-vide { display: flex; align-items: center; justify-content: center; font-size: 40px; color: var(--texte-doux); }
+.bloc-photo { display: flex; gap: 14px; align-items: center; }
+.apercu-photo { display: block; width: 180px; height: 240px; object-fit: cover; margin: 8px auto; border-radius: 12px; border: 3px solid var(--primaire); }
+
 /* --- Suivi de course (version 1.5) --- */
 .bandeau-suivi { position: sticky; top: 52px; z-index: 19; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   background: #B91C1C; color: #fff; font-weight: 800; padding: 10px 16px; }
@@ -288,6 +294,7 @@ a.btn { text-decoration: none; }
       <ul>
         <li>Uniquement quand <b>vous</b> appuyez sur « Pointer » : position GPS, précision, heure, statut et véhicule conduit.</li>
         <li>Quand <b>vous</b> appuyez sur « Panne / Urgence » : le motif, votre message et votre position GPS, pour vous porter secours.</li>
+        <li><b>Photo d'identité</b> (si <b>vous</b> l'ajoutez) : visible uniquement par la logistique, pour vous reconnaître.</li>
         <li><b>Suivi des courses</b> (seulement si <b>vous</b> appuyez sur « Démarrer le suivi ») : pendant une course ou une mission,
           votre position est envoyée <b>toutes les minutes</b>, jusqu'à « Terminer la course » (4 heures au maximum).
           Un bandeau rouge reste affiché pendant tout le suivi.</li>
@@ -368,6 +375,12 @@ a.btn { text-decoration: none; }
 
     <button id="btn-pointer" class="btn btn-pointer" type="button">📍 POINTER MA POSITION</button>
 
+    <div class="carte" id="carte-photo" hidden style="margin-top:14px">
+      <h3>Ma photo d'identité</h3>
+      <p id="carte-photo-texte" class="aide" style="margin-top:0">Ajoutez votre photo pour que la logistique vous reconnaisse rapidement (urgence, remplacement).</p>
+      <button id="btn-photo-principal" class="btn secondaire" type="button">📷 Prendre ma photo</button>
+    </div>
+
     <div class="carte" id="carte-suivi" hidden style="margin-top:14px">
       <h3>Suivi de la course</h3>
       <p class="aide" style="margin-top:0">Pendant la course, la logistique voit votre trajet en direct. Gardez l'application
@@ -425,7 +438,16 @@ a.btn { text-decoration: none; }
 
     <div class="carte">
       <h3>Mon compte</h3>
-      <div id="compte" class="petit"></div>
+      <div class="bloc-photo">
+        <div id="ma-photo"><div class="photo-id photo-vide" aria-hidden="true">👤</div></div>
+        <div id="compte" class="petit"></div>
+      </div>
+      <p id="photo-statut" class="aide" hidden></p>
+      <div class="rangee">
+        <button id="btn-photo" class="btn secondaire" type="button">📷 Prendre ma photo</button>
+        <button id="btn-photo-suppr" class="btn danger-contour" type="button" hidden>Supprimer</button>
+      </div>
+      <input id="photo-fichier" type="file" accept="image/*" capture="user" hidden>
       <button id="btn-changer-pin" class="btn secondaire" type="button">Changer mon PIN</button>
     </div>
 
@@ -837,7 +859,7 @@ function sauverSession() {
 /** Fin de session (expirée ou déconnexion). Les pointages en attente sont CONSERVÉS. */
 async function finSession(message) {
   etat.jeton = null; etat.profil = null;
-  lsDel('loc.jeton'); lsDel('loc.profil');
+  lsDel('loc.jeton'); lsDel('loc.profil'); lsDel('loc.photoEtat'); photoEtat = null;
   DB.del('kv', 'session').catch(() => {});
   router();
   if (message) {
@@ -868,7 +890,7 @@ function afficher(nom) {
   });
   if (nom === 'principal') rendrePrincipal();
   if (nom === 'historique') chargerHistorique();
-  if (nom === 'reglages') rendreReglages();
+  if (nom === 'reglages') { rendreReglages(); chargerMaPhoto(); }
   if (nom === 'consentement') { $('#cs-lu').checked = false; $('#cs-accepter').disabled = true; $('#cs-msg').hidden = true; }
   window.scrollTo(0, 0);
 }
@@ -1289,6 +1311,7 @@ function rendrePrincipal() {
   construireVehicules();
   rendreAlertes();
   majCarteSuivi();
+  majPhoto();
 
   // Dernier pointage
   const d = lsGet('loc.dernier');
@@ -2244,6 +2267,119 @@ async function reprendreSuivi() {
 }
 
 /* ===========================================================================
+   PHOTO D'IDENTITÉ (version 1.7)
+   - Prise par le chauffeur (appareil photo du téléphone), recadrée en demi-buste
+     300 x 400, compressée en JPEG (environ 30 Ko), puis envoyée (réseau nécessaire).
+   - Visible uniquement par la logistique ; elle peut la refuser avec un motif.
+   =========================================================================== */
+const PHOTO = { L: 300, H: 400, QUALITE: 0.72, MAX: 140000 };
+let photoEtat = null;   // { image, statut, motif } tel que renvoyé par le serveur
+
+async function chargerMaPhoto() {
+  if (!etat.jeton) return;
+  try {
+    const r = await rpc('loc_photo_moi', { p_jeton: etat.jeton });
+    if (r.ok) { photoEtat = r; lsSet('loc.photoEtat', { statut: r.statut, a_photo: !!r.image, motif: r.motif }); }
+  } catch { /* hors ligne : on garde l'état connu */ }
+  majPhoto();
+}
+
+function majPhoto() {
+  const memo = lsGet('loc.photoEtat', null);
+  const aPhoto = photoEtat ? !!photoEtat.image : !!(memo && memo.a_photo);
+  const refusee = (photoEtat ? photoEtat.statut : memo && memo.statut) === 'refusee';
+  const motif = photoEtat ? photoEtat.motif : memo && memo.motif;
+  // Écran principal : invitation tant qu'il n'y a pas de photo valable
+  $('#carte-photo').hidden = !etat.profil || aPhoto || !etat.profil.consentement;
+  $('#carte-photo-texte').innerHTML = refusee
+    ? `❌ <b>Votre photo a été refusée</b> : ${esc(motif || 'non conforme')}. Reprenez-la, de face et bien éclairée.`
+    : 'Ajoutez votre photo pour que la logistique vous reconnaisse rapidement (urgence, remplacement).';
+  // Réglages › Mon compte
+  $('#ma-photo').innerHTML = photoEtat && photoEtat.image
+    ? `<img class="photo-id" src="${photoEtat.image}" alt="Ma photo d'identité">`
+    : '<div class="photo-id photo-vide" aria-hidden="true">👤</div>';
+  const st = $('#photo-statut');
+  st.hidden = !(refusee || aPhoto);
+  st.innerHTML = refusee ? `❌ Photo refusée par la logistique : ${esc(motif || 'non conforme')}` : '✓ Photo visible par la logistique.';
+  $('#btn-photo').textContent = aPhoto ? '📷 Changer ma photo' : '📷 Prendre ma photo';
+  $('#btn-photo-suppr').hidden = !aPhoto;
+}
+
+async function prendrePhoto() {
+  const choix = await dialogue({
+    titre: '📷 Ma photo d\'identité',
+    html: '<p>Photo en <b>demi-buste</b> (tête et épaules) :</p><ul>'
+      + '<li>de <b>face</b>, visage bien visible, sans lunettes de soleil ni casquette ;</li>'
+      + '<li>dans un endroit <b>éclairé</b>, devant un fond simple.</li></ul>'
+      + '<p class="aide">Elle sera visible <b>uniquement par la logistique</b>, pour vous reconnaître. Vous pouvez la supprimer à tout moment.</p>',
+    boutons: [{ libelle: '📷 Prendre la photo', valeur: 'ok' }, { libelle: 'Annuler', valeur: 'non', classe: 'secondaire' }],
+  });
+  if (choix === 'ok') $('#photo-fichier').click();
+}
+$('#btn-photo').addEventListener('click', prendrePhoto);
+$('#btn-photo-principal').addEventListener('click', prendrePhoto);
+
+/** Recadre (demi-buste, légèrement vers le haut) et compresse l'image en JPEG. */
+async function preparerPhoto(fichier) {
+  let source;
+  try { source = await createImageBitmap(fichier, { imageOrientation: 'from-image' }); }
+  catch {
+    source = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = URL.createObjectURL(fichier); });
+  }
+  const sw = source.width, sh = source.height, ratio = PHOTO.L / PHOTO.H;
+  let cw = sw, ch = sw / ratio;
+  if (ch > sh) { ch = sh; cw = sh * ratio; }
+  const cx = (sw - cw) / 2, cy = Math.max(0, (sh - ch) * 0.3);   // tête plutôt en haut de l'image
+  const c = document.createElement('canvas'); c.width = PHOTO.L; c.height = PHOTO.H;
+  c.getContext('2d').drawImage(source, cx, cy, cw, ch, 0, 0, PHOTO.L, PHOTO.H);
+  let q = PHOTO.QUALITE, data = c.toDataURL('image/jpeg', q);
+  while (data.length > PHOTO.MAX && q > 0.3) { q -= 0.1; data = c.toDataURL('image/jpeg', q); }
+  return data;
+}
+
+$('#photo-fichier').addEventListener('change', async () => {
+  const f = $('#photo-fichier').files[0];
+  $('#photo-fichier').value = '';
+  if (!f) return;
+  let data;
+  try { data = await preparerPhoto(f); }
+  catch { return toast('Image illisible. Reprenez la photo.', 'erreur'); }
+  const choix = await dialogue({
+    titre: 'Envoyer cette photo ?',
+    html: `<img class="apercu-photo" src="${data}" alt="Aperçu de la photo">`
+      + '<p class="aide" style="text-align:center">Le visage est-il bien visible et net ?</p>',
+    boutons: [{ libelle: '✓ Envoyer ma photo', valeur: 'ok' }, { libelle: 'Reprendre', valeur: 'reprendre', classe: 'secondaire' },
+              { libelle: 'Annuler', valeur: 'non', classe: 'lien' }],
+  });
+  if (choix === 'reprendre') return $('#photo-fichier').click();
+  if (choix !== 'ok') return;
+  try {
+    const r = await rpc('loc_photo_envoyer', { p_jeton: etat.jeton, p_image: data });
+    if (!r.ok) { if (r.erreur === 'session_invalide') return finSession(r.message); return toast(r.message, 'erreur', 7000); }
+    photoEtat = { image: data, statut: 'active', motif: null };
+    lsSet('loc.photoEtat', { statut: 'active', a_photo: true, motif: null });
+    majPhoto();
+    toast('Photo envoyée ✓', 'succes');
+  } catch (e) {
+    toast(e instanceof ErreurReseau ? 'Pas de réseau : la photo doit être envoyée avec du réseau. Réessayez plus tard.' : 'Erreur : ' + e.message, 'erreur', 7000);
+  }
+});
+
+$('#btn-photo-suppr').addEventListener('click', async () => {
+  const c = await dialogue({ titre: 'Supprimer ma photo ?', html: '<p>La logistique ne verra plus votre photo.</p>',
+    boutons: [{ libelle: 'Supprimer', valeur: 'oui', classe: 'danger' }, { libelle: 'Annuler', valeur: 'non', classe: 'secondaire' }] });
+  if (c !== 'oui') return;
+  try {
+    const r = await rpc('loc_photo_supprimer', { p_jeton: etat.jeton });
+    if (!r.ok) return toast(r.message, 'erreur');
+    photoEtat = { image: null, statut: null, motif: null };
+    lsSet('loc.photoEtat', { statut: null, a_photo: false, motif: null });
+    majPhoto();
+    toast('Photo supprimée.', 'succes');
+  } catch (e) { toast(e instanceof ErreurReseau ? 'Pas de réseau.' : 'Erreur : ' + e.message, 'erreur'); }
+});
+
+/* ===========================================================================
    HISTORIQUE
    =========================================================================== */
 function ligneHistorique(p, enAttente) {
@@ -2415,6 +2551,7 @@ $('#btn-retrait').addEventListener('click', async () => {
     lsDel('loc.dernier');
     // Version 1.5 : suivi arrêté, trajets en attente supprimés (déjà effacés sur le serveur)
     arreterCapteurs(); lsDel('loc.course');
+    photoEtat = null; lsDel('loc.photoEtat');   // version 1.7 : photo effacée avec l'accord
     try { await DB.put('kv', { courses: [], points: [] }, 'courseFile'); } catch { /* ignoré */ }
     etat.profil.consentement_version = null;
     etat.profil.consentement = false;
@@ -2563,6 +2700,7 @@ async function demarrer() {
     await chargerReferentiel();
     suivreAlertes();
     reprendreSuivi();                     // version 1.5 : course suivie interrompue
+    chargerMaPhoto();                     // version 1.7 : photo (et refus éventuel)
     synchroniser();
   }
 }

@@ -17,7 +17,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.6.0';   // 1.6.0 : choix du site de travail (« Sur site »)
+const VERSION = 'v1.7.0';   // 1.7.0 : photo d'identité du chauffeur
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',
