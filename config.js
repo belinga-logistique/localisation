@@ -1,4 +1,10 @@
 /*
+ * Belinga Localisation Chauffeurs — © 2026 Samuel OLO OLO — Tous droits réservés.
+ * Logiciel protégé par le droit d'auteur (Accord de Bangui révisé — OAPI, Annexe VII ; droit gabonais).
+ * Reproduction, modification, vente ou réutilisation interdites sans autorisation écrite de l'auteur.
+ * Voir LICENCE.
+ */
+/*
  * Belinga Localisation Chauffeurs — configuration Supabase
  * ---------------------------------------------------------
  * SEUL endroit où figurent l'adresse du projet et la clé publishable.
@@ -14,5 +20,5 @@
 self.LOC_CONFIG = Object.freeze({
   SUPABASE_URL: 'https://pgoesbhdbmnjscmvsflv.supabase.co',
   SUPABASE_CLE: 'sb_publishable_QLqQLvr7DrGwfwXcM3EE2Q_x8vjMojB',
-  VERSION: '1.7.0'
+  VERSION: '1.7.1'
 });

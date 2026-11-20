@@ -1,4 +1,10 @@
 /*
+ * Belinga Localisation Chauffeurs — © 2026 Samuel OLO OLO — Tous droits réservés.
+ * Logiciel protégé par le droit d'auteur (Accord de Bangui révisé — OAPI, Annexe VII ; droit gabonais).
+ * Reproduction, modification, vente ou réutilisation interdites sans autorisation écrite de l'auteur.
+ * Voir LICENCE.
+ */
+/*
  * Belinga Localisation — service worker (mode hors ligne)
  * ---------------------------------------------------------------------------
  * 1. Garde en mémoire l'application chauffeur : elle s'ouvre même sans réseau.
@@ -17,10 +23,11 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.7.0';   // 1.7.0 : photo d'identité du chauffeur
+const VERSION = 'v1.7.1';   // 1.7.1 : informations légales, mentions de droits d'auteur
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',
+  './legal.html',
   './config.js',
   './manifest.json',
   './icones/icone-192.png',
