@@ -403,6 +403,8 @@ tr.urgence-ouverte td { background: #FEF2F2; }
   <section class="vue" id="v-synthese" hidden>
     <div class="bloc ligne">
       <button class="btn" id="btn-export-csv" type="button">📄 Exporter en CSV</button>
+      <span class="ligne" style="gap:6px"><button class="btn" id="btn-export-courses" type="button">🚕 Exporter les courses et passagers (Excel)</button>
+        <select id="export-courses-jours" aria-label="Période"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="1">Aujourd'hui (24 h)</option></select></span>
       <button class="btn sec" id="btn-export-pdf" type="button">🖨️ Imprimer / PDF</button>
       <span class="doux">Les exports sont enregistrés dans le journal d'audit.</span>
     </div>
@@ -583,7 +585,7 @@ const ACTIONS_JOURNAL = {
   retrait_consentement: 'Retrait du consentement', purge_automatique: 'Purge automatique (30 jours)',
   modification_chauffeur: 'Chauffeur modifié', ajout_chauffeur: 'Chauffeur ajouté', suppression_chauffeur: 'Chauffeur supprimé',
   consultation_alertes: 'Consultation des alertes Panne / Urgence', alerte_traitee: 'Alerte Panne / Urgence prise en charge',
-  consultation_courses_direct: 'Consultation des courses en direct', consultation_trajet: "Consultation du trajet d'une course",
+  export_courses: 'Export des courses et passagers', consultation_courses_direct: 'Consultation des courses en direct', consultation_trajet: "Consultation du trajet d'une course",
   photo_envoyee: "Photo d'identité envoyée par le chauffeur", photo_refusee: "Photo d'identité refusée", photo_supprimee: "Photo d'identité supprimée par le chauffeur",
 };
 
@@ -1089,7 +1091,8 @@ function popupChauffeur(c) {
   const b = c.binome;
   return vignette(c.id, c._nom, true) + `<b>${esc(c._nom)}</b> <span class="doux">(${esc(c.matricule)})</span><br>`
     + (s ? `<span class="point" style="background:${couleurChauffeur(c)}"></span>${esc(libelleStatut(d))}` : 'Aucun pointage')
-    + (d && d.destination ? ` → ${esc(d.destination)}` : '') + '<br>'
+    + (d && d.destination ? ` → ${esc(d.destination)}` : '')
+    + (d && d.passagers != null ? ` · 👥 ${d.passagers} passager${d.passagers > 1 ? 's' : ''}` : '') + '<br>'
     + (c._dispoEtat ? `<span class="etiq ${c._dispoEtat === 'vert' ? 'ok' : 'att'}">${c._dispoEtat === 'vert' ? '✓' : '⚠ à vérifier'}</span> ${esc(c._dispoMotif)}<br>` : '')
     + (d ? `<span class="doux">${esc(dateHeure(d.horodatage))} · <b>${esc(ilYa(d.horodatage))}</b></span><br>` : '')
     + `Zone : ${esc(c._zoneNom)}<br>`
@@ -1235,7 +1238,7 @@ function carteChauffeurHtml(c) {
   return `<div class="carte-ch" data-action="localiser" data-id="${esc(c.id)}">`
     + `<div class="t"><span class="identite">${vignette(c.id, c._nom)}<b>${s ? `<span class="point" style="background:${couleurChauffeur(c)}"></span>` : ''}${esc(c._nom)}</b></span>`
     + `<span class="doux">${d ? esc(ilYa(d.horodatage)) : 'jamais'}</span></div>`
-    + `<div class="doux">${s ? esc(libelleStatut(d)) : 'Aucun pointage'} · ${esc(c._zoneNom)}${c._quartier ? ' · ' + esc(c._quartier) : ''}${c._vehicule ? ' · 🚙 ' + esc(c._vehicule) : ''}</div>`
+    + `<div class="doux">${s ? esc(libelleStatut(d)) : 'Aucun pointage'}${d && d.passagers != null ? ` · 👥 ${d.passagers}` : ''} · ${esc(c._zoneNom)}${c._quartier ? ' · ' + esc(c._quartier) : ''}${c._vehicule ? ' · 🚙 ' + esc(c._vehicule) : ''}</div>`
     + `<div class="ligne" style="margin-top:4px"><a class="btn appel petit" href="tel:${esc(c.telephone)}" onclick="event.stopPropagation()">📞 ${esc(c.telephone)}</a>`
     + boutonWhatsApp(c)
     + (c._urgence ? `<span class="etiq ko">🚨 ${esc((MOTIFS[c._urgence.motif] || {}).libelle || 'urgence')}</span>` : '')
@@ -1434,7 +1437,7 @@ async function afficherHistorique(id) {
     const lignes = h.map(p => {
       const s = STATUTS[p.statut] || { libelle: p.statut, couleur: '#555' };
       const ld = p.lieu_dispo && LIEUX_DISPO[p.lieu_dispo];
-      return `<tr><td>${esc(dateHeure(p.horodatage))}</td><td><span class="point" style="background:${s.couleur}"></span>${esc(libelleStatut(p))}${p.destination ? ' → ' + esc(p.destination) : ''}`
+      return `<tr><td>${esc(dateHeure(p.horodatage))}</td><td><span class="point" style="background:${s.couleur}"></span>${esc(libelleStatut(p))}${p.destination ? ' → ' + esc(p.destination) : ''}${p.passagers != null ? ` · 👥 ${p.passagers}` : ''}`
         + `${ld ? `<br><span class="doux">${ld.ico} ${esc(ld.libelle)}</span>` : ''}${p.vehicule ? `<br><span class="doux">🚙 ${esc(p.vehicule)}</span>` : ''}</td>`
         + `<td>${p.province ? '<b>' + esc(texteProvince(p.province, p.ville)) + '</b> <span class="doux">(déclarée)</span><br>' : ''}`
         + `${p.latitude != null ? esc(zoneDe(p.latitude, p.longitude).nom) : '<span class="doux">sans position</span>'}</td>`
@@ -2126,7 +2129,7 @@ function lignesExport() {
       'Province déclarée': c._provinceDeclaree || '', 'Ville déclarée': c._provinceDeclaree && d.ville || '',
       'Disponibilité': c._dispoEtat ? `${c._dispoEtat === 'vert' ? 'Vert' : 'À vérifier'} — ${c._dispoMotif}` : '',
       Quartier: c._quartier || '', 'Repère': d && d.repere || '',
-      Destination: d && d.destination || '', 'Véhicule': c._vehicule || '', 'Dernier pointage (heure du Gabon)': d ? dateHeure(d.horodatage) : '',
+      Destination: d && d.destination || '', 'Passagers': d && d.passagers != null ? d.passagers : '', 'Véhicule': c._vehicule || '', 'Dernier pointage (heure du Gabon)': d ? dateHeure(d.horodatage) : '',
       'Ancienneté': d ? ilYa(d.horodatage) : '', 'Précision (m)': d && d.precision_m != null ? Math.round(d.precision_m) : '',
       Latitude: d && d.latitude != null ? d.latitude.toFixed(5) : '', Longitude: d && d.longitude != null ? d.longitude.toFixed(5) : '',
       'Binôme': c.binome ? nomComplet(c.binome) : '', 'Tél. binôme': c.binome ? c.binome.telephone : '',
@@ -2146,6 +2149,30 @@ $('#btn-export-csv').addEventListener('click', () => {
   telecharger(`localisation-chauffeurs-${date}.csv`, csv);
   rpc('loc_journaliser', { p_action: 'export_csv', p_details: { lignes: lignes.length } }).catch(() => {});
   toast('Export CSV téléchargé ✓', 'ok');
+});
+
+/* Version 1.8 : export des courses (une ligne par course) avec le nombre de passagers.
+   Fichier CSV (séparateur « ; », UTF-8) qui s'ouvre directement dans Excel. Consultation journalisée. */
+$('#btn-export-courses').addEventListener('click', async () => {
+  const jours = Number($('#export-courses-jours').value) || 7;
+  try {
+    const l = await rpc('loc_courses_export', { p_jours: jours }) || [];
+    if (!l.length) return toast('Aucune course sur cette période.', 'ko');
+    const cell = (v) => { const s = String(v ?? ''); return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const entetes = ['Date et heure (heure du Gabon)', 'Matricule', 'Nom', 'Prénom', 'Téléphone', 'Équipe', 'Destination',
+      'Passagers', 'Véhicule', 'Quartier de départ', 'Repère', 'Latitude', 'Longitude', 'Envoyée sans réseau'];
+    const lignes = l.map(k => [dateHeure(k.horodatage), k.matricule, k.nom, k.prenom || '', k.telephone,
+      k.equipe === 'libreville' ? 'Libreville' : 'Site', k.destination || '', k.passagers ?? '', k.vehicule || '',
+      k.quartier || '', k.repere || '', k.latitude != null ? k.latitude.toFixed(5) : '', k.longitude != null ? k.longitude.toFixed(5) : '',
+      k.hors_ligne ? 'Oui' : 'Non']);
+    const total = l.reduce((n, k) => n + (Number(k.passagers) || 0), 0);
+    const sansNombre = l.filter(k => k.passagers == null).length;
+    const csv = [entetes, ...lignes, [], ['TOTAL', `${l.length} course(s)`, '', '', '', '', '', total, sansNombre ? `${sansNombre} course(s) sans nombre (ancienne version)` : '']]
+      .map(r => r.map(cell).join(';')).join('\r\n');
+    const date = new Date(Date.now() + 3600e3).toISOString().slice(0, 16).replace(/[-:T]/g, '');
+    telecharger(`courses-passagers-${jours}j-${date}.csv`, csv);
+    toast(`Export téléchargé ✓ ${l.length} course(s), ${total} passager(s) au total.`, 'ok', 7000);
+  } catch (e) { toast(e.message, 'ko', 6000); }
 });
 
 $('#btn-export-pdf').addEventListener('click', () => {

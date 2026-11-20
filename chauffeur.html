@@ -146,6 +146,10 @@ input:focus-visible, button:focus-visible { outline: 3px solid #F59E0B; outline-
 @keyframes clignote-suivi { 50% { opacity: .2; } }
 @media (prefers-reduced-motion: reduce) { .bandeau-suivi .pointrouge { animation: none; } }
 .bandeau-suivi .btn { width: auto; min-height: 44px; margin: 0 0 0 auto; padding: 8px 14px; background: #fff; color: #B91C1C; font-size: 16px; }
+/* Nombre de passagers (version 1.8) */
+.compteur-passagers { display: grid; grid-template-columns: 64px 1fr 64px; gap: 8px; align-items: center; }
+.compteur-passagers .btn { margin-top: 0; min-height: 56px; font-size: 30px; line-height: 1; padding: 0; }
+.compteur-passagers input { text-align: center; font-size: 26px; font-weight: 800; }
 .btn-suivi { min-height: 64px; font-size: 19px; background: #1D4ED8; box-shadow: 0 4px 0 #1E3A8A; }
 
 /* --- Bouton Panne / Urgence (version 1.3) --- */
@@ -355,6 +359,13 @@ a.btn { text-decoration: none; }
       <div id="bloc-destination" hidden>
         <label for="destination">Destination de la course</label>
         <input id="destination" type="text" maxlength="80" placeholder="Ex. Aéroport, Port d'Owendo…">
+        <label for="passagers">Nombre de passagers *</label>
+        <div class="compteur-passagers">
+          <button id="pass-moins" class="btn secondaire" type="button" aria-label="Un passager de moins">−</button>
+          <input id="passagers" type="number" inputmode="numeric" min="0" max="60" step="1" placeholder="?">
+          <button id="pass-plus" class="btn secondaire" type="button" aria-label="Un passager de plus">+</button>
+        </div>
+        <p class="aide">Mettez <b>0</b> si vous roulez sans passager.</p>
       </div>
       <div id="bloc-lieu-dispo" hidden>
         <label id="lieu-dispo-titre">Où êtes-vous disponible ? *</label>
@@ -1332,6 +1343,7 @@ function rendrePrincipal() {
       + (d.site && SITES[d.site] ? ` — ⛏️ ${esc(SITES[d.site])}` : '')
       + (d.lieu ? ` — ${esc(d.lieu)}` : '')
       + (d.destination ? ` — vers ${esc(d.destination)}` : '')
+      + (d.passagers != null ? ` — 👥 ${d.passagers} passager${d.passagers > 1 ? 's' : ''}` : '')
       + (d.province ? ` — ${esc(texteProvince(d.province, d.ville))}` : '')
       + (d.lieu_dispo && LIEUX_DISPO[d.lieu_dispo] ? ` — ${LIEUX_DISPO[d.lieu_dispo].ico} ${esc(LIEUX_DISPO[d.lieu_dispo].libelle)}` : '')
       + (d.vehicule ? ` — 🚙 ${esc(d.vehicule)}` : '')
@@ -1385,6 +1397,14 @@ async function majEtatEnvoi() {
 }
 
 $('#destination').addEventListener('input', () => lsSet('loc.destination', $('#destination').value));
+// Version 1.8 : boutons − / + du nombre de passagers
+function ajusterPassagers(delta) {
+  const v = Number($('#passagers').value) || 0;
+  $('#passagers').value = Math.min(60, Math.max(0, ($('#passagers').value === '' && delta < 0) ? 0 : v + delta));
+  $('#passagers').classList.remove('a-remplir');
+}
+$('#pass-moins').addEventListener('click', () => ajusterPassagers(-1));
+$('#pass-plus').addEventListener('click', () => ajusterPassagers(+1));
 $('#province').addEventListener('change', () => lsSet('loc.province', $('#province').value));
 $('#ville').addEventListener('input', () => lsSet('loc.ville', $('#ville').value));
 
@@ -1417,6 +1437,17 @@ async function pointer() {
   if (statut === 'en_course') {
     destination = $('#destination').value.trim();
     if (!destination) { signalerChamp('#destination'); toast('Indiquez la destination de la course.', 'erreur'); return; }
+  }
+  // Version 1.8 : nombre de passagers obligatoire pour une course
+  let passagers = null;
+  if (statut === 'en_course') {
+    const v = $('#passagers').value.trim();
+    passagers = /^\d{1,2}$/.test(v) ? Number(v) : NaN;
+    if (!(passagers >= 0 && passagers <= 60)) {
+      signalerChamp('#passagers');
+      toast('Indiquez le nombre de passagers (0 si vous êtes seul).', 'erreur');
+      return;
+    }
   }
   let province = null, ville = null;
   if (statut === 'autre_province') {
@@ -1455,7 +1486,7 @@ async function pointer() {
   $('#btn-pointer').disabled = true;
   try {
     // Véhicule : seulement pour les statuts avec position (jamais en repos / congé / maladie)
-    const p = { statut, destination, province, ville, lieu_dispo: lieuDispo, site,
+    const p = { statut, destination, province, ville, lieu_dispo: lieuDispo, site, passagers,
                 vehicule_id: def.position ? vehiculeChoisi() : null };
     let lieuNom = null;
 
@@ -1486,6 +1517,7 @@ async function pointer() {
       }
     }
     await enregistrerPointage(p, lieuNom);
+    if (statut === 'en_course') $('#passagers').value = '';   // à ressaisir pour la course suivante
   } finally {
     etat.pointageEnCours = false;
     $('#btn-pointer').disabled = false;
@@ -1730,7 +1762,7 @@ async function enregistrerPointage(p, lieuNom) {
     chauffeur_id: c.id, statut: p.statut, horodatage: item.horodatage, lieu: lieuNom,
     destination: p.destination, province: p.province, ville: p.ville, lieu_dispo: p.lieu_dispo,
     vehicule: p.vehicule_id ? (vehiculeParId(p.vehicule_id) || {}).immatriculation || null : null,
-    contestation: p.contestation || null, site: p.site || null,
+    contestation: p.contestation || null, site: p.site || null, passagers: p.passagers ?? null,
     sans_position: STATUTS[p.statut].position && p.latitude == null,
   });
   lsSet('loc.dernierRappel', Date.now());
@@ -1755,6 +1787,7 @@ function versServeur(i) {
     quartier_confirme_id: i.quartier_confirme_id ?? null, repere: i.repere || null,
     province: i.province || null, ville: i.ville || null, lieu_dispo: i.lieu_dispo || null,
     vehicule_id: i.vehicule_id ?? null, contestation: i.contestation || null, site: i.site || null,
+    passagers: i.passagers ?? null,
     hors_ligne: Date.now() - (i.cree_ms || Date.now()) > 2 * 60 * 1000, // envoyé en différé
   };
 }
@@ -2399,6 +2432,7 @@ function ligneHistorique(p, enAttente) {
   if (p.quartier) details.push(esc(p.quartier));
   if (p.repere) details.push('« ' + esc(p.repere) + ' »');
   if (p.destination) details.push('vers ' + esc(p.destination));
+  if (p.passagers != null) details.push(`👥 ${p.passagers} passager${p.passagers > 1 ? 's' : ''}`);
   if (p.province) details.push('📍 ' + esc(texteProvince(p.province, p.ville)));
   if (p.lieu_dispo && LIEUX_DISPO[p.lieu_dispo]) details.push(LIEUX_DISPO[p.lieu_dispo].ico + ' ' + esc(LIEUX_DISPO[p.lieu_dispo].libelle));
   const vehicule = p.vehicule || (p.vehicule_id ? (vehiculeParId(p.vehicule_id) || {}).immatriculation : null);
