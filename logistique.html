@@ -159,6 +159,7 @@ tr.urgence-ouverte td { background: #FEF2F2; }
 /* --- Points de la carte et groupes (version 1.3) --- */
 .pt { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.45); }
 .pt.ancien { opacity: .5; border-style: dashed; }
+.pt.conteste { box-shadow: 0 0 0 3px #DC2626, 0 1px 3px rgba(0,0,0,.45); }
 .groupe-carte { width: 38px; height: 38px; border-radius: 50%; background: rgba(0,112,60,.92); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
 .groupe-carte.grand { width: 46px; height: 46px; font-size: 16px; }
 .btn.wa { background: #128C7E; border-color: #128C7E; }
@@ -929,6 +930,8 @@ function enrichir(c) {
   // Version 1.3 : véhicule du dernier pointage et alerte Panne / Urgence en cours
   c._vehicule = d && d.vehicule ? d.vehicule + (d.vehicule_modele ? ' · ' + d.vehicule_modele : '') : null;
   c._urgence = etat.urgences.find(u => u.chauffeur_id === c.id && !u.traitee_le) || null;
+  // Version 1.4 : le chauffeur a maintenu un statut que son GPS contredit (« Mon GPS se trompe »)
+  c._contestation = d && d.contestation ? d.contestation : null;
 
   // Alertes (chauffeurs actifs uniquement)
   c._alertes = [];
@@ -950,6 +953,8 @@ function enrichir(c) {
     // (hors de Libreville : déjà signalé par l'alerte rouge « Hors zone », pas de doublon)
     if (c._dispoEtat === 'orange' && !c._dispoHorsZone) c._alertes.push({ type: 'Disponibilité à vérifier', niveau: 'att', detail: c._dispoMotif });
     if (!c.pin_defini) c._alertes.push({ type: 'PIN non défini', niveau: 'att', detail: 'Le chauffeur ne peut pas se connecter' });
+    if (c._contestation) c._alertes.unshift({ type: 'Position contestée', niveau: 'ko',
+    detail: `${c._contestation} — le chauffeur affirme que son GPS se trompe : appelez-le pour vérifier` });
   }
   return c;
 }
@@ -1004,7 +1009,7 @@ function marqueurChauffeur(c) {
   const mk = L.marker(c._pos, {
     title: c._nom,
     icon: L.divIcon({ className: '', iconSize: [18, 18], iconAnchor: [9, 9],
-      html: `<div class="pt${c._recent ? '' : ' ancien'}" style="background:${couleurChauffeur(c)}"></div>` }),
+      html: `<div class="pt${c._recent ? '' : ' ancien'}${c._contestation ? ' conteste' : ''}" style="background:${couleurChauffeur(c)}"></div>` }),
   });
   mk.bindTooltip(`${esc(c._nom)} — ${esc(ilYa(c.dernier.horodatage))}`);
   mk.bindPopup(() => popupChauffeur(c));
@@ -1027,6 +1032,7 @@ function popupChauffeur(c) {
     + (d && d.precision_m != null ? `<span class="doux">Précision ± ${Math.round(d.precision_m)} m</span><br>` : '')
     + (c._vehicule ? `Véhicule : 🚙 <b>${esc(c._vehicule)}</b><br>` : '')
     + (c._urgence ? `<span class="etiq ko">🚨 ${esc((MOTIFS[c._urgence.motif] || {}).libelle || 'Urgence')} en cours</span><br>` : '')
+    + (c._contestation ? `<span class="etiq ko">⚠ position contestée</span> <span class="doux">${esc(c._contestation)}</span><br>` : '')
     + (b ? `Binôme : ${esc(nomComplet(b))} <a href="tel:${esc(b.telephone)}">${esc(b.telephone)}</a><br>` : '')
     + `<a class="btn appel petit" href="tel:${esc(c.telephone)}">📞 Appeler ${esc(c.telephone)}</a> ${boutonWhatsApp(c)} `
     + `<button class="btn sec petit" type="button" data-action="historique" data-id="${esc(c.id)}">🕘 Historique 7 j</button>`;
@@ -1158,6 +1164,7 @@ function carteChauffeurHtml(c) {
     + `<div class="ligne" style="margin-top:4px"><a class="btn appel petit" href="tel:${esc(c.telephone)}" onclick="event.stopPropagation()">📞 ${esc(c.telephone)}</a>`
     + boutonWhatsApp(c)
     + (c._urgence ? `<span class="etiq ko">🚨 ${esc((MOTIFS[c._urgence.motif] || {}).libelle || 'urgence')}</span>` : '')
+    + (c._contestation ? '<span class="etiq ko">⚠ position contestée</span>' : '')
     + (c._alertes.some(a => a.niveau === 'ko') ? '<span class="etiq ko">⚠ alerte</span>' : '')
     + (c._dispoEtat === 'orange' ? '<span class="etiq att">dispo à vérifier</span>' : (c._dispo ? '<span class="etiq ok">disponible</span>' : ''))
     + '</div>' + (c._dispoEtat ? `<div class="doux">${esc(c._dispoMotif)}</div>` : '') + '</div>';
@@ -1352,7 +1359,8 @@ async function afficherHistorique(id) {
         + `<td>${p.province ? '<b>' + esc(texteProvince(p.province, p.ville)) + '</b> <span class="doux">(déclarée)</span><br>' : ''}`
         + `${p.latitude != null ? esc(zoneDe(p.latitude, p.longitude).nom) : '<span class="doux">sans position</span>'}</td>`
         + `<td>${esc(p.quartier_confirme || p.quartier_detecte || '')}${p.quartier_detecte && p.quartier_confirme && p.quartier_detecte !== p.quartier_confirme ? ` <span class="doux">(proposé : ${esc(p.quartier_detecte)})</span>` : ''}${p.repere ? '<br>« ' + esc(p.repere) + ' »' : ''}</td>`
-        + `<td>${p.precision_m != null ? '± ' + Math.round(p.precision_m) + ' m' : ''}${p.hors_ligne ? ' <span class="etiq att">hors ligne</span>' : ''}</td></tr>`;
+        + `<td>${p.precision_m != null ? '± ' + Math.round(p.precision_m) + ' m' : ''}${p.hors_ligne ? ' <span class="etiq att">hors ligne</span>' : ''}`
+        + `${p.contestation ? `<br><span class="etiq ko">⚠ position contestée</span><br><span class="doux">${esc(p.contestation)}</span>` : ''}</td></tr>`;
     }).join('');
     // Tracé sur la carte principale
     if (etat.vue !== 'carte') afficherVue('carte');
@@ -1861,6 +1869,7 @@ function contenuSynthese() {
       ['Pointage récent (dans le seuil)', actifs.filter(c => c._recent).length],
       ['Alertes', actifs.reduce((n, c) => n + c._alertes.filter(a => a.niveau === 'ko').length, 0)],
       ['Pannes / urgences en cours', urgencesOuvertes().length],
+      ['Positions contestées', actifs.filter(c => c._contestation).length],
       ['Sans consentement', actifs.filter(c => !c._consent).length]])
     + tableauSynthese('Par statut', ['Statut', 'Chauffeurs'], parStatut)
     + tableauSynthese('Par zone', ['Zone', 'Chauffeurs'], parZone)
@@ -1883,7 +1892,8 @@ function lignesExport() {
       'Ancienneté': d ? ilYa(d.horodatage) : '', 'Précision (m)': d && d.precision_m != null ? Math.round(d.precision_m) : '',
       Latitude: d && d.latitude != null ? d.latitude.toFixed(5) : '', Longitude: d && d.longitude != null ? d.longitude.toFixed(5) : '',
       'Binôme': c.binome ? nomComplet(c.binome) : '', 'Tél. binôme': c.binome ? c.binome.telephone : '',
-      Consentement: c._consent ? 'Oui' : 'Non', Alertes: c._alertes.filter(a => a.niveau === 'ko').map(a => a.type).join(', '),
+      Consentement: c._consent ? 'Oui' : 'Non', 'Position contestée': c._contestation || '',
+      Alertes: c._alertes.filter(a => a.niveau === 'ko').map(a => a.type).join(', '),
     };
   });
 }

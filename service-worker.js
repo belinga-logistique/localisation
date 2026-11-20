@@ -17,7 +17,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.3.0';   // 1.3.0 : Panne / Urgence, véhicule conduit, boutons de statut plus grands
+const VERSION = 'v1.4.0';   // 1.4.0 : contrôle « Tu n'es pas là où tu prétends être » (position contestée)
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',
@@ -136,7 +136,7 @@ function versServeur(i) {
     quartier_detecte_id: i.quartier_detecte_id ?? null, distance_detecte_m: i.distance_detecte_m ?? null,
     quartier_confirme_id: i.quartier_confirme_id ?? null, repere: i.repere || null,
     province: i.province || null, ville: i.ville || null, lieu_dispo: i.lieu_dispo || null,
-    vehicule_id: i.vehicule_id ?? null,
+    vehicule_id: i.vehicule_id ?? null, contestation: i.contestation || null,
     hors_ligne: Date.now() - (i.cree_ms || Date.now()) > 2 * 60 * 1000,
   };
 }

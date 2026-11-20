@@ -523,6 +523,20 @@ const STATUTS = {
 const PROVINCES = ['Estuaire', 'Haut-Ogooué', 'Moyen-Ogooué', 'Ngounié', 'Nyanga',
   'Ogooué-Ivindo', 'Ogooué-Lolo', 'Ogooué-Maritime', 'Woleu-Ntem'];
 
+/* Villes de référence pour estimer la province d'une position GPS (mêmes valeurs que
+   l'interface logistique). Estimation : ville de référence la plus proche. */
+const VILLES_PROVINCES = [
+  ['Estuaire', 0.39, 9.45], ['Estuaire', 0.39, 9.76], ['Estuaire', 1.00, 9.58], ['Estuaire', 0.17, 10.12],
+  ['Haut-Ogooué', -1.63, 13.58], ['Haut-Ogooué', -1.57, 13.20], ['Haut-Ogooué', -0.66, 13.68], ['Haut-Ogooué', -1.59, 14.24], ['Haut-Ogooué', -1.18, 13.88],
+  ['Moyen-Ogooué', -0.70, 10.24], ['Moyen-Ogooué', -0.18, 10.76],
+  ['Ngounié', -1.87, 11.06], ['Ngounié', -1.22, 10.60], ['Ngounié', -1.90, 11.91], ['Ngounié', -2.40, 11.36],
+  ['Nyanga', -2.85, 11.03], ['Nyanga', -3.43, 10.65],
+  ['Ogooué-Ivindo', 0.57, 12.86], ['Ogooué-Ivindo', -0.09, 11.94], ['Ogooué-Ivindo', 1.02, 13.93], ['Ogooué-Ivindo', 0.32, 12.45], ['Ogooué-Ivindo', 1.08, 13.20],
+  ['Ogooué-Lolo', -1.13, 12.47], ['Ogooué-Lolo', -0.82, 12.71],
+  ['Ogooué-Maritime', -0.72, 8.78], ['Ogooué-Maritime', -1.57, 9.26], ['Ogooué-Maritime', -2.65, 10.00],
+  ['Woleu-Ntem', 1.60, 11.58], ['Woleu-Ntem', 2.08, 11.50], ['Woleu-Ntem', 0.78, 11.55], ['Woleu-Ntem', 2.15, 12.13], ['Woleu-Ntem', 0.95, 10.79],
+];
+
 /* Lieux de disponibilité (statut « Disponible à Libreville »), mêmes codes que la base */
 const LIEUX_DISPO = {
   chez_moi:   { libelle: 'Chez moi',                ico: '🏠' },
@@ -1003,6 +1017,96 @@ function zoneDuPoint(lat, lon) {
   return lbv ? `hors des zones connues, à ${Math.round(haversine(lat, lon, lbv.lat, lbv.lon) / 1000)} km de Libreville` : 'hors de Libreville';
 }
 
+/** Province estimée d'un point GPS (ville de référence la plus proche), ou « Hors Gabon ». */
+function provinceDe(lat, lon) {
+  let m = null;
+  for (const [prov, la, lo] of VILLES_PROVINCES) {
+    const d = haversine(lat, lon, la, lo);
+    if (!m || d < m.d) m = { prov, d };
+  }
+  return (!m || m.d > 250000) ? 'Hors Gabon' : m.prov;
+}
+
+/* ---------------------------------------------------------------------------
+   CONTRÔLE DE COHÉRENCE (version 1.4) : le GPS correspond-il au lieu déclaré ?
+   Renvoie null si tout est cohérent (ou invérifiable), sinon
+   { declare, constate, conseil } pour le message « Tu n'es pas là où tu prétends être ».
+   Tolérance : rayon du lieu + précision du GPS (plafonnée), pour ne pas accuser
+   un chauffeur honnête à cause d'un GPS imprécis.
+   Lieux MARIA / INFRATEC : contrôlés seulement une fois placés et « vérifiés » sur la carte.
+   --------------------------------------------------------------------------- */
+function controleCoherence(statut, lieuDispo, province, pos) {
+  if (!pos || !etat.ref) return null;
+  const zones = etat.ref.zones || [];
+  const prec = Math.min(Number(pos.precision) || 0, 500);
+  const dans = (z) => haversine(pos.lat, pos.lon, z.lat, z.lon) <= z.rayon_m + prec;
+  const ici = zoneDuPoint(pos.lat, pos.lon);
+  const lbv = zones.filter(z => z.type === 'libreville');
+  const auxLbv = lbv.length && lbv.some(dans);
+  const auSite = zones.some(z => z.type === 'site' && dans(z));
+  // Conseil : le statut qui correspond au GPS
+  const conseil = auSite ? '« Sur site »' : auxLbv ? '« Disponible à Libreville »'
+    : `« En mission » ou « Autre province » (${provinceDe(pos.lat, pos.lon)})`;
+
+  if (statut === 'sur_site') {
+    const sites = zones.filter(z => z.type === 'site');
+    if (sites.length && !auSite) return { declare: 'Sur site', constate: ici, conseil };
+  }
+  if (statut === 'dispo_libreville') {
+    if (lbv.length && !auxLbv) return { declare: 'Disponible à Libreville', constate: ici, conseil };
+    if (lieuDispo === 'base_maria' || lieuDispo === 'infratec') {
+      const ref = (etat.ref.lieux || []).find(l => l.code === lieuDispo && !l.approximatif);
+      if (ref) {
+        const d = haversine(pos.lat, pos.lon, ref.lat, ref.lon);
+        if (d > ref.rayon_m + Math.min(prec, 200)) {
+          return { declare: LIEUX_DISPO[lieuDispo].libelle, constate: `à ${distanceTexte(d)} de ${ref.nom}`,
+                   conseil: '« Chez moi », « Fin de course » ou « Autre endroit »' };
+        }
+      }
+    }
+  }
+  if (statut === 'autre_province' && province) {
+    if (auxLbv) return { declare: `Autre province (${province})`, constate: 'Grand Libreville', conseil: '« Disponible à Libreville »' };
+    const estimee = provinceDe(pos.lat, pos.lon);
+    if (estimee !== province) {
+      return { declare: `Autre province (${province})`, constate: `${estimee}${estimee === 'Hors Gabon' ? '' : ' (province estimée)'}`,
+               conseil: estimee === 'Hors Gabon' ? '« En mission »' : `la province « ${estimee} »` };
+    }
+  }
+  return null;
+}
+
+/**
+ * Message « Tu n'es pas là où tu prétends être ». Le chauffeur doit corriger son statut ;
+ * seule exception : « Mon GPS se trompe », qui envoie le pointage marqué « position contestée ».
+ * Renvoie le motif de contestation (texte) ou null si le chauffeur corrige.
+ */
+async function signalerIncoherence(inc, pos) {
+  const choix = await dialogue({
+    titre: "📍 Tu n'es pas là où tu prétends être",
+    html: `<div class="bandeau erreur" style="display:block">Tu as déclaré : <b>${esc(inc.declare)}</b><br>`
+        + `Ton GPS indique : <b>${esc(inc.constate)}</b>${pos.precision ? ` (± ${Math.round(pos.precision)} m)` : ''}</div>`
+        + '<p style="font-size:20px;font-weight:800;margin:14px 0 6px">Choisis la bonne localisation.</p>'
+        + `<p>D'après ton GPS, choisis plutôt ${esc(inc.conseil)}.</p>`,
+    boutons: [
+      { libelle: 'Choisir la bonne localisation', valeur: 'corriger' },
+      { libelle: 'Mon GPS se trompe', valeur: 'contester', classe: 'lien' },
+    ],
+  });
+  if (choix !== 'contester') return null;
+  const confirme = await dialogue({
+    titre: '⚠️ Position contestée',
+    html: '<p>Ton pointage sera envoyé, mais <b>signalé en rouge</b> à la logistique comme « <b>position contestée</b> ».</p>'
+        + '<p>La logistique pourra t\'appeler pour vérifier où tu es.</p>',
+    boutons: [
+      { libelle: 'Revenir et corriger', valeur: 'corriger' },
+      { libelle: 'Envoyer (position contestée)', valeur: 'envoyer', classe: 'danger-contour' },
+    ],
+  });
+  if (confirme !== 'envoyer') return null;
+  return `Déclaré « ${inc.declare} » ; GPS : ${inc.constate}`.slice(0, 160);
+}
+
 /** Lieux triés du plus proche au plus éloigné. */
 function lieuxParDistance(lat, lon) {
   return ((etat.ref && etat.ref.lieux) || [])
@@ -1136,7 +1240,8 @@ function rendrePrincipal() {
       + (d.lieu_dispo && LIEUX_DISPO[d.lieu_dispo] ? ` — ${LIEUX_DISPO[d.lieu_dispo].ico} ${esc(LIEUX_DISPO[d.lieu_dispo].libelle)}` : '')
       + (d.vehicule ? ` — 🚙 ${esc(d.vehicule)}` : '')
       + `<br>${esc(dateHeure(d.horodatage))} (${esc(ilYa(d.horodatage))})`
-      + (d.sans_position ? '<br><span class="etiquette">sans position</span>' : '');
+      + (d.sans_position ? '<br><span class="etiquette">sans position</span>' : '')
+      + (d.contestation ? '<br><span class="etiquette" style="background:var(--danger-fond);color:var(--danger)">⚠ position contestée</span>' : '');
   } else {
     zone.textContent = "Aucun pointage pour l'instant.";
   }
@@ -1252,23 +1357,17 @@ async function pointer() {
       if (pos === undefined) return; // annulé par le chauffeur
       if (pos) {
         p.latitude = pos.lat; p.longitude = pos.lon; p.precision_m = Math.round(pos.precision);
-        // « Disponible à Libreville » alors que le GPS est ailleurs : on prévient le chauffeur
-        const zoneLbvConnue = ((etat.ref && etat.ref.zones) || []).some(z => z.type === 'libreville');
-        if (statut === 'dispo_libreville' && zoneLbvConnue && !dansLibreville(pos.lat, pos.lon)) {
-          const choix = await dialogue({
-            titre: "📍 Vous n'êtes pas à Libreville",
-            html: `<p>Votre position GPS indique : <b>${esc(zoneDuPoint(pos.lat, pos.lon))}</b>.</p>`
-                + '<p>Avec le statut « Disponible à Libreville », vous apparaîtrez <b>en orange « à vérifier »</b> pour la logistique.</p>'
-                + '<p>Choisissez plutôt <b>Sur site</b>, <b>En mission</b> ou <b>Autre province</b>.</p>',
-            boutons: [
-              { libelle: 'Changer de statut', valeur: 'changer' },
-              { libelle: 'Envoyer quand même', valeur: 'envoyer', classe: 'secondaire' },
-            ],
-          });
-          if (choix !== 'envoyer') {
+        // Version 1.4 : le GPS doit correspondre au lieu déclaré, sinon le chauffeur corrige
+        // (seule exception : « Mon GPS se trompe » -> pointage marqué « position contestée »)
+        const inc = controleCoherence(statut, lieuDispo, province, pos);
+        if (inc) {
+          const motif = await signalerIncoherence(inc, pos);
+          if (!motif) {
             $('#grille-statuts').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            toast('Choisis la bonne localisation, puis pointe de nouveau.', 'attente', 6000);
             return;
           }
+          p.contestation = motif;
         }
         // Détection du quartier uniquement dans la zone Libreville
         if (etat.ref && etat.ref.lieux && etat.ref.lieux.length && dansLibreville(pos.lat, pos.lon)) {
@@ -1522,6 +1621,7 @@ async function enregistrerPointage(p, lieuNom) {
     chauffeur_id: c.id, statut: p.statut, horodatage: item.horodatage, lieu: lieuNom,
     destination: p.destination, province: p.province, ville: p.ville, lieu_dispo: p.lieu_dispo,
     vehicule: p.vehicule_id ? (vehiculeParId(p.vehicule_id) || {}).immatriculation || null : null,
+    contestation: p.contestation || null,
     sans_position: STATUTS[p.statut].position && p.latitude == null,
   });
   lsSet('loc.dernierRappel', Date.now());
@@ -1545,7 +1645,7 @@ function versServeur(i) {
     quartier_detecte_id: i.quartier_detecte_id ?? null, distance_detecte_m: i.distance_detecte_m ?? null,
     quartier_confirme_id: i.quartier_confirme_id ?? null, repere: i.repere || null,
     province: i.province || null, ville: i.ville || null, lieu_dispo: i.lieu_dispo || null,
-    vehicule_id: i.vehicule_id ?? null,
+    vehicule_id: i.vehicule_id ?? null, contestation: i.contestation || null,
     hors_ligne: Date.now() - (i.cree_ms || Date.now()) > 2 * 60 * 1000, // envoyé en différé
   };
 }
@@ -1851,6 +1951,7 @@ function ligneHistorique(p, enAttente) {
   const vehicule = p.vehicule || (p.vehicule_id ? (vehiculeParId(p.vehicule_id) || {}).immatriculation : null);
   if (vehicule) details.push('🚙 ' + esc(vehicule));
   if (p.precision_m != null) details.push('± ' + Math.round(p.precision_m) + ' m');
+  if (p.contestation) details.push('<span class="etiquette" style="background:var(--danger-fond);color:var(--danger)">⚠ position contestée</span>');
   if (s.position === false) details.push('🔒 sans position');
   else if (p.latitude == null) details.push('sans position');
   return `<li><span class="point" style="background:${s.couleur}"></span><div>`
