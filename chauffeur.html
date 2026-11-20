@@ -126,6 +126,15 @@ input:focus-visible, button:focus-visible { outline: 3px solid #F59E0B; outline-
 .statut[aria-pressed=true] { color: #fff; border-color: transparent; background: var(--c); box-shadow: 0 3px 0 rgba(0,0,0,.25); }
 .statut[aria-pressed=true]::after { content: "✓ choisi"; font-size: 13px; }
 
+/* --- Suivi de course (version 1.5) --- */
+.bandeau-suivi { position: sticky; top: 52px; z-index: 19; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: #B91C1C; color: #fff; font-weight: 800; padding: 10px 16px; }
+.bandeau-suivi .pointrouge { width: 12px; height: 12px; border-radius: 50%; background: #fff; animation: clignote-suivi 1s infinite; }
+@keyframes clignote-suivi { 50% { opacity: .2; } }
+@media (prefers-reduced-motion: reduce) { .bandeau-suivi .pointrouge { animation: none; } }
+.bandeau-suivi .btn { width: auto; min-height: 44px; margin: 0 0 0 auto; padding: 8px 14px; background: #fff; color: #B91C1C; font-size: 16px; }
+.btn-suivi { min-height: 64px; font-size: 19px; background: #1D4ED8; box-shadow: 0 4px 0 #1E3A8A; }
+
 /* --- Bouton Panne / Urgence (version 1.3) --- */
 .btn-urgence {
   min-height: 64px; margin: 0 0 14px; font-size: 20px; letter-spacing: .03em; border-radius: 16px;
@@ -218,6 +227,12 @@ a.btn { text-decoration: none; }
   <h1>Belinga Localisation</h1>
   <span id="pastille-reseau" class="pastille en-ligne" role="status">● En ligne</span>
 </header>
+<!-- Version 1.5 : bandeau visible pendant tout le suivi d'une course -->
+<div id="bandeau-suivi" class="bandeau-suivi" role="status" aria-live="polite" hidden>
+  <span class="pointrouge" aria-hidden="true"></span>
+  <span id="suivi-texte">Suivi de la course en cours</span>
+  <button id="btn-terminer-suivi" type="button" class="btn">⏹ Terminer la course</button>
+</div>
 
 <main>
   <!-- =====================================================================
@@ -273,6 +288,9 @@ a.btn { text-decoration: none; }
       <ul>
         <li>Uniquement quand <b>vous</b> appuyez sur « Pointer » : position GPS, précision, heure, statut et véhicule conduit.</li>
         <li>Quand <b>vous</b> appuyez sur « Panne / Urgence » : le motif, votre message et votre position GPS, pour vous porter secours.</li>
+        <li><b>Suivi des courses</b> (seulement si <b>vous</b> appuyez sur « Démarrer le suivi ») : pendant une course ou une mission,
+          votre position est envoyée <b>toutes les minutes</b>, jusqu'à « Terminer la course » (4 heures au maximum).
+          Un bandeau rouge reste affiché pendant tout le suivi.</li>
         <li>À Libreville : le quartier proposé, le quartier que vous confirmez et un repère facultatif.</li>
         <li><b>Aucun suivi en continu</b>, aucune localisation en arrière-plan.</li>
         <li>Repos, congé, maladie : <b>aucune position</b> n'est envoyée.</li>
@@ -280,7 +298,7 @@ a.btn { text-decoration: none; }
       <h3>Qui les voit ?</h3>
       <p>Seulement les responsables autorisés du département logistique. Chaque consultation est enregistrée dans un journal.</p>
       <h3>Combien de temps ?</h3>
-      <p>Les positions sont <b>supprimées automatiquement après 30 jours</b>.</p>
+      <p>Les positions et les trajets des courses sont <b>supprimés automatiquement après 30 jours</b>.</p>
       <h3>Vos droits</h3>
       <p>Vous pouvez <b>retirer votre accord à tout moment</b> (Réglages › Mes données). Vos positions sont alors effacées. Vous pouvez aussi demander à la logistique quelles données sont enregistrées sur vous.</p>
     </div>
@@ -345,6 +363,13 @@ a.btn { text-decoration: none; }
     </div>
 
     <button id="btn-pointer" class="btn btn-pointer" type="button">📍 POINTER MA POSITION</button>
+
+    <div class="carte" id="carte-suivi" hidden style="margin-top:14px">
+      <h3>Suivi de la course</h3>
+      <p class="aide" style="margin-top:0">Pendant la course, la logistique voit votre trajet en direct. Gardez l'application
+        <b>ouverte, écran allumé</b> (téléphone sur un support, branché si possible).</p>
+      <button id="btn-demarrer-suivi" class="btn btn-suivi" type="button">▶ Démarrer le suivi de la course</button>
+    </div>
 
     <div class="carte" style="margin-top:18px">
       <h3>Dernier pointage</h3>
@@ -858,7 +883,7 @@ $('#f-connexion').addEventListener('submit', async (ev) => {
     const r = await rpc('loc_connexion', { p_telephone: tel, p_pin: pin, p_appareil: navigator.userAgent.slice(0, 300) });
     if (!r.ok) { msg.textContent = r.message; msg.hidden = false; $('#c-pin').value = ''; return; }
     etat.jeton = r.jeton;
-    etat.profil = { chauffeur: r.chauffeur, consentement: r.consentement, pin_a_changer: r.pin_a_changer };
+    etat.profil = { chauffeur: r.chauffeur, consentement: r.consentement, consentement_version: r.consentement_version || null, pin_a_changer: r.pin_a_changer };
     sauverSession();
     lsSet('loc.tel', tel);
     $('#c-pin').value = '';
@@ -891,7 +916,7 @@ async function rafraichirProfil() {
       return;
     }
     const avant = JSON.stringify(etat.profil);
-    etat.profil = { chauffeur: r.chauffeur, consentement: r.consentement, pin_a_changer: r.pin_a_changer };
+    etat.profil = { chauffeur: r.chauffeur, consentement: r.consentement, consentement_version: r.consentement_version || null, pin_a_changer: r.pin_a_changer };
     sauverSession();
     if (avant !== JSON.stringify(etat.profil)) router();
   } catch { /* hors ligne : on garde le profil enregistré */ }
@@ -1227,6 +1252,7 @@ function rendrePrincipal() {
   choisirLieuDispo(lsGet('loc.lieuDispo', null));
   construireVehicules();
   rendreAlertes();
+  majCarteSuivi();
 
   // Dernier pointage
   const d = lsGet('loc.dernier');
@@ -1604,6 +1630,8 @@ function confirmerQuartier(pos) {
 /** Range le pointage dans la file d'attente locale, puis tente l'envoi. */
 async function enregistrerPointage(p, lieuNom) {
   const c = etat.profil.chauffeur;
+  // Version 1.5 : un nouveau pointage termine la course suivie en cours
+  if (courseActive()) await terminerSuivi('nouveau_statut', true);
   const item = {
     ...p,
     id: uuid(),
@@ -1938,6 +1966,236 @@ function rendreAlertes() {
 }
 
 /* ===========================================================================
+   SUIVI DES COURSES (version 1.5)
+   - Proposé après un pointage « En course » ou « En mission » ; démarré par le chauffeur.
+   - Accord « v2 » obligatoire (demandé au premier démarrage).
+   - Une position par minute (et une de plus tous les 500 m), gardée sur le téléphone
+     (IndexedDB, clé « courseFile ») puis envoyée ; hors ligne : envoi au retour du réseau.
+   - Écran maintenu allumé (Wake Lock) ; arrêt : « Terminer », nouveau pointage, 4 h, déconnexion.
+   =========================================================================== */
+const SUIVI = { INTERVALLE_MS: 60 * 1000, DISTANCE_M: 500, DUREE_MAX_MS: 4 * 3600 * 1000, STATUTS: ['en_course', 'en_mission'] };
+const suivi = { watchId: null, minuteur: null, verrou: null, fix: null, dernierPoint: null, envoiEnCours: false };
+
+/** Course suivie en cours pour le chauffeur connecté (ou null). */
+function courseActive() {
+  const c = lsGet('loc.course', null);
+  return c && etat.profil && c.chauffeur_id === etat.profil.chauffeur.id && !c.fin ? c : null;
+}
+async function fileCourse() {
+  try { return (await DB.get('kv', 'courseFile')) || { courses: [], points: [] }; } catch { return { courses: [], points: [] }; }
+}
+async function ajouterFileCourse({ course, point }) {
+  const f = await fileCourse();
+  if (course) { f.courses = f.courses.filter(x => x.id !== course.id); f.courses.push(course); }
+  if (point) f.points.push(point);
+  await DB.put('kv', f, 'courseFile');
+}
+const accordSuivi = () => !!(etat.profil && etat.profil.consentement_version && etat.profil.consentement_version !== 'v1');
+
+/** Carte « Démarrer le suivi » : après un pointage En course / En mission de moins de 4 h, sans suivi en cours. */
+function majCarteSuivi() {
+  const d = lsGet('loc.dernier');
+  const c = etat.profil && etat.profil.chauffeur;
+  const ok = c && d && d.chauffeur_id === c.id && SUIVI.STATUTS.includes(d.statut)
+    && Date.now() - new Date(d.horodatage).getTime() < SUIVI.DUREE_MAX_MS && !courseActive();
+  $('#carte-suivi').hidden = !ok;
+  majBandeauSuivi();
+}
+function majBandeauSuivi() {
+  const c = courseActive();
+  $('#bandeau-suivi').hidden = !c;
+  if (c) $('#suivi-texte').textContent = `Suivi de la course en cours depuis ${heure(c.debut)} · ${c.nb_points || 0} position(s)`;
+}
+
+/** Accord v2 (suivi des courses) : texte, acceptation enregistrée sur le serveur. */
+async function demanderAccordSuivi() {
+  const choix = await dialogue({
+    titre: 'Suivi des courses : votre accord',
+    html: '<p>Pendant une course ou une mission, si <b>vous</b> appuyez sur « Démarrer le suivi » :</p>'
+      + '<ul><li>votre position est envoyée <b>toutes les minutes</b> à la logistique, qui voit votre trajet en direct ;</li>'
+      + '<li>le suivi s\'arrête quand vous touchez « <b>Terminer la course</b> », quand vous pointez un autre statut, ou au bout de <b>4 heures</b> ;</li>'
+      + '<li>un <b>bandeau rouge</b> reste affiché pendant tout le suivi ;</li>'
+      + '<li>les trajets sont <b>supprimés après 30 jours</b> ; chaque consultation est enregistrée dans un journal.</li></ul>'
+      + '<p>Vous pouvez refuser : vos pointages continuent normalement, sans suivi.</p>',
+    boutons: [
+      { libelle: "J'accepte le suivi pendant mes courses", valeur: 'oui' },
+      { libelle: 'Non merci', valeur: 'non', classe: 'secondaire' },
+    ],
+  });
+  if (choix !== 'oui') return false;
+  try {
+    const r = await rpc('loc_consentir', { p_jeton: etat.jeton, p_version: 'v2', p_appareil: navigator.userAgent.slice(0, 300) });
+    if (!r.ok) { if (r.erreur === 'session_invalide') finSession(r.message); else toast(r.message, 'erreur'); return false; }
+    etat.profil.consentement_version = 'v2';
+    sauverSession();
+    return true;
+  } catch (e) {
+    toast(e instanceof ErreurReseau ? 'Il faut du réseau pour enregistrer votre accord. Réessayez avec du réseau.' : 'Erreur : ' + e.message, 'erreur', 7000);
+    return false;
+  }
+}
+
+$('#btn-demarrer-suivi').addEventListener('click', demarrerSuivi);
+$('#btn-terminer-suivi').addEventListener('click', async () => {
+  const c = await dialogue({ titre: 'Terminer la course ?', html: '<p>Le suivi de votre trajet s\'arrête.</p>',
+    boutons: [{ libelle: '⏹ Terminer la course', valeur: 'oui' }, { libelle: 'Continuer le suivi', valeur: 'non', classe: 'secondaire' }] });
+  if (c === 'oui') terminerSuivi('termine');
+});
+
+async function demarrerSuivi() {
+  if (courseActive() || !etat.profil) return;
+  const d = lsGet('loc.dernier');
+  if (!d || !SUIVI.STATUTS.includes(d.statut)) return toast('Pointez d\'abord « En course » ou « En mission ».', 'erreur');
+  if (!accordSuivi() && !(await demanderAccordSuivi())) return;
+  if (!('geolocation' in navigator)) return toast('Ce téléphone ne permet pas la localisation.', 'erreur');
+  const c = etat.profil.chauffeur;
+  const course = {
+    id: uuid(), chauffeur_id: c.id, statut: d.statut, destination: d.destination || null,
+    vehicule_id: vehiculeChoisi(), debut: new Date().toISOString(), nb_points: 0,
+  };
+  lsSet('loc.course', course);
+  await ajouterFileCourse({ course: courseVersServeur(course) });
+  lancerSuivi();
+  majCarteSuivi();
+  toast('▶ Suivi démarré. Gardez l\'application ouverte, écran allumé.', 'succes', 6000);
+}
+
+/** Démarre (ou reprend après réouverture) la lecture du GPS, l'enregistrement et l'envoi. */
+function lancerSuivi() {
+  arreterCapteurs();
+  try {
+    suivi.watchId = navigator.geolocation.watchPosition((p) => {
+      suivi.fix = { lat: p.coords.latitude, lon: p.coords.longitude, precision: p.coords.accuracy,
+                    vitesse: p.coords.speed, t: Date.now() };
+      // Un point de plus si le véhicule a parcouru 500 m depuis le dernier
+      if (!suivi.dernierPoint || haversine(suivi.dernierPoint.lat, suivi.dernierPoint.lon, suivi.fix.lat, suivi.fix.lon) >= SUIVI.DISTANCE_M) {
+        enregistrerPointSuivi();
+      }
+    }, (err) => {
+      if (err.code === 1) {
+        terminerSuivi('termine');
+        dialogue({ titre: '📵 Localisation refusée', html: '<p>Le suivi de la course est arrêté : autorisez la position pour Chrome, puis redémarrez le suivi.</p>' });
+      }
+    }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 60000 });
+  } catch { /* GPS indisponible : les envois continuent pour la file */ }
+  suivi.minuteur = setInterval(tickSuivi, SUIVI.INTERVALLE_MS);
+  garderEcranAllume();
+  majBandeauSuivi();
+}
+
+async function tickSuivi() {
+  const c = courseActive();
+  if (!c) { arreterCapteurs(); return; }
+  if (Date.now() - new Date(c.debut).getTime() >= SUIVI.DUREE_MAX_MS) { await terminerSuivi('duree_max'); return; }
+  // Une position par minute (si le GPS a répondu récemment et qu'aucun point n'est parti à l'instant)
+  if (suivi.fix && Date.now() - suivi.fix.t < 90000 && (!suivi.dernierPoint || Date.now() - suivi.dernierPoint.t > 50000)) {
+    await enregistrerPointSuivi();
+  }
+  envoyerSuivi();
+}
+
+async function enregistrerPointSuivi() {
+  const c = courseActive();
+  if (!c || !suivi.fix) return;
+  const f = suivi.fix;
+  suivi.dernierPoint = { lat: f.lat, lon: f.lon, t: Date.now() };
+  await ajouterFileCourse({ point: {
+    id: uuid(), course_id: c.id, chauffeur_id: c.chauffeur_id, latitude: f.lat, longitude: f.lon,
+    precision_m: Math.round(f.precision), vitesse_kmh: f.vitesse != null && f.vitesse >= 0 ? Math.round(f.vitesse * 3.6) : null,
+    horodatage: new Date(f.t).toISOString(),
+  } });
+  c.nb_points = (c.nb_points || 0) + 1;
+  lsSet('loc.course', c);
+  majBandeauSuivi();
+}
+
+/** Prépare une course pour l'envoi (champs connus du serveur). */
+function courseVersServeur(c) {
+  return { id: c.id, chauffeur_id: c.chauffeur_id, statut: c.statut, destination: c.destination || null,
+           vehicule_id: c.vehicule_id ?? null, debut: c.debut, fin: c.fin || null, fin_motif: c.fin_motif || null };
+}
+
+/** Envoie la file du suivi (courses puis points). Renvoie 'ok' | 'vide' | 'hors_ligne' | 'refus'. */
+async function envoyerSuivi() {
+  if (suivi.envoiEnCours || !etat.jeton || !etat.profil) return 'ignore';
+  const id = etat.profil.chauffeur.id;
+  const f = await fileCourse();
+  const courses = f.courses.filter(x => x.chauffeur_id === id).slice(0, 20);
+  const points = f.points.filter(x => x.chauffeur_id === id).slice(0, 500);
+  if (!courses.length && !points.length) return 'vide';
+  suivi.envoiEnCours = true;
+  try {
+    const r = await rpc('loc_course_sync', { p_jeton: etat.jeton, p_donnees: { courses, points } });
+    if (!r.ok) {
+      if (r.erreur === 'session_invalide') finSession('Votre session a expiré. Reconnectez-vous : le trajet en attente sera envoyé ensuite.');
+      if (r.erreur === 'consentement_suivi') {
+        etat.profil.consentement_version = 'v1'; sauverSession();
+        if (courseActive()) await terminerSuivi('termine', true);
+        toast('Suivi arrêté : votre accord pour le suivi des courses est nécessaire.', 'erreur', 8000);
+      }
+      return 'refus';
+    }
+    const faits = new Set([...r.courses, ...r.points, ...r.rejetes.map(x => x.id)]);
+    const g = await fileCourse();   // relecture : de nouveaux points ont pu arriver pendant l'envoi
+    // Une course terminée reste dans la file tant que sa fin n'est pas confirmée
+    g.courses = g.courses.filter(x => !(faits.has(x.id) && courses.some(y => y.id === x.id && y.fin === x.fin)));
+    g.points = g.points.filter(x => !faits.has(x.id));
+    await DB.put('kv', g, 'courseFile');
+    return 'ok';
+  } catch (e) {
+    if (e instanceof ErreurReseau) { demanderEnvoiArrierePlan(); return 'hors_ligne'; }
+    return 'refus';
+  } finally {
+    suivi.envoiEnCours = false;
+  }
+}
+
+/** Termine la course suivie : dernier point, fin envoyée, capteurs arrêtés. */
+async function terminerSuivi(motif, silencieux = false) {
+  const c = courseActive();
+  if (!c) { arreterCapteurs(); majCarteSuivi(); return; }
+  if (suivi.fix && Date.now() - suivi.fix.t < 90000) await enregistrerPointSuivi();
+  const fin = courseActive() || c;
+  fin.fin = new Date().toISOString(); fin.fin_motif = motif;
+  lsSet('loc.course', fin);
+  await ajouterFileCourse({ course: courseVersServeur(fin) });
+  arreterCapteurs();
+  majCarteSuivi();
+  envoyerSuivi();
+  if (!silencieux) {
+    toast(motif === 'duree_max' ? 'Suivi arrêté automatiquement après 4 heures.' : '⏹ Course terminée : suivi arrêté.', 'succes', 6000);
+    if (motif === 'duree_max') notifier('Suivi de course arrêté', 'Belinga Localisation : le suivi s\'est arrêté après 4 heures.');
+  }
+}
+
+function arreterCapteurs() {
+  if (suivi.watchId !== null) { try { navigator.geolocation.clearWatch(suivi.watchId); } catch { /* ignoré */ } }
+  suivi.watchId = null;
+  clearInterval(suivi.minuteur); suivi.minuteur = null;
+  if (suivi.verrou) { suivi.verrou.release().catch(() => {}); suivi.verrou = null; }
+}
+
+/** Écran maintenu allumé pendant le suivi (si le navigateur le permet). */
+async function garderEcranAllume() {
+  try { if ('wakeLock' in navigator && !suivi.verrou) suivi.verrou = await navigator.wakeLock.request('screen'); } catch { /* non pris en charge */ }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !courseActive()) return;
+  suivi.verrou = null;            // le navigateur libère le verrou quand l'écran s'éteint
+  if (suivi.watchId === null) lancerSuivi(); else garderEcranAllume();
+  envoyerSuivi();
+});
+
+/** Au démarrage de l'application : reprise d'une course interrompue (ou fin si plus de 4 h). */
+async function reprendreSuivi() {
+  const c = courseActive();
+  if (!c) { majCarteSuivi(); if ((await fileCourse()).points.length || (await fileCourse()).courses.length) envoyerSuivi(); return; }
+  if (Date.now() - new Date(c.debut).getTime() >= SUIVI.DUREE_MAX_MS) { await terminerSuivi('duree_max'); return; }
+  lancerSuivi();
+  envoyerSuivi();
+}
+
+/* ===========================================================================
    HISTORIQUE
    =========================================================================== */
 function ligneHistorique(p, enAttente) {
@@ -2106,6 +2364,10 @@ $('#btn-retrait').addEventListener('click', async () => {
     }
     for (const p of await pointagesEnAttente()) await DB.del('file', p.id);
     lsDel('loc.dernier');
+    // Version 1.5 : suivi arrêté, trajets en attente supprimés (déjà effacés sur le serveur)
+    arreterCapteurs(); lsDel('loc.course');
+    try { await DB.put('kv', { courses: [], points: [] }, 'courseFile'); } catch { /* ignoré */ }
+    etat.profil.consentement_version = null;
     etat.profil.consentement = false;
     sauverSession();
     await dialogue({ titre: 'Accord retiré', html: `<p>Votre accord est retiré et ${r.pointages_supprimes} position(s) ont été effacées.</p>` });
@@ -2123,6 +2385,7 @@ async function deconnexion() {
     boutons: [{ libelle: 'Se déconnecter', valeur: 'oui' }, { libelle: 'Annuler', valeur: 'non', classe: 'secondaire' }],
   });
   if (c !== 'oui') return;
+  if (courseActive()) { await terminerSuivi('deconnexion', true); await envoyerSuivi(); }
   const jeton = etat.jeton;
   etat.ecran = null;
   await finSession(null);
@@ -2139,6 +2402,7 @@ window.addEventListener('online', async () => {
   majReseau(true);
   await envoyerAlertes();                  // les alertes d'urgence partent en premier
   suivreAlertes();
+  envoyerSuivi();
   const r = await synchroniser();
   if (r.statut === 'ok') afficherResultatSync(r);
 });
@@ -2213,6 +2477,7 @@ async function enregistrerServiceWorker() {
   // Message du service worker : file envoyée en arrière-plan
   navigator.serviceWorker.addEventListener('message', (ev) => {
     if (!ev.data || ev.data.type !== 'sync-termine') return;
+    if (ev.data.suivi) majBandeauSuivi();
     (ev.data.alertes || []).forEach(id => majSuivi(id, { etat: 'envoyee' }));
     rendreAlertes();
     lsSet('loc.dernierEnvoi', Date.now());
@@ -2247,6 +2512,7 @@ async function demarrer() {
     await envoyerAlertes();               // alertes d'urgence en attente : en premier
     await chargerReferentiel();
     suivreAlertes();
+    reprendreSuivi();                     // version 1.5 : course suivie interrompue
     synchroniser();
   }
 }

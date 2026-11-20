@@ -163,6 +163,12 @@ tr.urgence-ouverte td { background: #FEF2F2; }
 .groupe-carte { width: 38px; height: 38px; border-radius: 50%; background: rgba(0,112,60,.92); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
 .groupe-carte.grand { width: 46px; height: 46px; font-size: 16px; }
 .btn.wa { background: #128C7E; border-color: #128C7E; }
+/* --- Courses suivies en direct (version 1.5) --- */
+.tete-course { width: 22px; height: 22px; border-radius: 50%; background: #1D4ED8; border: 3px solid #fff; box-shadow: 0 0 0 0 rgba(29,78,216,.7); animation: pulse-bleu 1.6s infinite; }
+@keyframes pulse-bleu { 70% { box-shadow: 0 0 0 16px rgba(29,78,216,0); } 100% { box-shadow: 0 0 0 0 rgba(29,78,216,0); } }
+@media (prefers-reduced-motion: reduce) { .tete-course { animation: none; } }
+.carte-course { border: 2px solid #1D4ED8; border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; background: #EFF6FF; }
+.carte-course[aria-current=true] { background: #DBEAFE; }
 
 /* --- Fenêtre modale --- */
 .voile { position: fixed; inset: 0; background: rgba(15,23,42,.55); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -280,6 +286,10 @@ tr.urgence-ouverte td { background: #FEF2F2; }
           <span class="point" style="background:#D97706"></span>Disponible, à vérifier (autre endroit, GPS éloigné ou hors de Libreville)
         </p>
         <button class="btn wa petit" id="btn-copier-dispo" type="button" style="margin-top:8px">💬 Liste des disponibles pour WhatsApp</button>
+        <div id="bloc-courses" hidden>
+          <h3>🚗 Courses suivies en direct (<span id="nb-courses">0</span>)</h3>
+          <div id="liste-courses"></div>
+        </div>
         <div class="ligne" style="margin-top:8px">
           <select id="f-zone" aria-label="Filtrer par zone"><option value="">Toutes les zones</option></select>
           <select id="f-quartier" aria-label="Filtrer par quartier"><option value="">Tous les quartiers</option></select>
@@ -542,6 +552,7 @@ const ACTIONS_JOURNAL = {
   retrait_consentement: 'Retrait du consentement', purge_automatique: 'Purge automatique (30 jours)',
   modification_chauffeur: 'Chauffeur modifié', ajout_chauffeur: 'Chauffeur ajouté', suppression_chauffeur: 'Chauffeur supprimé',
   consultation_alertes: 'Consultation des alertes Panne / Urgence', alerte_traitee: 'Alerte Panne / Urgence prise en charge',
+  consultation_courses_direct: 'Consultation des courses en direct', consultation_trajet: "Consultation du trajet d'une course",
 };
 
 /* État en mémoire */
@@ -553,6 +564,8 @@ const etat = {
   urgences: [],     // version 1.3 : alertes Panne / Urgence (en cours + traitées récentes)
   urgencesEtat: { ouvertes: 0, derniere: null },
   filtreSpecial: null,  // compteurs : 'dispo' | 'verifier' | 'sans_nouvelles'
+  courses: [],          // version 1.5 : courses suivies en direct (avec leur trajet)
+  suivre: null,         // identifiant de la course que la carte suit
 };
 
 /* Retour depuis le lien « Mot de passe oublié » reçu par e-mail (lu AVANT la création du client,
@@ -664,7 +677,7 @@ function afficherConnexion(message, type = 'ko', formulaire = 'connexion') {
   $('#app').hidden = true; $('#e-connexion').hidden = false;
   formulaireConnexion(formulaire);
   messageConnexion(message, type);
-  etat.chauffeurs = []; etat.urgences = []; // aucune position ne reste affichée
+  etat.chauffeurs = []; etat.urgences = []; etat.courses = []; etat.suivre = null; // aucune position ne reste affichée
   arreterSignalUrgence();
 }
 
@@ -793,6 +806,7 @@ async function ouvrirApplication(user) {
   afficherVue(etat.vue);
   await chargerTout();
   await verifierUrgences(true);
+  await chargerCourses();
 }
 
 $('#btn-deconnexion').addEventListener('click', async () => {
@@ -1033,6 +1047,7 @@ function popupChauffeur(c) {
     + (c._vehicule ? `Véhicule : 🚙 <b>${esc(c._vehicule)}</b><br>` : '')
     + (c._urgence ? `<span class="etiq ko">🚨 ${esc((MOTIFS[c._urgence.motif] || {}).libelle || 'Urgence')} en cours</span><br>` : '')
     + (c._contestation ? `<span class="etiq ko">⚠ position contestée</span> <span class="doux">${esc(c._contestation)}</span><br>` : '')
+    + (etat.courses.some(k => k.chauffeur_id === c.id) ? `<span class="etiq" style="background:#DBEAFE;color:#1D4ED8">🚗 course suivie en direct</span><br>` : '')
     + (b ? `Binôme : ${esc(nomComplet(b))} <a href="tel:${esc(b.telephone)}">${esc(b.telephone)}</a><br>` : '')
     + `<a class="btn appel petit" href="tel:${esc(c.telephone)}">📞 Appeler ${esc(c.telephone)}</a> ${boutonWhatsApp(c)} `
     + `<button class="btn sec petit" type="button" data-action="historique" data-id="${esc(c.id)}">🕘 Historique 7 j</button>`;
@@ -1096,13 +1111,19 @@ function rendreCompteurs() {
   $('#compteurs').innerHTML = COMPTEURS.map(k => `<button type="button" class="compteur" data-compteur="${k.cle}" style="--c:${k.couleur}" aria-pressed="${etat.filtreSpecial === k.cle}">`
       + `<b>${actifs.filter(k.test).length}</b><span>${esc(k.libelle)}</span></button>`).join('')
     + `<button type="button" class="compteur${nbUrgences ? ' rouge-actif' : ''}" data-compteur="urgences" style="--c:#B91C1C" aria-pressed="false">`
-    + `<b>${nbUrgences}</b><span>🚨 Urgences en cours</span></button>`;
+    + `<b>${nbUrgences}</b><span>🚨 Urgences en cours</span></button>`
+    + `<button type="button" class="compteur" data-compteur="courses" style="--c:#1D4ED8" aria-pressed="false">`
+    + `<b>${etat.courses.length}</b><span>🚗 Courses en direct</span></button>`;
 }
 $('#compteurs').addEventListener('click', (e) => {
   const b = e.target.closest('[data-compteur]');
   if (!b) return;
   const cle = b.dataset.compteur;
   if (cle === 'urgences') return afficherVue('alertes');
+  if (cle === 'courses') {
+    if (!etat.courses.length) return toast('Aucune course suivie en direct pour le moment.', '', 4000);
+    return suivreCourse(etat.courses[0].id);
+  }
   etat.filtreSpecial = etat.filtreSpecial === cle ? null : cle;
   rendreCarte();
 });
@@ -1197,6 +1218,7 @@ function rendreCarte() {
       icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: '<div class="pulse">🚨</div>' }) })
       .bindPopup(() => popupUrgence(u)).addTo(couche);
   });
+  dessinerCourses(couche);
   // Zones en arrière-plan
   zonesActives().forEach(z => L.circle([z.latitude, z.longitude], { radius: z.rayon_m, color: z.couleur, weight: 1, fill: false, dashArray: '4', interactive: false }).addTo(couche));
 }
@@ -1337,6 +1359,9 @@ document.addEventListener('click', (e) => {
     'zone-enregistrer': () => enregistrerLigneZone(Number(id)),
     'repere-creer': () => creerLieuDepuisRepere(Number(el.dataset.index)),
     'urgence-traiter': () => traiterUrgence(id),
+    'voir-trajet': () => voirTrajet(id),
+    'suivre-course': () => suivreCourse(id),
+    'arreter-suivre': () => { etat.suivre = null; rendreListeCourses(); },
     'urgence-voir': () => voirUrgence(id),
     'veh-enregistrer': () => enregistrerVehicule(Number(id)),
     'veh-supprimer': () => supprimerVehicule(Number(id)),
@@ -1371,9 +1396,18 @@ async function afficherHistorique(id) {
         ...pts.map((p, i) => L.circleMarker(p, { radius: 4, color: '#334155', fillOpacity: i === pts.length - 1 ? 1 : 0.4 }))]).addTo(etat.cartes.carte);
       etat.cartes.carte.fitBounds(L.latLngBounds(pts).pad(0.3));
     }
-    await modale(`Historique 7 jours — ${c ? c._nom : ''}`, h.length
+    // Version 1.5 : courses suivies (trajets), sans position tant qu'on ne clique pas sur « Voir le trajet »
+    let courses = [];
+    try { courses = await rpc('loc_courses_chauffeur', { p_chauffeur: id, p_jours: 7 }) || []; } catch { /* base sans suivi */ }
+    const motifsFin = { termine: 'terminée', nouveau_statut: 'nouveau statut', duree_max: 'arrêt après 4 h', deconnexion: 'déconnexion' };
+    const blocCourses = courses.length ? `<h3>🚗 Courses suivies (${courses.length})</h3><table><thead><tr><th>Début</th><th>Fin</th><th>Type / destination</th><th class="num">Positions</th><th></th></tr></thead><tbody>`
+      + courses.map(k => `<tr><td>${esc(dateHeure(k.debut))}</td><td>${k.fin ? esc(heure(k.fin)) + ` <span class="doux">(${esc(motifsFin[k.fin_motif] || '')})</span>` : '<span class="etiq" style="background:#DBEAFE;color:#1D4ED8">en direct</span>'}</td>`
+        + `<td>${esc(STATUTS[k.statut]?.libelle || k.statut)}${k.destination ? ' → ' + esc(k.destination) : ''}${k.vehicule ? `<br><span class="doux">🚙 ${esc(k.vehicule)}</span>` : ''}</td>`
+        + `<td class="num">${k.nb_points}</td><td>${k.nb_points ? `<button class="btn sec petit" data-action="voir-trajet" data-id="${esc(k.id)}">🗺️ Voir le trajet</button>` : ''}</td></tr>`).join('')
+      + '</tbody></table>' : '';
+    await modale(`Historique 7 jours — ${c ? c._nom : ''}`, (h.length
       ? `<p class="doux">${h.length} pointage(s). Le tracé est affiché sur la carte. Consultation enregistrée au journal.</p><div style="overflow:auto"><table><thead><tr><th>Date</th><th>Statut</th><th>Zone</th><th>Quartier / repère</th><th>Précision</th></tr></thead><tbody>${lignes}</tbody></table></div>`
-      : '<p class="vide">Aucun pointage sur les 7 derniers jours.</p>',
+      : '<p class="vide">Aucun pointage sur les 7 derniers jours.</p>') + blocCourses,
     [{ libelle: 'Effacer le tracé', valeur: 'effacer', classe: 'sec' }, { libelle: 'Fermer', valeur: 'ok' }]).then(v => { if (v === 'effacer' && etat.trace) { etat.trace.remove(); etat.trace = null; } });
   } catch (e) { toast(e.message, 'ko', 6000); }
 }
@@ -1598,6 +1632,110 @@ function rendreAlertes() {
     + (c.binome ? `<a class="btn sec petit" href="tel:${esc(c.binome.telephone)}" title="${esc(nomComplet(c.binome))}">📞 Binôme</a>` : '')
     + (c._pos ? `<button class="btn sec petit" data-action="localiser" data-id="${esc(c.id)}">🗺️ Voir</button>` : '') + '</div></td></tr>').join('')
     : '<tr><td colspan="5" class="vide">Aucune alerte. ✓</td></tr>';
+}
+
+/* ===========================================================================
+   COURSES SUIVIES EN DIRECT (version 1.5)
+   - Toutes les 30 s : loc_courses_en_cours() (journalisée au plus toutes les 10 min).
+   - Trajet en bleu sur la carte, position actuelle clignotante, bouton « Suivre ».
+   - Trajet d'une course passée : loc_trace_course() (journalisée), depuis l'historique.
+   =========================================================================== */
+async function chargerCourses() {
+  if (!etat.user || !sb) return;
+  try { etat.courses = await rpc('loc_courses_en_cours') || []; }
+  catch { return; }   // base sans suivi des courses ou réseau absent : on garde l'affichage
+  if (etat.suivre && !etat.courses.some(k => k.id === etat.suivre)) etat.suivre = null;
+  if (etat.vue === 'carte') rendreCarte();
+  const k = etat.suivre && etat.courses.find(x => x.id === etat.suivre);
+  if (k && k.points.length && etat.cartes.carte) etat.cartes.carte.panTo([k.points[k.points.length - 1][0], k.points[k.points.length - 1][1]]);
+}
+setInterval(() => { if (etat.user) chargerCourses(); }, 30000);
+
+/** Distance parcourue (somme des segments) en mètres. */
+function distanceTrajet(points) {
+  let d = 0;
+  for (let i = 1; i < points.length; i++) d += haversine(points[i - 1][0], points[i - 1][1], points[i][0], points[i][1]);
+  return d;
+}
+const dureeTexte = (ms) => { const m = Math.max(0, Math.round(ms / 60000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`; };
+
+function popupCourse(k) {
+  const der = k.points[k.points.length - 1];
+  return `<b style="color:#1D4ED8">🚗 ${esc(STATUTS[k.statut]?.libelle || k.statut)} — suivi en direct</b><br>`
+    + `<b>${esc(nomComplet(k))}</b> <span class="doux">(${esc(k.matricule)})</span><br>`
+    + (k.destination ? `Destination : <b>${esc(k.destination)}</b><br>` : '')
+    + (k.vehicule ? `🚙 ${esc(k.vehicule)}<br>` : '')
+    + `<span class="doux">Depuis ${esc(heure(k.debut))} (${esc(dureeTexte(Date.now() - new Date(k.debut)))}) · ${distanceTexte(distanceTrajet(k.points))} parcourus</span><br>`
+    + (der ? `<span class="doux">Dernière position ${esc(ilYa(der[2]))}${der[3] != null ? ` · ${Math.round(der[3])} km/h` : ''}</span><br>` : '<span class="doux">En attente de la première position…</span><br>')
+    + `<a class="btn appel petit" href="tel:${esc(k.telephone)}">📞 Appeler</a> ${boutonWhatsApp(k)}`;
+}
+
+/** Trajets en bleu + position actuelle clignotante (appelé par rendreCarte). */
+function dessinerCourses(couche) {
+  etat.marqueursCourse = {};
+  etat.courses.forEach(k => {
+    const pts = k.points.map(p => [p[0], p[1]]);
+    if (pts.length > 1) L.polyline(pts, { color: k.statut === 'en_mission' ? '#1D4ED8' : '#7C3AED', weight: 4, opacity: .85 }).addTo(couche);
+    if (pts.length) {
+      etat.marqueursCourse[k.id] = L.marker(pts[pts.length - 1], { zIndexOffset: 900, title: 'Course : ' + nomComplet(k),
+        icon: L.divIcon({ className: '', iconSize: [22, 22], iconAnchor: [11, 11], html: '<div class="tete-course"></div>' }) })
+        .bindPopup(() => popupCourse(k)).addTo(couche);
+    }
+  });
+  rendreListeCourses();
+}
+
+function rendreListeCourses() {
+  const bloc = $('#bloc-courses');
+  if (!bloc) return;
+  bloc.hidden = !etat.courses.length;
+  $('#nb-courses').textContent = etat.courses.length;
+  $('#liste-courses').innerHTML = etat.courses.map(k => {
+    const der = k.points[k.points.length - 1];
+    const suivie = etat.suivre === k.id;
+    return `<div class="carte-course" aria-current="${suivie}"><b>${esc(nomComplet(k))}</b>`
+      + ` <span class="doux">${esc(STATUTS[k.statut]?.libelle || '')}${k.destination ? ' → ' + esc(k.destination) : ''}</span><br>`
+      + `<span class="doux">Depuis ${esc(heure(k.debut))} · ${distanceTexte(distanceTrajet(k.points))} · ${der ? 'position ' + esc(ilYa(der[2])) : 'en attente de position'}</span>`
+      + `<div class="ligne" style="margin-top:4px">${suivie
+          ? `<button class="btn sec petit" data-action="arreter-suivre" data-id="${esc(k.id)}">Arrêter de suivre</button>`
+          : `<button class="btn petit" data-action="suivre-course" data-id="${esc(k.id)}">🎯 Suivre sur la carte</button>`}`
+      + `<a class="btn appel petit" href="tel:${esc(k.telephone)}">📞</a></div></div>`;
+  }).join('');
+}
+
+/** Centre la carte sur la course et la garde au centre à chaque mise à jour. */
+function suivreCourse(id) {
+  const k = etat.courses.find(x => x.id === id);
+  if (!k) return;
+  etat.suivre = id;
+  if (etat.vue !== 'carte') afficherVue('carte');
+  rendreListeCourses();
+  if (k.points.length && etat.cartes.carte) {
+    const der = k.points[k.points.length - 1];
+    etat.cartes.carte.setView([der[0], der[1]], 14);
+    setTimeout(() => etat.marqueursCourse?.[id]?.openPopup(), 200);
+  } else toast('Course démarrée : en attente de la première position.', '', 5000);
+}
+
+/** Trajet d'une course (passée ou en cours) depuis l'historique — consultation journalisée. */
+async function voirTrajet(id) {
+  try {
+    const k = await rpc('loc_trace_course', { p_course: id });
+    const pts = k.points.map(p => [p[0], p[1]]);
+    $('#modale').hidden = true;
+    if (etat.vue !== 'carte') afficherVue('carte');
+    if (etat.trace) etat.trace.remove();
+    if (!pts.length || !etat.cartes.carte) return toast('Aucune position pour cette course.', 'ko');
+    etat.trace = L.layerGroup([
+      L.polyline(pts, { color: '#1D4ED8', weight: 5, opacity: .9 }),
+      L.circleMarker(pts[0], { radius: 7, color: '#fff', weight: 2, fillColor: '#15803D', fillOpacity: 1 }).bindTooltip('Départ ' + heure(k.points[0][2])),
+      L.circleMarker(pts[pts.length - 1], { radius: 7, color: '#fff', weight: 2, fillColor: '#B91C1C', fillOpacity: 1 })
+        .bindTooltip((k.fin ? 'Arrivée ' : 'Dernière position ') + heure(k.points[k.points.length - 1][2])),
+    ]).addTo(etat.cartes.carte);
+    etat.cartes.carte.fitBounds(L.latLngBounds(pts).pad(0.2));
+    const duree = (k.fin ? new Date(k.fin) : new Date(k.points[k.points.length - 1][2])) - new Date(k.debut);
+    toast(`Trajet : ${distanceTexte(distanceTrajet(k.points))} en ${dureeTexte(duree)} (${k.points.length} positions). Vert = départ, rouge = arrivée.`, 'ok', 9000);
+  } catch (e) { toast(e.message, 'ko', 6000); }
 }
 
 /* ===========================================================================

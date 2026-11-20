@@ -17,7 +17,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.4.0';   // 1.4.0 : contrôle « Tu n'es pas là où tu prétends être » (position contestée)
+const VERSION = 'v1.5.0';   // 1.5.0 : suivi des courses en direct (trajet)
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',
@@ -151,6 +151,37 @@ function alerteVersServeur(a) {
 }
 
 /**
+ * Envoie le trajet des courses suivies en attente (clé « courseFile », version 1.5).
+ * Renvoie true si quelque chose a été envoyé.
+ */
+async function envoyerSuivi(db, CFG, session, relancerSiEchec) {
+  const f = (await operation(db, 'kv', 'readonly', (s) => s.get('courseFile'))) || { courses: [], points: [] };
+  const courses = f.courses.filter((x) => x.chauffeur_id === session.chauffeur_id).slice(0, 20);
+  const points = f.points.filter((x) => x.chauffeur_id === session.chauffeur_id).slice(0, 500);
+  if (!courses.length && !points.length) return false;
+  let rep;
+  try {
+    rep = await fetch(`${CFG.SUPABASE_URL}/rest/v1/rpc/loc_course_sync`, {
+      method: 'POST',
+      headers: { apikey: CFG.SUPABASE_CLE, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_jeton: session.jeton, p_donnees: { courses, points } }),
+    });
+  } catch (e) {
+    if (relancerSiEchec) throw e;
+    return false;
+  }
+  if (!rep.ok) { if (relancerSiEchec && rep.status >= 500) throw new Error('serveur ' + rep.status); return false; }
+  const r = await rep.json();
+  if (!r.ok) return false;
+  const faits = new Set([...r.courses, ...r.points, ...r.rejetes.map((x) => x.id)]);
+  const g = (await operation(db, 'kv', 'readonly', (s) => s.get('courseFile'))) || { courses: [], points: [] };
+  g.courses = g.courses.filter((x) => !(faits.has(x.id) && courses.some((y) => y.id === x.id && y.fin === x.fin)));
+  g.points = g.points.filter((x) => !faits.has(x.id));
+  await operation(db, 'kv', 'readwrite', (s) => s.put(g, 'courseFile'));
+  return true;
+}
+
+/**
  * Envoie les alertes Panne / Urgence en attente (clé « alertesFile »).
  * Renvoie la liste des identifiants acceptés par le serveur.
  */
@@ -191,15 +222,17 @@ async function envoyerFile(relancerSiEchec) {
   if (!session || !session.jeton || !CFG) return;
   // 1. Les alertes d'urgence d'abord
   const alertes = await envoyerAlertes(db, CFG, session, relancerSiEchec);
+  // 2. Le trajet des courses suivies (version 1.5)
+  const suivi = await envoyerSuivi(db, CFG, session, relancerSiEchec);
   const prevenir = async (envoyes, rejets) => {
     const fenetres = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    fenetres.forEach((c) => c.postMessage({ type: 'sync-termine', envoyes, rejets, alertes }));
+    fenetres.forEach((c) => c.postMessage({ type: 'sync-termine', envoyes, rejets, alertes, suivi }));
   };
   // 2. Puis les pointages
   const items = (await operation(db, 'file', 'readonly', (s) => s.getAll()))
     .filter((i) => i.chauffeur_id === session.chauffeur_id)
     .sort((a, b) => a.horodatage.localeCompare(b.horodatage));
-  if (!items.length) { if (alertes.length) await prevenir(0, []); return; }
+  if (!items.length) { if (alertes.length || suivi) await prevenir(0, []); return; }
 
   let envoyes = 0;
   const rejets = [];
