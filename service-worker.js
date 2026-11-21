@@ -23,7 +23,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.11.0';   // 1.11.0 : animation des chiffres des rubriques
+const VERSION = 'v1.12.0';   // 1.12.0 : photo depuis la galerie, nouvelle présentation chauffeur (vert clair, 16 px, animations)
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',

@@ -10,7 +10,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#00703C">
+<meta name="theme-color" content="#FFFFFF">
 <meta name="description" content="Belinga Localisation — pointage des chauffeurs">
 <title>Belinga Localisation — Chauffeur</title>
 <link rel="manifest" href="manifest.json">
@@ -20,229 +20,283 @@
 <script src="config.js"></script>
 <style>
 /* =========================================================================
-   STYLES — sobres, très contrastés (lisibles en plein soleil), gros boutons
+   STYLES (version 1.12) — vert clair et blanc, texte 16 px (taille de référence
+   du web), boutons larges faciles à toucher, animation à chaque toucher.
+   Contrastes vérifiés (texte blanc sur vert #15803D : 5 : 1).
    ========================================================================= */
 :root {
-  --fond: #F2F7F4;
+  --fond: #F1FAF4;
+  --fond-2: #E3F5EA;
   --carte: #FFFFFF;
-  --texte: #0F172A;
-  --texte-doux: #475569;
-  --bord: #CBD5E1;
-  --primaire: #00703C;
-  --primaire-fonce: #004F2A;
+  --texte: #12261A;
+  --texte-doux: #4B5E52;
+  --bord: #D3E9DB;
+  --bord-fort: #B5DCC3;
+  --primaire: #15803D;
+  --primaire-fonce: #166534;
+  --primaire-clair: #22C55E;
+  --vert-pale: #ECFDF3;
   --succes: #166534;
   --succes-fond: #DCFCE7;
   --alerte: #92400E;
   --alerte-fond: #FEF3C7;
   --danger: #B91C1C;
   --danger-fond: #FEE2E2;
-  --rayon: 14px;
-  --ombre: 0 1px 3px rgba(15, 23, 42, .12);
+  --rayon: 16px;
+  --ombre: 0 1px 2px rgba(18, 38, 26, .06), 0 4px 14px rgba(21, 128, 61, .07);
+  --ombre-forte: 0 6px 18px rgba(21, 128, 61, .18);
+  --transition: 160ms cubic-bezier(.2, .8, .2, 1);
 }
-* { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; font-size: 16px; }
 body {
-  margin: 0; background: var(--fond); color: var(--texte);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-  font-size: 18px; line-height: 1.45;
+  margin: 0; color: var(--texte);
+  background: linear-gradient(180deg, var(--fond-2) 0, var(--fond) 220px) no-repeat, var(--fond);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 1rem; line-height: 1.5;
   padding-bottom: calc(76px + env(safe-area-inset-bottom));
 }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 [hidden] { display: none !important; }
 
-/* --- Barre du haut --- */
+/* --- Barre du haut : blanche, titre vert --- */
 .barre {
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  background: var(--primaire); color: #fff;
+  background: rgba(255, 255, 255, .96); color: var(--primaire-fonce);
+  border-bottom: 1px solid var(--bord); box-shadow: 0 2px 10px rgba(21, 128, 61, .06);
   padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
 }
-.barre h1 { font-size: 19px; margin: 0; font-weight: 700; }
+.barre h1 { font-size: 1.125rem; margin: 0; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.barre h1::before { content: ""; width: 12px; height: 12px; border-radius: 50%; background: var(--primaire-clair); box-shadow: 0 0 0 4px var(--succes-fond); }
 .pastille {
-  font-size: 14px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
-  background: #fff; white-space: nowrap;
+  font-size: .8125rem; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+  background: var(--vert-pale); border: 1px solid var(--bord); white-space: nowrap;
 }
 .pastille.en-ligne { color: var(--succes); }
-.pastille.hors-ligne { color: var(--danger); }
+.pastille.hors-ligne { color: var(--danger); background: var(--danger-fond); border-color: #FECACA; }
 
 main { max-width: 560px; margin: 0 auto; padding: 16px; }
-.ecran h2 { font-size: 22px; margin: 4px 0 14px; }
+.ecran h2 { font-size: 1.375rem; margin: 4px 0 14px; font-weight: 700; color: var(--primaire-fonce); }
+.ecran:not([hidden]) { animation: apparait 220ms ease-out; }
+@keyframes apparait { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
 /* --- Cartes --- */
 .carte {
   background: var(--carte); border: 1px solid var(--bord); border-radius: var(--rayon);
   padding: 16px; margin-bottom: 14px; box-shadow: var(--ombre);
 }
-.carte h3 { font-size: 17px; margin: 0 0 10px; color: var(--texte-doux); text-transform: uppercase; letter-spacing: .03em; }
+.carte h3 { font-size: .8125rem; margin: 0 0 10px; color: var(--primaire); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
 
 /* --- Formulaires --- */
-label { display: block; font-weight: 700; margin: 12px 0 6px; }
-input[type=tel], input[type=text], input[type=password], input[type=search], select {
-  width: 100%; min-height: 56px; padding: 12px 14px;
-  border: 2px solid var(--bord); border-radius: 12px; background: #fff; font-size: 20px;
+label { display: block; font-weight: 600; font-size: .9375rem; margin: 12px 0 6px; }
+input[type=tel], input[type=text], input[type=password], input[type=search], input[type=number], select {
+  width: 100%; min-height: 48px; padding: 10px 14px;
+  border: 1.5px solid var(--bord-fort); border-radius: 12px; background: #fff; font-size: 1rem;
+  transition: border-color var(--transition), box-shadow var(--transition);
 }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primaire); box-shadow: 0 0 0 4px rgba(34, 197, 94, .18); }
 input:focus-visible, button:focus-visible { outline: 3px solid #F59E0B; outline-offset: 2px; }
-.pin { letter-spacing: .5em; text-align: center; font-size: 26px; }
-.a-remplir { border-color: var(--danger) !important; background: var(--danger-fond) !important; }
-/* Choix du lieu de disponibilité : gros boutons, un par ligne */
+.pin { letter-spacing: .5em; text-align: center; font-size: 1.5rem; }
+.a-remplir { border-color: var(--danger) !important; background: var(--danger-fond) !important; animation: secoue 300ms; }
+@keyframes secoue { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+/* Choix du lieu de disponibilité / du site : un bouton par ligne */
 .lieux-dispo { display: grid; gap: 8px; border-radius: 12px; border: 2px solid transparent; padding: 2px; }
 .lieu-dispo {
-  min-height: 56px; padding: 10px 14px; border-radius: 12px; border: 3px solid var(--bord);
-  background: #fff; font-weight: 700; font-size: 17px; text-align: left; display: flex; align-items: center; gap: 10px;
+  min-height: 52px; padding: 10px 14px; border-radius: 12px; border: 1.5px solid var(--bord-fort);
+  background: #fff; font-weight: 600; font-size: 1rem; text-align: left; display: flex; align-items: center; gap: 10px;
 }
-.lieu-dispo[aria-checked=true] { border-color: #15803D; background: #DCFCE7; color: #14532D; }
-.lieu-dispo[aria-checked=true]::after { content: "✓"; margin-left: auto; font-size: 20px; }
+.lieu-dispo[aria-checked=true] { border-color: var(--primaire); background: var(--succes-fond); color: #14532D; box-shadow: 0 0 0 3px rgba(34, 197, 94, .15); }
+.lieu-dispo[aria-checked=true]::after { content: "✓"; margin-left: auto; font-size: 1.125rem; font-weight: 800; }
 .lieu-dispo[data-lieu=ailleurs][aria-checked=true] { border-color: #B45309; background: var(--alerte-fond); color: var(--alerte); }
-.aide { font-size: 15px; color: var(--texte-doux); margin: 6px 0 0; }
-.case { display: flex; gap: 12px; align-items: flex-start; font-weight: 600; margin: 14px 0; }
-.case input { width: 28px; height: 28px; flex: none; margin-top: 2px; }
+.aide { font-size: .875rem; color: var(--texte-doux); margin: 6px 0 0; }
+.case { display: flex; gap: 12px; align-items: flex-start; font-weight: 500; margin: 14px 0; }
+.case input { width: 24px; height: 24px; flex: none; margin-top: 2px; accent-color: var(--primaire); }
 
 /* --- Boutons --- */
 .btn {
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  width: 100%; min-height: 56px; padding: 12px 16px; margin-top: 12px;
-  border: 2px solid transparent; border-radius: 12px; font-weight: 700; font-size: 18px;
+  width: 100%; min-height: 50px; padding: 12px 16px; margin-top: 12px;
+  border: 1.5px solid transparent; border-radius: 14px; font-weight: 700; font-size: 1rem;
   background: var(--primaire); color: #fff; text-align: center;
+  box-shadow: 0 2px 6px rgba(21, 128, 61, .25);
 }
-.btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: .55; cursor: not-allowed; }
-.btn.secondaire { background: #fff; color: var(--primaire); border-color: var(--primaire); }
-.btn.danger { background: var(--danger); }
-.btn.danger-contour { background: #fff; color: var(--danger); border-color: var(--danger); }
-.btn.lien { background: none; color: var(--primaire); text-decoration: underline; min-height: 44px; }
+.btn.secondaire { background: var(--vert-pale); color: var(--primaire-fonce); border-color: var(--bord-fort); box-shadow: none; }
+.btn.danger { background: var(--danger); box-shadow: 0 2px 6px rgba(185, 28, 28, .25); }
+.btn.danger-contour { background: #fff; color: var(--danger); border-color: #FCA5A5; box-shadow: none; }
+.btn.lien { background: none; color: var(--primaire); text-decoration: underline; min-height: 44px; box-shadow: none; }
 .rangee { display: flex; gap: 10px; }
 .rangee .btn { flex: 1; }
 
 /* Gros bouton de pointage */
 .btn-pointer {
-  min-height: 92px; font-size: 22px; letter-spacing: .02em; border-radius: 18px;
-  background: var(--primaire); box-shadow: 0 4px 0 var(--primaire-fonce);
+  min-height: 76px; font-size: 1.1875rem; letter-spacing: .02em; border-radius: 18px;
+  background: linear-gradient(135deg, var(--primaire-clair), var(--primaire)); box-shadow: var(--ombre-forte);
 }
-.btn-pointer.prive { background: #374151; box-shadow: 0 4px 0 #1F2937; }
+.btn-pointer.prive { background: linear-gradient(135deg, #64748B, #374151); box-shadow: 0 6px 18px rgba(55, 65, 81, .25); }
 
-/* --- Grille des statuts (version 1.3 : boutons plus grands, faciles à toucher) --- */
-.statuts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+/* --- Grille des statuts --- */
+.statuts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .statut {
-  min-height: 96px; padding: 12px 8px; border-radius: 14px; border: 3px solid var(--bord);
-  border-left: 8px solid var(--c);
-  background: #fff; font-weight: 800; font-size: 17px; line-height: 1.2;
+  min-height: 92px; padding: 12px 8px; border-radius: 16px; border: 1.5px solid var(--bord);
+  border-left: 6px solid var(--c);
+  background: #fff; font-weight: 700; font-size: .9375rem; line-height: 1.25;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  box-shadow: var(--ombre);
 }
-.statut .ico { font-size: 30px; }
-.statut[aria-pressed=true] { color: #fff; border-color: transparent; background: var(--c); box-shadow: 0 3px 0 rgba(0,0,0,.25); }
-.statut[aria-pressed=true]::after { content: "✓ choisi"; font-size: 13px; }
+.statut .ico { font-size: 1.75rem; }
+.statut[aria-pressed=true] { color: #fff; border-color: transparent; background: var(--c); box-shadow: 0 6px 16px rgba(0, 0, 0, .18); }
+.statut[aria-pressed=true]::after { content: "✓ choisi"; font-size: .75rem; }
 
 /* --- Photo d'identité (version 1.7) --- */
-.photo-id { width: 96px; height: 128px; border-radius: 10px; object-fit: cover; border: 2px solid var(--bord); background: #E2E8F0; flex: none; }
-.photo-vide { display: flex; align-items: center; justify-content: center; font-size: 40px; color: var(--texte-doux); }
+.photo-id { width: 96px; height: 128px; border-radius: 12px; object-fit: cover; border: 2px solid var(--bord); background: var(--vert-pale); flex: none; }
+.photo-vide { display: flex; align-items: center; justify-content: center; font-size: 2.5rem; color: var(--texte-doux); }
 .bloc-photo { display: flex; gap: 14px; align-items: center; }
-.apercu-photo { display: block; width: 180px; height: 240px; object-fit: cover; margin: 8px auto; border-radius: 12px; border: 3px solid var(--primaire); }
+.apercu-photo { display: block; width: 180px; height: 240px; object-fit: cover; margin: 8px auto; border-radius: 14px; border: 3px solid var(--primaire); }
 
 /* --- Suivi de course (version 1.5) --- */
 .bandeau-suivi { position: sticky; top: 52px; z-index: 19; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  background: #B91C1C; color: #fff; font-weight: 800; padding: 10px 16px; }
+  background: #B91C1C; color: #fff; font-weight: 700; padding: 10px 16px; }
 .bandeau-suivi .pointrouge { width: 12px; height: 12px; border-radius: 50%; background: #fff; animation: clignote-suivi 1s infinite; }
 @keyframes clignote-suivi { 50% { opacity: .2; } }
-@media (prefers-reduced-motion: reduce) { .bandeau-suivi .pointrouge { animation: none; } }
-.bandeau-suivi .btn { width: auto; min-height: 44px; margin: 0 0 0 auto; padding: 8px 14px; background: #fff; color: #B91C1C; font-size: 16px; }
+.bandeau-suivi .btn { width: auto; min-height: 44px; margin: 0 0 0 auto; padding: 8px 14px; background: #fff; color: #B91C1C; font-size: .9375rem; }
 /* Nombre de passagers (version 1.8) */
-.compteur-passagers { display: grid; grid-template-columns: 64px 1fr 64px; gap: 8px; align-items: center; }
-.compteur-passagers .btn { margin-top: 0; min-height: 56px; font-size: 30px; line-height: 1; padding: 0; }
-.compteur-passagers input { text-align: center; font-size: 26px; font-weight: 800; }
+.compteur-passagers { display: grid; grid-template-columns: 56px 1fr 56px; gap: 8px; align-items: center; }
+.compteur-passagers .btn { margin-top: 0; min-height: 50px; font-size: 1.625rem; line-height: 1; padding: 0; }
+.compteur-passagers input { text-align: center; font-size: 1.375rem; font-weight: 800; }
 /* --- Décompte des rotations (version 1.9) --- */
 .carte-periode { border-left: 6px solid var(--couleur, #B45309); }
-.carte-periode .grand { font-size: 22px; font-weight: 800; margin: 4px 0; }
-.carte-periode .barre { height: 10px; background: #E5E7EB; border-radius: 6px; overflow: hidden; margin-top: 8px; }
-.carte-periode .barre > span { display: block; height: 100%; background: var(--couleur, #B45309); }
+.carte-periode .grand { font-size: 1.25rem; font-weight: 800; margin: 4px 0; color: var(--texte); }
+.carte-periode .barre { display: block; height: 10px; background: #E5E7EB; border-radius: 6px; overflow: hidden; margin-top: 8px; position: static; box-shadow: none; padding: 0; border: 0; }
+.carte-periode .barre > span { display: block; height: 100%; background: var(--couleur, #B45309); border-radius: 6px; transition: width 600ms ease-out; }
 .carte-periode.fin { --couleur: #15803D; background: var(--succes-fond); color: var(--succes); }
-.btn-suivi { min-height: 64px; font-size: 19px; background: #1D4ED8; box-shadow: 0 4px 0 #1E3A8A; }
+.btn-suivi { min-height: 60px; font-size: 1.0625rem; background: #1D4ED8; box-shadow: 0 6px 16px rgba(29, 78, 216, .25); }
 
 /* --- Bouton Panne / Urgence (version 1.3) --- */
 .btn-urgence {
-  min-height: 64px; margin: 0 0 14px; font-size: 20px; letter-spacing: .03em; border-radius: 16px;
-  background: var(--danger); box-shadow: 0 4px 0 #7F1D1D;
+  min-height: 58px; margin: 0 0 14px; font-size: 1.0625rem; letter-spacing: .03em; border-radius: 16px;
+  background: var(--danger); box-shadow: 0 6px 16px rgba(185, 28, 28, .25);
 }
 .motifs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0 4px; }
 .motif {
-  min-height: 76px; border-radius: 12px; border: 3px solid var(--danger); background: #fff; color: var(--danger);
-  font-weight: 800; font-size: 17px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  min-height: 72px; border-radius: 14px; border: 1.5px solid #FCA5A5; background: #fff; color: var(--danger);
+  font-weight: 700; font-size: .9375rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
 }
-.motif .ico { font-size: 26px; }
+.motif .ico { font-size: 1.5rem; }
 .motif:last-child:nth-child(odd) { grid-column: 1 / -1; }
-textarea { width: 100%; min-height: 70px; padding: 10px 12px; border: 2px solid var(--bord); border-radius: 12px; font-size: 17px; resize: vertical; }
+textarea { width: 100%; min-height: 70px; padding: 10px 12px; border: 1.5px solid var(--bord-fort); border-radius: 12px; font-size: 1rem; resize: vertical; }
 a.btn { text-decoration: none; }
 .alerte-suivi { border-left: 6px solid var(--danger); padding: 8px 0 8px 12px; margin: 8px 0; }
 .alerte-suivi.traitee { border-left-color: var(--succes); }
 .alerte-suivi.attente { border-left-color: #B45309; }
 
 /* --- Bandeaux d'état --- */
-.bandeau { border-radius: 12px; padding: 12px 14px; font-weight: 700; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.bandeau { border-radius: 14px; padding: 12px 14px; font-weight: 600; font-size: .9375rem; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .bandeau.ok { background: var(--succes-fond); color: var(--succes); }
 .bandeau.attente { background: var(--alerte-fond); color: var(--alerte); }
 .bandeau.erreur { background: var(--danger-fond); color: var(--danger); }
-.bandeau.neutre { background: #E2E8F0; color: var(--texte-doux); }
-.bandeau .btn { width: auto; min-height: 44px; margin: 0 0 0 auto; padding: 8px 14px; font-size: 16px; }
+.bandeau.neutre { background: #fff; color: var(--texte-doux); border: 1px solid var(--bord); }
+.bandeau .btn { width: auto; min-height: 44px; margin: 0 0 0 auto; padding: 8px 14px; font-size: .9375rem; }
 .message { margin-top: 12px; }
 
 /* --- Listes --- */
 .liste { list-style: none; margin: 0; padding: 0; }
 .liste li { padding: 12px 0; border-bottom: 1px solid var(--bord); display: flex; gap: 12px; align-items: flex-start; }
 .liste li:last-child { border-bottom: 0; }
-.point { width: 14px; height: 14px; border-radius: 50%; flex: none; margin-top: 6px; }
-.petit { font-size: 15px; color: var(--texte-doux); }
-.etiquette { display: inline-block; font-size: 13px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--alerte-fond); color: var(--alerte); }
+.point { width: 12px; height: 12px; border-radius: 50%; flex: none; margin-top: 6px; }
+.petit { font-size: .875rem; color: var(--texte-doux); }
+.etiquette { display: inline-block; font-size: .75rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--alerte-fond); color: var(--alerte); }
 
 /* --- Navigation du bas --- */
 .nav {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
-  display: flex; background: #fff; border-top: 1px solid var(--bord);
+  display: flex; background: rgba(255, 255, 255, .97); border-top: 1px solid var(--bord);
+  box-shadow: 0 -4px 14px rgba(21, 128, 61, .06);
   padding-bottom: env(safe-area-inset-bottom);
 }
 .nav button {
-  flex: 1; min-height: 64px; border: 0; background: none; font-size: 14px; font-weight: 700;
+  flex: 1; min-height: 62px; border: 0; background: none; font-size: .8125rem; font-weight: 600;
   color: var(--texte-doux); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  transition: color var(--transition);
 }
-.nav button .ico { font-size: 22px; }
-.nav button[aria-current=page] { color: var(--primaire); box-shadow: inset 0 3px 0 var(--primaire); }
+.nav button .ico { font-size: 1.375rem; transition: transform var(--transition); }
+.nav button[aria-current=page] { color: var(--primaire); }
+.nav button[aria-current=page] .ico { transform: translateY(-2px) scale(1.12); }
+.nav button[aria-current=page]::before { content: ""; position: absolute; top: 0; left: 30%; right: 30%; height: 3px; border-radius: 0 0 3px 3px; background: var(--primaire); }
 
 /* --- Fenêtres (modales) --- */
 .voile {
-  position: fixed; inset: 0; z-index: 50; background: rgba(15, 23, 42, .6);
+  position: fixed; inset: 0; z-index: 50; background: rgba(18, 38, 26, .45);
   display: flex; align-items: flex-end; justify-content: center; padding: 0;
+  animation: fondu 180ms ease-out;
 }
 .fenetre {
   background: #fff; width: 100%; max-width: 560px; max-height: 92vh; overflow: auto;
-  border-radius: 18px 18px 0 0; padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  border-radius: 22px 22px 0 0; padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  animation: monte 240ms cubic-bezier(.2, .8, .2, 1);
 }
-@media (min-width: 600px) { .voile { align-items: center; } .fenetre { border-radius: 18px; } }
-.fenetre h2 { margin: 0 0 10px; font-size: 21px; }
-.grand { font-size: 26px; font-weight: 800; color: var(--primaire); margin: 6px 0; }
-.choix-lieu { width: 100%; text-align: left; min-height: 56px; padding: 10px 12px; border: 1px solid var(--bord); border-radius: 10px; background: #fff; margin-top: 8px; }
+@keyframes fondu { from { opacity: 0; } }
+@keyframes monte { from { transform: translateY(40px); opacity: .4; } }
+@media (min-width: 600px) { .voile { align-items: center; } .fenetre { border-radius: 22px; } }
+.fenetre h2 { margin: 0 0 10px; font-size: 1.25rem; color: var(--primaire-fonce); }
+.grand { font-size: 1.5rem; font-weight: 800; color: var(--primaire); margin: 6px 0; }
+.choix-lieu { width: 100%; text-align: left; min-height: 52px; padding: 10px 12px; border: 1px solid var(--bord); border-radius: 12px; background: #fff; margin-top: 8px; }
 .choix-lieu b { display: block; }
 .liste-lieux { max-height: 46vh; overflow: auto; margin-top: 8px; }
-.compteur { text-align: right; font-size: 14px; color: var(--texte-doux); }
+.compteur { text-align: right; font-size: .8125rem; color: var(--texte-doux); }
 
 /* Recherche GPS : indicateur animé */
-.radar { width: 70px; height: 70px; margin: 10px auto; border-radius: 50%; border: 6px solid #BBE5CC; border-top-color: var(--primaire); animation: tourne 1s linear infinite; }
+.radar { width: 70px; height: 70px; margin: 10px auto; border-radius: 50%; border: 6px solid #BBF7D0; border-top-color: var(--primaire); animation: tourne 1s linear infinite; }
 @keyframes tourne { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .radar { animation: none; } }
 
 /* Notification éphémère */
 .toast {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom));
-  z-index: 60; max-width: calc(100% - 32px); width: 520px; padding: 14px 16px; border-radius: 12px;
-  font-weight: 700; color: #fff; background: #1E293B; box-shadow: 0 6px 20px rgba(0,0,0,.25);
+  z-index: 60; max-width: calc(100% - 32px); width: 520px; padding: 14px 16px; border-radius: 14px;
+  font-weight: 600; color: #fff; background: #1E293B; box-shadow: 0 10px 24px rgba(0,0,0,.2);
+  animation: toast-entre 220ms cubic-bezier(.2, .8, .2, 1);
 }
+@keyframes toast-entre { from { transform: translate(-50%, 16px); opacity: 0; } }
 .toast.succes { background: var(--succes); }
 .toast.erreur { background: var(--danger); }
 .toast.attente { background: var(--alerte); }
 
-.texte-consentement h3 { font-size: 17px; margin: 16px 0 4px; color: var(--primaire); text-transform: none; letter-spacing: 0; }
+.texte-consentement h3 { font-size: 1rem; margin: 16px 0 4px; color: var(--primaire); text-transform: none; letter-spacing: 0; }
 .texte-consentement p, .texte-consentement ul { margin: 4px 0; }
 .texte-consentement ul { padding-left: 22px; }
-.version { text-align: center; font-size: 13px; color: var(--texte-doux); margin-top: 18px; }
+.version { text-align: center; font-size: .8125rem; color: var(--texte-doux); margin-top: 18px; }
 .anim-chiffre { font-variant-numeric: tabular-nums; }
+
+/* --- Version 1.12 : animation à chaque toucher (enfoncement + onde) --- */
+.btn, .statut, .lieu-dispo, .motif, .choix-lieu, .nav button, .carte-photo-choix {
+  position: relative; overflow: hidden;
+  transition: transform var(--transition), box-shadow var(--transition), background-color var(--transition), border-color var(--transition);
+}
+.btn:active:not(:disabled), .statut:active, .lieu-dispo:active, .motif:active, .choix-lieu:active, .carte-photo-choix:active { transform: scale(.97); }
+.nav button:active .ico { transform: scale(.85); }
+.onde {
+  position: absolute; border-radius: 50%; pointer-events: none; transform: scale(0);
+  background: currentColor; opacity: .22; animation: onde 520ms ease-out forwards;
+}
+.btn:not(.secondaire):not(.lien):not(.danger-contour) .onde, .statut[aria-pressed=true] .onde { background: #fff; opacity: .35; }
+@keyframes onde { to { transform: scale(2.6); opacity: 0; } }
+
+/* Photo : deux façons d'ajouter (version 1.12) */
+.choix-photo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.carte-photo-choix {
+  min-height: 96px; border-radius: 16px; border: 1.5px solid var(--bord-fort); background: var(--vert-pale);
+  color: var(--primaire-fonce); font-weight: 700; font-size: .9375rem;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 10px;
+}
+.carte-photo-choix .ico { font-size: 1.75rem; }
+
+/* Accessibilité : animations coupées si l'appareil le demande */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .onde { display: none; }
+}
 </style>
 </head>
 <body>
@@ -423,7 +477,10 @@ a.btn { text-decoration: none; }
     <div class="carte" id="carte-photo" hidden style="margin-top:14px">
       <h3>Ma photo d'identité</h3>
       <p id="carte-photo-texte" class="aide" style="margin-top:0">Ajoutez votre photo pour que la logistique vous reconnaisse rapidement (urgence, remplacement).</p>
-      <button id="btn-photo-principal" class="btn secondaire" type="button">📷 Prendre ma photo</button>
+      <div class="choix-photo">
+        <button id="btn-photo-principal" class="carte-photo-choix" type="button"><span class="ico" aria-hidden="true">📷</span>Prendre ma photo</button>
+        <button id="btn-photo-galerie-principal" class="carte-photo-choix" type="button"><span class="ico" aria-hidden="true">🖼️</span>Choisir dans mes photos</button>
+      </div>
     </div>
 
     <div class="carte" id="carte-suivi" hidden style="margin-top:14px">
@@ -493,6 +550,8 @@ a.btn { text-decoration: none; }
         <button id="btn-photo-suppr" class="btn danger-contour" type="button" hidden>Supprimer</button>
       </div>
       <input id="photo-fichier" type="file" accept="image/*" capture="user" hidden>
+      <!-- Version 1.12 : photo déjà enregistrée dans le téléphone (galerie) -->
+      <input id="photo-galerie" type="file" accept="image/jpeg,image/png,image/webp,image/*" hidden>
       <button id="btn-changer-pin" class="btn secondaire" type="button">Changer mon PIN</button>
     </div>
 
@@ -2702,23 +2761,31 @@ function majPhoto() {
   const st = $('#photo-statut');
   st.hidden = !(refusee || aPhoto);
   st.innerHTML = refusee ? `❌ Photo refusée par la logistique : ${esc(motif || 'non conforme')}` : '✓ Photo visible par la logistique.';
-  $('#btn-photo').textContent = aPhoto ? '📷 Changer ma photo' : '📷 Prendre ma photo';
+  $('#btn-photo').textContent = aPhoto ? '📷 Changer ma photo' : '📷 Ajouter ma photo';
   $('#btn-photo-suppr').hidden = !aPhoto;
 }
 
-async function prendrePhoto() {
+/** Version 1.12 : prendre la photo (appareil photo) OU la choisir dans les photos du téléphone. */
+async function prendrePhoto(source) {
+  const boutons = [];
+  if (source !== 'galerie') boutons.push({ libelle: '📷 Prendre la photo', valeur: 'camera' });
+  if (source !== 'camera') boutons.push({ libelle: '🖼️ Choisir dans mes photos', valeur: 'galerie', classe: source ? '' : 'secondaire' });
+  boutons.push({ libelle: 'Annuler', valeur: 'non', classe: 'lien' });
   const choix = await dialogue({
     titre: '📷 Ma photo d\'identité',
     html: '<p>Photo en <b>demi-buste</b> (tête et épaules) :</p><ul>'
       + '<li>de <b>face</b>, visage bien visible, sans lunettes de soleil ni casquette ;</li>'
       + '<li>dans un endroit <b>éclairé</b>, devant un fond simple.</li></ul>'
-      + '<p class="aide">Elle sera visible <b>uniquement par la logistique</b>, pour vous reconnaître. Vous pouvez la supprimer à tout moment.</p>',
-    boutons: [{ libelle: '📷 Prendre la photo', valeur: 'ok' }, { libelle: 'Annuler', valeur: 'non', classe: 'secondaire' }],
+      + '<p class="aide">Vous pouvez la prendre maintenant ou choisir une photo déjà dans votre téléphone. '
+      + 'Elle sera visible <b>uniquement par la logistique</b>, pour vous reconnaître. Vous pouvez la supprimer à tout moment.</p>',
+    boutons,
   });
-  if (choix === 'ok') $('#photo-fichier').click();
+  if (choix === 'camera') $('#photo-fichier').click();
+  if (choix === 'galerie') $('#photo-galerie').click();
 }
-$('#btn-photo').addEventListener('click', prendrePhoto);
-$('#btn-photo-principal').addEventListener('click', prendrePhoto);
+$('#btn-photo').addEventListener('click', () => prendrePhoto());
+$('#btn-photo-principal').addEventListener('click', () => prendrePhoto('camera'));
+$('#btn-photo-galerie-principal').addEventListener('click', () => prendrePhoto('galerie'));
 
 /** Recadre (demi-buste, légèrement vers le haut) et compresse l'image en JPEG. */
 async function preparerPhoto(fichier) {
@@ -2738,21 +2805,24 @@ async function preparerPhoto(fichier) {
   return data;
 }
 
-$('#photo-fichier').addEventListener('change', async () => {
-  const f = $('#photo-fichier').files[0];
-  $('#photo-fichier').value = '';
+async function photoChoisie(champ) {
+  const f = champ.files[0];
+  champ.value = '';
   if (!f) return;
+  const galerie = champ.id === 'photo-galerie';
+  if (f.type && !f.type.startsWith('image/')) return toast('Ce fichier n\'est pas une photo. Choisissez une image (JPEG ou PNG).', 'erreur', 6000);
+  if (f.size > 30 * 1024 * 1024) return toast('Photo trop lourde (plus de 30 Mo). Choisissez-en une autre.', 'erreur', 6000);
   let data;
   try { data = await preparerPhoto(f); }
-  catch { return toast('Image illisible. Reprenez la photo.', 'erreur'); }
+  catch { return toast(galerie ? 'Format de photo non pris en charge. Choisissez une photo JPEG ou PNG.' : 'Image illisible. Reprenez la photo.', 'erreur', 6000); }
   const choix = await dialogue({
     titre: 'Envoyer cette photo ?',
     html: `<img class="apercu-photo" src="${data}" alt="Aperçu de la photo">`
       + '<p class="aide" style="text-align:center">Le visage est-il bien visible et net ?</p>',
-    boutons: [{ libelle: '✓ Envoyer ma photo', valeur: 'ok' }, { libelle: 'Reprendre', valeur: 'reprendre', classe: 'secondaire' },
+    boutons: [{ libelle: '✓ Envoyer ma photo', valeur: 'ok' }, { libelle: galerie ? 'Choisir une autre photo' : 'Reprendre', valeur: 'reprendre', classe: 'secondaire' },
               { libelle: 'Annuler', valeur: 'non', classe: 'lien' }],
   });
-  if (choix === 'reprendre') return $('#photo-fichier').click();
+  if (choix === 'reprendre') return champ.click();
   if (choix !== 'ok') return;
   try {
     const r = await rpc('loc_photo_envoyer', { p_jeton: etat.jeton, p_image: data });
@@ -2764,7 +2834,9 @@ $('#photo-fichier').addEventListener('change', async () => {
   } catch (e) {
     toast(e instanceof ErreurReseau ? 'Pas de réseau : la photo doit être envoyée avec du réseau. Réessayez plus tard.' : 'Erreur : ' + e.message, 'erreur', 7000);
   }
-});
+}
+$('#photo-fichier').addEventListener('change', () => photoChoisie($('#photo-fichier')));
+$('#photo-galerie').addEventListener('change', () => photoChoisie($('#photo-galerie')));
 
 $('#btn-photo-suppr').addEventListener('click', async () => {
   const c = await dialogue({ titre: 'Supprimer ma photo ?', html: '<p>La logistique ne verra plus votre photo.</p>',
@@ -3118,6 +3190,25 @@ async function demarrer() {
     synchroniser();
   }
 }
+/* Version 1.12 : animation à chaque toucher — petite onde qui part du doigt
+   (coupée si l'appareil demande de réduire les animations). */
+const TOUCHABLES = '.btn, .statut, .lieu-dispo, .motif, .choix-lieu, .nav button, .carte-photo-choix';
+document.addEventListener('pointerdown', (e) => {
+  const el = e.target.closest(TOUCHABLES);
+  if (!el || el.disabled) return;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const r = el.getBoundingClientRect();
+  const taille = Math.max(r.width, r.height);
+  const onde = document.createElement('span');
+  onde.className = 'onde';
+  onde.setAttribute('aria-hidden', 'true');
+  onde.style.width = onde.style.height = taille + 'px';
+  onde.style.left = (e.clientX - r.left - taille / 2) + 'px';
+  onde.style.top = (e.clientY - r.top - taille / 2) + 'px';
+  el.appendChild(onde);
+  setTimeout(() => onde.remove(), 600);
+}, { passive: true });
+
 demarrer();
 </script>
 </body>
