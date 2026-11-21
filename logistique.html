@@ -204,6 +204,7 @@ tr.urgence-ouverte td { background: #FEF2F2; }
   #impression table { font-size: 10px; } #impression th { position: static; }
   @page { size: A4 landscape; margin: 12mm; }
 }
+.anim-chiffre { font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
@@ -304,7 +305,7 @@ tr.urgence-ouverte td { background: #FEF2F2; }
         </p>
         <button class="btn wa petit" id="btn-copier-dispo" type="button" style="margin-top:8px">💬 Liste des disponibles pour WhatsApp</button>
         <div id="bloc-courses" hidden>
-          <h3>🚗 Courses suivies en direct (<span id="nb-courses">0</span>)</h3>
+          <h3>🚗 Courses suivies en direct (<span id="nb-courses" class="chiffre">0</span>)</h3>
           <div id="liste-courses"></div>
         </div>
         <div class="ligne" style="margin-top:8px">
@@ -313,7 +314,7 @@ tr.urgence-ouverte td { background: #FEF2F2; }
         </div>
         <h3>Statuts</h3>
         <div class="puces" id="f-statuts"></div>
-        <h3><span id="nb-liste">0</span> chauffeur(s)</h3>
+        <h3><span id="nb-liste" class="chiffre">0</span> chauffeur(s)</h3>
         <div id="liste-carte"></div>
       </div>
       <div id="map-carte" class="carte-map"></div>
@@ -918,8 +919,10 @@ async function chargerTout() {
     etat.lieux = lieux; etat.zones = zones; etat.vehicules = vehicules;
     etat.params = Object.fromEntries(params.map(p => [p.cle, p.valeur]));
     etat.chauffeurs = positions.map(enrichir);
+    const premier = !etat.maj;
     etat.maj = new Date();
     rendreTout();
+    if (premier) animerChiffres($('#v-' + etat.vue));   // version 1.11 : à l'ouverture du tableau de bord
   } catch (e) {
     toast('Chargement impossible : ' + e.message, 'ko', 7000);
   } finally {
@@ -1124,6 +1127,38 @@ function enrichir(c) {
 /* ===========================================================================
    AFFICHAGE GÉNÉRAL
    =========================================================================== */
+/* ---------------------------------------------------------------------------
+   Version 1.11 : animation des chiffres. Quand on touche une rubrique, ses chiffres
+   défilent de 0 jusqu'à la valeur réelle (moins d'une seconde). Désactivée si le
+   téléphone / l'ordinateur demande de réduire les animations (accessibilité).
+   --------------------------------------------------------------------------- */
+const ANIM_CHIFFRES_MS = 900;
+function animerChiffres(racine, selecteur = '.compteur b, td.num, .chiffre, .badge') {
+  if (!racine) return;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const t0 = performance.now();
+  const id = racine.__animChiffres = (racine.__animChiffres || 0) + 1;   // une seule animation à la fois par rubrique
+  // Chaque image : on reprend les chiffres de la rubrique (même s'ils ont été redessinés entre-temps,
+  // par exemple par l'actualisation automatique) ; la vraie valeur est gardée dans data-fin.
+  const pas = (t) => {
+    if (racine.__animChiffres !== id) return;
+    const p = Math.min(1, Math.max(0, (t - t0) / ANIM_CHIFFRES_MS));
+    const e = 1 - Math.pow(1 - p, 3);   // démarre vite, ralentit à l'arrivée
+    racine.querySelectorAll(selecteur).forEach(el => {
+      if (el.children.length) return;
+      if (el.dataset.fin === undefined) {
+        if (!/^[1-9]\d{0,5}$/.test(el.textContent.trim())) return;
+        el.dataset.fin = el.textContent.trim();
+        el.classList.add('anim-chiffre');
+      }
+      el.textContent = p < 1 ? String(Math.round(Number(el.dataset.fin) * e)) : el.dataset.fin;
+      if (p >= 1) { delete el.dataset.fin; el.classList.remove('anim-chiffre'); }
+    });
+    if (p < 1) requestAnimationFrame(pas);
+  };
+  pas(t0);
+}
+
 function afficherVue(vue) {
   etat.vue = vue;
   document.querySelectorAll('.onglets button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.vue === vue)));
@@ -1136,6 +1171,8 @@ function afficherVue(vue) {
   if (vue === 'alertes' && etat.user) chargerUrgences();
   rendreVue(vue);
   Object.values(etat.cartes).forEach(m => setTimeout(() => m.invalidateSize(), 50));
+  animerChiffres($('#v-' + vue));                       // version 1.11 : les chiffres de la rubrique défilent
+  if (vue === 'alertes') animerChiffres($('.onglets'), '#badge-alertes');
 }
 document.querySelectorAll('.onglets button').forEach(b => b.addEventListener('click', () => afficherVue(b.dataset.vue)));
 
@@ -1287,6 +1324,7 @@ $('#compteurs').addEventListener('click', (e) => {
   }
   etat.filtreSpecial = etat.filtreSpecial === cle ? null : cle;
   rendreCarte();
+  animerChiffres($('#v-carte'));   // version 1.11
 });
 
 /* ---------------------------------------------------------------------------

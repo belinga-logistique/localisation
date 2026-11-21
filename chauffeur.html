@@ -242,6 +242,7 @@ a.btn { text-decoration: none; }
 .texte-consentement p, .texte-consentement ul { margin: 4px 0; }
 .texte-consentement ul { padding-left: 22px; }
 .version { text-align: center; font-size: 13px; color: var(--texte-doux); margin-top: 18px; }
+.anim-chiffre { font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
@@ -1455,6 +1456,41 @@ function decompte(per, maintenant = Date.now()) {
   return { ecoules, jour: ecoules + 1, duree: d, reste: d ? Math.max(0, d - ecoules) : null, fini: !!d && ecoules >= d };
 }
 const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
+// Version 1.11 : même texte, avec le nombre animable
+const plurielAnime = (n, mot) => `<span class="chiffre">${n}</span> ${mot}${n > 1 ? 's' : ''}`;
+
+/* ---------------------------------------------------------------------------
+   Version 1.11 : animation des chiffres. Quand on touche une rubrique, ses chiffres
+   défilent de 0 jusqu'à la valeur réelle (moins d'une seconde). Désactivée si le
+   téléphone / l'ordinateur demande de réduire les animations (accessibilité).
+   --------------------------------------------------------------------------- */
+const ANIM_CHIFFRES_MS = 900;
+function animerChiffres(racine, selecteur = '.chiffre') {
+  if (!racine) return;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const t0 = performance.now();
+  const id = racine.__animChiffres = (racine.__animChiffres || 0) + 1;   // une seule animation à la fois par rubrique
+  // Chaque image : on reprend les chiffres de la rubrique (même s'ils ont été redessinés entre-temps,
+  // par exemple par l'actualisation automatique) ; la vraie valeur est gardée dans data-fin.
+  const pas = (t) => {
+    if (racine.__animChiffres !== id) return;
+    const p = Math.min(1, Math.max(0, (t - t0) / ANIM_CHIFFRES_MS));
+    const e = 1 - Math.pow(1 - p, 3);   // démarre vite, ralentit à l'arrivée
+    racine.querySelectorAll(selecteur).forEach(el => {
+      if (el.children.length) return;
+      if (el.dataset.fin === undefined) {
+        if (!/^[1-9]\d{0,5}$/.test(el.textContent.trim())) return;
+        el.dataset.fin = el.textContent.trim();
+        el.classList.add('anim-chiffre');
+      }
+      el.textContent = p < 1 ? String(Math.round(Number(el.dataset.fin) * e)) : el.dataset.fin;
+      if (p >= 1) { delete el.dataset.fin; el.classList.remove('anim-chiffre'); }
+    });
+    if (p < 1) requestAnimationFrame(pas);
+  };
+  pas(t0);
+}
+
 
 function rendrePeriode() {
   const zone = $('#carte-periode');
@@ -1478,10 +1514,10 @@ function rendrePeriode() {
   const depuis = new Date(per.debut).toLocaleDateString('fr-FR', { timeZone: 'Africa/Libreville', day: 'numeric', month: 'long' });
   zone.innerHTML = `<h3 style="margin:0">${def.ico} ${esc(def.libelle)}</h3>`
     + (k.duree
-      ? `<div class="grand">Jour ${k.jour} sur ${k.duree}</div>`
-        + `<p style="margin:0">Il reste <b>${pluriel(k.reste, 'jour')}</b> (depuis le ${esc(depuis)}).</p>`
+      ? `<div class="grand">Jour <span class="chiffre">${k.jour}</span> sur ${k.duree}</div>`
+        + `<p style="margin:0">Il reste <b>${plurielAnime(k.reste, 'jour')}</b> (depuis le ${esc(depuis)}).</p>`
         + `<div class="barre" aria-hidden="true"><span style="width:${Math.min(100, Math.round(100 * k.ecoules / k.duree))}%"></span></div>`
-      : `<div class="grand">Jour ${k.jour}</div><p style="margin:0">Depuis le ${esc(depuis)}.</p>`);
+      : `<div class="grand">Jour <span class="chiffre">${k.jour}</span></div><p style="margin:0">Depuis le ${esc(depuis)}.</p>`);
 }
 
 function rendrePrincipal() {
@@ -2951,7 +2987,10 @@ $('#btn-deconnexion').addEventListener('click', deconnexion);
 /* ===========================================================================
    NAVIGATION, RÉSEAU ET TÂCHES PÉRIODIQUES
    =========================================================================== */
-document.querySelectorAll('#nav button').forEach(b => b.addEventListener('click', () => afficher(b.dataset.ecran)));
+document.querySelectorAll('#nav button').forEach(b => b.addEventListener('click', () => {
+  afficher(b.dataset.ecran);
+  if (b.dataset.ecran === 'principal') animerChiffres($('#carte-periode'));   // version 1.11 : le décompte défile
+}));
 
 window.addEventListener('online', async () => {
   majReseau(true);

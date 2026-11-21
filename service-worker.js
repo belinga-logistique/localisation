@@ -23,7 +23,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.10.0';   // 1.10.0 : rappels de pointage par notification (6 jours ; 1 heure en course)
+const VERSION = 'v1.11.0';   // 1.11.0 : animation des chiffres des rubriques
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',
