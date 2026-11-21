@@ -633,6 +633,7 @@ const ACTIONS_JOURNAL = {
   consultation_alertes: 'Consultation des alertes Panne / Urgence', alerte_traitee: 'Alerte Panne / Urgence prise en charge',
   export_courses: 'Export des courses et passagers', consultation_courses_direct: 'Consultation des courses en direct', consultation_trajet: "Consultation du trajet d'une course",
   duree_site: 'Durée du séjour sur site modifiée',
+  relance: 'Chauffeur relancé (WhatsApp)', rappels_push: 'Rappels automatiques envoyés aux chauffeurs',
   photo_envoyee: "Photo d'identité envoyée par le chauffeur", photo_refusee: "Photo d'identité refusée", photo_supprimee: "Photo d'identité supprimée par le chauffeur",
 };
 
@@ -1005,6 +1006,37 @@ const couleurChauffeur = (c) => c._dispoEtat === 'orange' ? COULEUR_A_VERIFIER
   : (c._finPeriode ? '#15803D' : (c.dernier ? STATUTS[c.dernier.statut].couleur : '#94A3B8'));
 
 /** Ajoute à chaque chauffeur les informations calculées (préfixe « _ »). */
+/* ---------------------------------------------------------------------------
+   Rappels (version 1.10) : le serveur relance seul les chauffeurs abonnés ;
+   la logistique peut aussi relancer par WhatsApp (message prêt), ce qui est noté.
+   --------------------------------------------------------------------------- */
+const RELANCE = { JOURS: 6, COURSE_MIN: 60, COURSE_MAX_H: 16 };
+function dureeRelance(min) {
+  if (min < 120) return `${Math.floor(min)} min`;
+  if (min < 2 * 1440) return `${Math.floor(min / 60)} h`;
+  return `${Math.floor(min / 1440)} jours`;
+}
+function texteRelance(c) {
+  const d = c.dernier;
+  const s = STATUTS[d.statut];
+  const debut = `Bonjour ${c.prenom || c.nom}, ici la logistique Fortescue Belinga. `;
+  if (c._relance && c._relance.course) return debut + 'Course en cours : merci de pointer votre position dans l\'application Belinga Localisation.';
+  if (!s.position) return debut + `Êtes-vous toujours « ${s.libelle} » ? Merci de le confirmer dans l'application Belinga Localisation (aucune position n'est demandée).`;
+  return debut + 'Merci de pointer votre position dans l\'application Belinga Localisation.';
+}
+function boutonRelance(c) {
+  const u = lienWhatsApp(c.telephone, texteRelance(c));
+  return u ? `<a class="btn wa petit" href="${esc(u)}" target="_blank" rel="noopener" data-relance="${esc(c.id)}">💬 Relancer</a>` : '';
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-relance]');
+  if (!b) return;
+  e.stopPropagation();
+  const c = etat.chauffeurs.find(x => x.id === b.dataset.relance);
+  if (c) { c.dernier_rappel = new Date().toISOString(); c.dernier_rappel_canal = 'whatsapp'; }
+  rpc('loc_noter_relance', { p_chauffeur: b.dataset.relance, p_canal: 'whatsapp' }).catch(() => { /* noté au prochain essai */ });
+});
+
 function enrichir(c) {
   const d = c.dernier;
   c._nom = nomComplet(c);
@@ -1038,6 +1070,15 @@ function enrichir(c) {
   // Version 1.4 : le chauffeur a maintenu un statut que son GPS contredit (« Mon GPS se trompe »)
   c._contestation = d && d.contestation ? d.contestation : null;
 
+  // Version 1.10 : sans nouvelles (« En course » : 1 heure sans position ; sinon 6 jours), sauf « Disponible »
+  c._relance = null;
+  if (c.actif && c._consent && d && d.statut !== 'dispo_libreville') {
+    const derniere = Math.max(Date.parse(d.horodatage), c.derniere_trace ? Date.parse(c.derniere_trace) : 0);
+    const min = (Date.now() - derniere) / 60000;
+    const course = d.statut === 'en_course' && Date.now() - Date.parse(d.horodatage) < RELANCE.COURSE_MAX_H * 3600e3;
+    if (min >= (course ? RELANCE.COURSE_MIN : RELANCE.JOURS * 1440)) c._relance = { min, course };
+  }
+
   // Alertes (chauffeurs actifs uniquement)
   c._alertes = [];
   if (c.actif) {
@@ -1070,6 +1111,10 @@ function enrichir(c) {
     if (c._decompte && c._decompte.fini && c._decompte.type === 'site') c._alertes.push({ type: 'Relève à prévoir', niveau: 'att',
       detail: `${c._decompte.duree} jours sur site atteints (depuis le ${dateCourte(c.periode.debut)})` });
     if (!c.pin_defini) c._alertes.push({ type: 'PIN non défini', niveau: 'att', detail: 'Le chauffeur ne peut pas se connecter' });
+    if (c._relance) c._alertes.push({ type: 'À relancer', niveau: c._relance.course ? 'ko' : 'att', relance: true,
+      detail: (c._relance.course ? 'En course sans position depuis ' : `« ${STATUTS[d.statut].libelle} » sans pointage depuis `) + dureeRelance(c._relance.min)
+        + (c.dernier_rappel ? ` · dernier rappel ${c.dernier_rappel_canal === 'push' ? 'automatique' : 'WhatsApp'} ${ilYa(c.dernier_rappel)}` : '')
+        + (c.push ? '' : ' · rappels NON activés sur son téléphone : relancez par WhatsApp') });
     if (c._contestation) c._alertes.unshift({ type: 'Position contestée', niveau: 'ko',
     detail: `${c._contestation} — le chauffeur affirme que son GPS se trompe : appelez-le pour vérifier` });
   }
@@ -1304,6 +1349,7 @@ function carteChauffeurHtml(c) {
     + (c._contestation ? '<span class="etiq ko">⚠ position contestée</span>' : '')
     + (c._alertes.some(a => a.niveau === 'ko') ? '<span class="etiq ko">⚠ alerte</span>' : '')
     + etiquetteDecompte(c)
+    + (c._relance ? `<span class="etiq ${c._relance.course ? 'ko' : 'att'}">⏰ à relancer</span>` : '')
     + (c._dispoEtat === 'orange' ? '<span class="etiq att">dispo à vérifier</span>' : (c._dispo ? '<span class="etiq ok">disponible</span>' : ''))
     + '</div>' + (c._dispoEtat ? `<div class="doux">${esc(c._dispoMotif)}</div>` : '') + '</div>';
 }
@@ -1743,7 +1789,8 @@ function telecharger(nom, contenu, type = 'text/csv;charset=utf-8') {
    =========================================================================== */
 function rendreAlertes() {
   $('#alertes-regles').textContent = `Seuils : pas de pointage depuis ${etat.params.seuil_alerte_h} h (équipe site) ou ${etat.params.seuil_alerte_libreville_h} h (équipe Libreville). `
-    + 'Pas d\'alerte pendant un repos, un congé ou une maladie. « Hors zone » : statut déclaré incohérent avec la position.';
+    + 'Pas d\'alerte pendant un repos, un congé ou une maladie. « Hors zone » : statut déclaré incohérent avec la position. '
+    + '« À relancer » : en course sans position depuis 1 h, ou sans pointage depuis 6 jours (sauf « Disponible ») — le téléphone reçoit aussi un rappel automatique (de 6 h à 22 h pour les courses).';
   const lignes = [];
   etat.chauffeurs.forEach(c => c._alertes.forEach(a => lignes.push({ c, a })));
   const ordre = { ko: 0, att: 1 };
@@ -1751,7 +1798,7 @@ function rendreAlertes() {
   $('#tab-alertes').innerHTML = lignes.length ? lignes.map(({ c, a }) => `<tr><td><span class="etiq ${a.niveau}">${esc(a.type)}</span></td>`
     + `<td><b>${esc(c._nom)}</b><br><span class="doux">${esc(c.matricule)} · ${c.equipe === 'libreville' ? 'Libreville' : 'Site'}</span></td>`
     + `<td>${esc(a.detail)}</td><td>${c.dernier ? esc(dateHeure(c.dernier.horodatage)) + '<br><span class="doux">' + esc(ilYa(c.dernier.horodatage)) + '</span>' : '—'}</td>`
-    + `<td><div class="ligne"><a class="btn appel petit" href="tel:${esc(c.telephone)}">📞 Appeler</a>` + boutonWhatsApp(c)
+    + `<td><div class="ligne"><a class="btn appel petit" href="tel:${esc(c.telephone)}">📞 Appeler</a>` + (a.relance ? boutonRelance(c) : boutonWhatsApp(c))
     + (c.binome ? `<a class="btn sec petit" href="tel:${esc(c.binome.telephone)}" title="${esc(nomComplet(c.binome))}">📞 Binôme</a>` : '')
     + (c._pos ? `<button class="btn sec petit" data-action="localiser" data-id="${esc(c.id)}">🗺️ Voir</button>` : '') + '</div></td></tr>').join('')
     : '<tr><td colspan="5" class="vide">Aucune alerte. ✓</td></tr>';

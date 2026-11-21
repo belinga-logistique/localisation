@@ -23,7 +23,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.9.2';   // 1.9.2 : « Disponible » seulement après récupération, repos, congé, maladie
+const VERSION = 'v1.10.0';   // 1.10.0 : rappels de pointage par notification (6 jours ; 1 heure en course)
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',
@@ -277,10 +277,24 @@ async function envoyerFile(relancerSiEchec) {
    --------------------------------------------------------------------------- */
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || './chauffeur.html';
   event.waitUntil((async () => {
     const fenetres = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const appli = fenetres.find((c) => c.url.includes('chauffeur.html'));
-    if (appli) return appli.focus();
-    return self.clients.openWindow('./chauffeur.html');
+    if (appli) { appli.postMessage({ type: 'rappel' }); return appli.focus(); }
+    return self.clients.openWindow(url);
   })());
+});
+
+/* Version 1.10 : rappel envoyé par le serveur (« push »), même application fermée.
+   Le message est chiffré pour CE téléphone ; il ne contient aucune position. */
+self.addEventListener('push', (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (e) { d = { corps: event.data ? event.data.text() : '' }; }
+  event.waitUntil(self.registration.showNotification(d.titre || 'Belinga Localisation', {
+    body: d.corps || 'Pensez à pointer.',
+    icon: 'icones/icone-192.png', badge: 'icones/icone-192.png',
+    tag: d.tag || 'rappel-pointage', renotify: true, requireInteraction: true,
+    data: { url: d.url || './chauffeur.html?rappel=1' },
+  }));
 });

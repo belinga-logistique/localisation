@@ -131,12 +131,17 @@
       <tr><td>Alerte Panne / Urgence : motif, message, position</td><td>Quand le chauffeur la déclenche</td><td><b>30 jours</b></td></tr>
       <tr><td>Trajet d'une course (une position par minute)</td><td>Seulement si le chauffeur démarre le suivi</td><td><b>30 jours</b></td></tr>
       <tr><td>Photo d'identité</td><td>Seulement si le chauffeur la prend</td><td>Jusqu'à sa suppression par le chauffeur ou le retrait de son accord</td></tr>
+      <tr><td>Abonnement aux rappels (adresse technique du téléphone pour recevoir les notifications, sans position)</td><td>Seulement si le chauffeur active les rappels</td><td>Jusqu'à la déconnexion, le retrait de l'accord ou la désactivation des notifications</td></tr>
       <tr><td>Accord (consentement) et retrait</td><td>À chaque accord ou retrait</td><td>Tant que le chauffeur est inscrit (preuve)</td></tr>
       <tr><td>Journal des consultations par la logistique</td><td>À chaque consultation</td><td>1 an</td></tr>
     </tbody>
   </table>
   <p><b>Aucun suivi en continu</b> en dehors d'un suivi de course démarré par le chauffeur. En repos, congé ou maladie,
      <b>aucune position</b> n'est enregistrée.</p>
+  <p><b>Rappels</b> (si le chauffeur les active) : une notification lui demande de pointer quand son dernier pointage date
+     de 6 jours (toutes les heures pendant une course, de 6 h à 22 h). En repos, congé ou maladie, le rappel demande
+     seulement de <b>confirmer le statut</b> : aucune position n'est demandée. Le contenu des notifications est chiffré
+     et passe par le service de notifications du téléphone (Google pour Android, Apple pour iPhone).</p>
   <h3>3.3 Finalités et fondement</h3>
   <p>Organisation des missions et des remplacements, sécurité et assistance des chauffeurs (pannes, accidents),
      identification par la logistique. Le traitement repose sur l'<b>accord exprès</b> du chauffeur, recueilli par

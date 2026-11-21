@@ -350,6 +350,15 @@ a.btn { text-decoration: none; }
 
     <div id="etat-envoi" class="bandeau neutre" role="status" aria-live="polite">—</div>
     <div id="bandeau-rappel" class="bandeau attente message" role="alert" hidden>⏰ Pensez à pointer votre position.</div>
+    <div id="bandeau-rappel6" class="bandeau attente message" role="alert" hidden>
+      <span id="rappel6-texte"></span>
+      <button id="btn-rappel6" type="button" class="btn" style="margin-top:8px;width:100%"></button>
+    </div>
+    <div id="carte-notif" class="carte" hidden>
+      <h3>🔔 Rappels sur le téléphone</h3>
+      <p id="notif-texte" class="aide" style="margin-top:0"></p>
+      <button id="btn-notif" type="button" class="btn">🔔 Activer les rappels</button>
+    </div>
     <div id="bandeau-installer" class="bandeau neutre message" hidden>
       📲 Installez l'application pour l'ouvrir d'un geste, même sans réseau.
       <button id="btn-installer" type="button" class="btn">Installer</button>
@@ -1523,7 +1532,130 @@ function rendrePrincipal() {
   }
   majEtatEnvoi();
   verifierRappel();
+  majBandeauRappel6();
+  majCarteNotif();
 }
+
+/* ===========================================================================
+   RAPPELS PAR NOTIFICATION (version 1.10)
+   Le serveur envoie un rappel, même application fermée :
+   - « En course » : toutes les heures sans position (de 06h à 22h, équipes 06h-14h et 14h-22h) ;
+   - autres statuts (sauf « Disponible à Libreville ») : après 6 jours sans pointage.
+   Repos, congé, maladie : on demande seulement de CONFIRMER le statut (aucune position).
+   =========================================================================== */
+const RAPPEL = { JOURS: 6, COURSE_MIN: 60, COURSE_MAX_H: 16 };
+const pushPossible = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && !!CFG.VAPID_PUBLIC;
+function octetsB64u(t) {
+  const s = atob(t.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((t.length + 3) % 4));
+  return Uint8Array.from(s, ch => ch.charCodeAt(0));
+}
+function pushActif() {
+  const p = lsGet('loc.push', null);
+  return !!(p && etat.profil && p.cid === etat.profil.chauffeur.id && pushPossible() && Notification.permission === 'granted');
+}
+/** Abonne CE téléphone aux rappels (demande l'autorisation si « demander »). */
+async function abonnerPush(demander) {
+  if (!pushPossible() || !etat.jeton || !etat.profil || !etat.profil.consentement) return false;
+  if (demander && Notification.permission === 'default') {
+    try { await Notification.requestPermission(); } catch { /* ignoré */ }
+  }
+  if (Notification.permission !== 'granted') { majCarteNotif(); return false; }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let ab = await reg.pushManager.getSubscription();
+    if (!ab) ab = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: octetsB64u(CFG.VAPID_PUBLIC) });
+    const r = await rpc('loc_push_abonner', { p_jeton: etat.jeton, p_abonnement: ab.toJSON(), p_appareil: navigator.userAgent.slice(0, 300) });
+    if (r && r.ok) {
+      lsSet('loc.push', { cid: etat.profil.chauffeur.id, le: Date.now() });
+      majCarteNotif();
+      return true;
+    }
+    if (r && r.erreur === 'session_invalide') finSession(r.message);
+  } catch { /* hors ligne ou téléphone sans notifications : nouvel essai plus tard */ }
+  majCarteNotif();
+  return false;
+}
+/** Une fois par jour : l'abonnement est renvoyé au serveur (il peut changer). */
+function synchroniserPush() {
+  if (!pushPossible() || Notification.permission !== 'granted') return;
+  const p = lsGet('loc.push', null);
+  if (!p || !etat.profil || p.cid !== etat.profil.chauffeur.id || Date.now() - p.le > 24 * 3600 * 1000) abonnerPush(false);
+}
+async function desabonnerPush(jeton) {
+  const etaitAbonne = !!lsGet('loc.push', null);
+  lsDel('loc.push');
+  if (!etaitAbonne) return;
+  try {
+    const reg = pushPossible() && await navigator.serviceWorker.getRegistration();
+    const ab = reg && await reg.pushManager.getSubscription();
+    if (ab && jeton) await rpc('loc_push_desabonner', { p_jeton: jeton, p_endpoint: ab.endpoint });
+  } catch { /* hors ligne : le serveur oubliera ce téléphone à son premier échec */ }
+}
+function majCarteNotif() {
+  const carte = $('#carte-notif');
+  if (!pushPossible() || !etat.profil || !etat.profil.consentement || pushActif()) { carte.hidden = true; return; }
+  const bloque = Notification.permission === 'denied';
+  $('#notif-texte').innerHTML = bloque
+    ? 'Les notifications sont <b>bloquées</b> sur ce téléphone. Pour recevoir les rappels : touchez le cadenas 🔒 de Chrome › Notifications › Autoriser.'
+    : 'Activez les notifications : un rappel vous sera envoyé si vous n\'avez pas pointé depuis <b>6 jours</b>, et <b>toutes les heures</b> pendant une course.';
+  $('#btn-notif').hidden = bloque;
+  carte.hidden = false;
+}
+$('#btn-notif').addEventListener('click', async () => {
+  if (await abonnerPush(true)) toast('🔔 Rappels activés ✓', 'succes');
+  else if (Notification.permission === 'denied') toast('Notifications refusées : les rappels ne pourront pas arriver.', 'erreur', 6000);
+  else toast('Rappels non activés (pas de réseau ?). Réessayez plus tard.', 'attente', 6000);
+});
+
+function dureeTexte(min) {
+  if (min < 120) return `${Math.floor(min)} minutes`;
+  if (min < 2 * 1440) return `${Math.floor(min / 60)} heures`;
+  return `${Math.floor(min / 1440)} jours`;
+}
+/** Dernier pointage trop ancien selon la règle de son statut (ou null). */
+function rappelEnRetard(maintenant = Date.now()) {
+  const d = lsGet('loc.dernier');
+  if (!d || !etat.profil || d.chauffeur_id !== etat.profil.chauffeur.id || !STATUTS[d.statut]) return null;
+  if (d.statut === 'dispo_libreville') return null;
+  const min = (maintenant - Date.parse(d.horodatage)) / 60000;
+  if (d.statut === 'en_course' && min < RAPPEL.COURSE_MAX_H * 60) {
+    return !courseActive() && min >= RAPPEL.COURSE_MIN ? { d, min } : null;
+  }
+  return min >= RAPPEL.JOURS * 1440 ? { d, min } : null;
+}
+function majBandeauRappel6() {
+  const zone = $('#bandeau-rappel6');
+  const r = rappelEnRetard();
+  if (!r) { zone.hidden = true; return; }
+  const s = STATUTS[r.d.statut];
+  if (!s.position) {
+    $('#rappel6-texte').innerHTML = `⏰ Dernier pointage il y a <b>${esc(dureeTexte(r.min))}</b>. Êtes-vous toujours <b>« ${esc(s.libelle)} »</b> ?`
+      + '<br><small>Confirmez en un geste : aucune position n\'est envoyée.</small>';
+    $('#btn-rappel6').textContent = `✅ Je confirme : ${s.libelle}`;
+  } else {
+    $('#rappel6-texte').innerHTML = r.d.statut === 'en_course'
+      ? `📍 Course en cours : pas de position depuis <b>${esc(dureeTexte(r.min))}</b>. Donnez votre position.`
+      : `📍 Votre dernier pointage date de <b>${esc(dureeTexte(r.min))}</b>. Donnez votre position.`;
+    $('#btn-rappel6').textContent = `📍 Donner ma position (${s.libelle})`;
+  }
+  zone.hidden = false;
+}
+$('#btn-rappel6').addEventListener('click', async () => {
+  const r = rappelEnRetard();
+  if (!r) return;
+  const st = r.d.statut;
+  if (st === 'sur_site') {
+    choisirStatut(st);   // le site doit être choisi à chaque fois
+    toast('Choisissez votre site, puis appuyez sur « POINTER MA POSITION ».', 'attente', 6000);
+    return;
+  }
+  choisirStatut(st, false);
+  if (st === 'en_course') {   // même course : destination et passagers repris du dernier pointage
+    if (!$('#destination').value.trim() && r.d.destination) $('#destination').value = r.d.destination;
+    if (!$('#passagers').value.trim() && r.d.passagers != null) $('#passagers').value = String(r.d.passagers);
+  }
+  await pointer();
+});
 
 /** Nombre de pointages en attente pour le chauffeur connecté. */
 async function pointagesEnAttente() {
@@ -2740,6 +2872,7 @@ $('#r-actif').addEventListener('change', async () => {
     toast('Notifications bloquées : seul le bandeau de rappel et la vibration seront utilisés.', 'attente', 6000);
   } else if (actif) toast('Rappels activés ✓', 'succes');
   verifierRappel();
+  if (actif) abonnerPush(false);   // version 1.10 : rappels du serveur aussi
 });
 
 $('#r-tester').addEventListener('click', async () => {
@@ -2783,6 +2916,7 @@ $('#btn-retrait').addEventListener('click', async () => {
     }
     for (const p of await pointagesEnAttente()) await DB.del('file', p.id);
     lsDel('loc.dernier');
+    lsDel('loc.push');   // version 1.10 : abonnement aux rappels effacé sur le serveur
     // Version 1.5 : suivi arrêté, trajets en attente supprimés (déjà effacés sur le serveur)
     arreterCapteurs(); lsDel('loc.course');
     photoEtat = null; lsDel('loc.photoEtat');   // version 1.7 : photo effacée avec l'accord
@@ -2807,6 +2941,7 @@ async function deconnexion() {
   if (c !== 'oui') return;
   if (courseActive()) { await terminerSuivi('deconnexion', true); await envoyerSuivi(); }
   const jeton = etat.jeton;
+  await desabonnerPush(jeton);   // version 1.10 : plus de rappels sur ce téléphone
   etat.ecran = null;
   await finSession(null);
   rpc('loc_deconnexion', { p_jeton: jeton }).catch(() => { /* hors ligne : la session expirera seule */ });
@@ -2896,6 +3031,11 @@ async function enregistrerServiceWorker() {
   }
   // Message du service worker : file envoyée en arrière-plan
   navigator.serviceWorker.addEventListener('message', (ev) => {
+    if (ev.data && ev.data.type === 'rappel') {   // version 1.10 : notification de rappel touchée
+      majBandeauRappel6();
+      if (!$('#bandeau-rappel6').hidden) $('#bandeau-rappel6').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     if (!ev.data || ev.data.type !== 'sync-termine') return;
     if (ev.data.suivi) majBandeauSuivi();
     (ev.data.alertes || []).forEach(id => majSuivi(id, { etat: 'envoyee' }));
@@ -2935,6 +3075,7 @@ async function demarrer() {
     suivreAlertes();
     reprendreSuivi();                     // version 1.5 : course suivie interrompue
     chargerMaPhoto();                     // version 1.7 : photo (et refus éventuel)
+    synchroniserPush();                   // version 1.10 : abonnement aux rappels
     synchroniser();
   }
 }
