@@ -1236,6 +1236,10 @@ function construireStatuts() {
 }
 
 function choisirStatut(code, mettreFocus = true) {
+  if (code === 'dispo_libreville' && mettreFocus) {
+    const b = blocageDispo();
+    if (b) { refuserDispo(b); return; }
+  }
   etat.statut = code;
   lsSet('loc.statut', code);
   document.querySelectorAll('.statut').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.statut === code)));
@@ -1380,7 +1384,60 @@ function periodeApres(ancienne, statut, horodatage, joursMaladie, dureeSite) {
   else if (type === 'conge') duree = 30;
   else if (type === 'maladie') duree = joursMaladie || null;
   else if (ancienne && ancienne.type === 'site') duree = ancienne.duree_jours >= 21 ? 14 : 7;
+  else {
+    const f = finSiteMemo();
+    if (f && Date.parse(horodatage) - Date.parse(f.fin) < 3 * 86400000) duree = f.duree >= 21 ? 14 : 7;
+  }
   return { type, debut: horodatage, duree_jours: duree };
+}
+
+/* Version 1.9.2 : « Disponible » seulement quand la récupération après le site, le repos,
+   le congé et le repos maladie sont terminés. Renvoie null si le chauffeur peut se déclarer disponible,
+   sinon { titre, html }. */
+const recuperation = (dureeSite) => (dureeSite >= 21 ? 14 : 7);
+/** Fin du dernier séjour sur site mémorisée sur ce téléphone (pour ce chauffeur seulement). */
+function finSiteMemo() {
+  const f = lsGet('loc.finSite', null);
+  const c = etat.profil && etat.profil.chauffeur;
+  return f && c && f.cid === c.id ? f : null;
+}
+function dateDispo(debut, jours) {
+  return new Date(Date.parse(jourGabon(debut)) + jours * 86400000)
+    .toLocaleDateString('fr-FR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' });
+}
+function blocageDispo(maintenant = Date.now()) {
+  const per = etat.profil && etat.profil.periode;
+  if (per && per.type === 'site') {
+    const r = recuperation(per.duree_jours);
+    return { titre: '⛏️ Vous revenez du site',
+      html: `<p>Après votre séjour sur site, vous avez droit à <b>${r} jours de repos</b> de récupération.</p>`
+          + `<p>Pointez d'abord <b>« Repos »</b>. Vous serez disponible à la fin de votre repos.</p>` };
+  }
+  if (per && ['repos', 'conge', 'maladie'].includes(per.type) && per.duree_jours) {
+    const k = decompte(per, maintenant);
+    if (!k.fini) {
+      const nom = { repos: 'en repos', conge: 'en congé', maladie: 'en repos maladie' }[per.type];
+      return { titre: `${PERIODES[per.type].ico} Vous êtes ${nom}`,
+        html: `<p>Il vous reste <b>${pluriel(k.reste, 'jour')}</b>.</p>`
+            + `<p>Vous pourrez vous déclarer <b>disponible</b> (chez vous ou à Libreville) à partir du <b>${esc(dateDispo(per.debut, per.duree_jours))}</b>.</p>` };
+    }
+    return null;
+  }
+  // Retour du site sans repos déclaré : la récupération court depuis la fin du séjour
+  const f = finSiteMemo();
+  if (f && !(per && per.type === 'repos')) {
+    const r = recuperation(f.duree);
+    if (joursEcoules(f.fin, maintenant) < r) {
+      return { titre: '⛏️ Récupération en cours',
+        html: `<p>Vous êtes revenu du site depuis peu : votre récupération est de <b>${r} jours</b>.</p>`
+            + `<p>Pointez <b>« Repos »</b>. Vous serez disponible à partir du <b>${esc(dateDispo(f.fin, r))}</b>.</p>` };
+    }
+  }
+  return null;
+}
+async function refuserDispo(b) {
+  await dialogue({ titre: b.titre, html: b.html + '<p style="font-weight:800">Vous ne pouvez pas encore choisir « Disponible ».</p>',
+                   boutons: [{ libelle: "J'ai compris", valeur: 'ok' }] });
 }
 /** Décompte d'une période : jour N sur D, jours restants, terminée ou non. */
 function decompte(per, maintenant = Date.now()) {
@@ -1597,6 +1654,8 @@ async function pointer() {
   }
   let lieuDispo = null;
   if (statut === 'dispo_libreville') {
+    const b = blocageDispo();
+    if (b) { await refuserDispo(b); return; }
     lieuDispo = etat.lieuDispo;
     if (!LIEUX_DISPO[lieuDispo]) {
       const grille = $('#grille-lieux-dispo');
@@ -1892,7 +1951,10 @@ async function enregistrerPointage(p, lieuNom) {
   });
   lsSet('loc.dernierRappel', Date.now());
   // Version 1.9 : décompte mis à jour tout de suite (même sans réseau), comme le fera le serveur
-  etat.profil.periode = periodeApres(etat.profil.periode, p.statut, item.horodatage, p.jours_maladie, etat.profil.duree_site);
+  const avantPer = etat.profil.periode;
+  if (avantPer && avantPer.type === 'site' && p.statut !== 'sur_site') lsSet('loc.finSite', { cid: c.id, fin: item.horodatage, duree: avantPer.duree_jours || 14 });
+  if (p.statut === 'sur_site') lsDel('loc.finSite');
+  etat.profil.periode = periodeApres(avantPer, p.statut, item.horodatage, p.jours_maladie, etat.profil.duree_site);
   sauverSession();
   $('#bandeau-rappel').hidden = true;
   rendrePrincipal();
