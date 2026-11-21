@@ -224,11 +224,32 @@ tr.urgence-ouverte td { background: #FEF2F2; }
 /* --- Impression / PDF : seule la zone #impression est imprimée --- */
 #impression { display: none; }
 @media print {
+  html, body { background: #fff !important; }
   body > *:not(#impression) { display: none !important; }
   #impression { display: block; font-size: 11px; }
   #impression h1 { font-size: 16px; } #impression h2 { font-size: 13px; margin: 12px 0 4px; }
   #impression table { font-size: 10px; } #impression th { position: static; background: #F1F5F9; }
   @page { size: A4 landscape; margin: 12mm; }
+  /* Version 1.14 : rapport journalier en A4 portrait */
+  @page rapport { size: A4 portrait; margin: 12mm 11mm; }
+  #impression.rapport { page: rapport; font-size: 10.5px; color: #12261A; }
+  #impression.rapport table { width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 9.5px; }
+  #impression.rapport th, #impression.rapport td { border: 1px solid #CFE3D6; padding: 3px 5px; text-align: left; vertical-align: top; }
+  #impression.rapport th { background: #ECFDF3; color: #166534; }
+  #impression.rapport td.num, #impression.rapport th.num { text-align: right; }
+  #impression.rapport tr { break-inside: avoid; }
+  #impression.rapport h2 { break-after: avoid; color: #166534; border-bottom: 2px solid #15803D; padding-bottom: 2px; }
+  #impression.rapport .r-tete { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 3px solid #15803D; padding-bottom: 6px; margin-bottom: 8px; }
+  #impression.rapport .r-tete h1 { margin: 0; color: #166534; }
+  #impression.rapport .r-chiffres { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0; }
+  #impression.rapport .r-chiffres div { border: 1px solid #CFE3D6; border-radius: 6px; padding: 5px 7px; background: #F6FBF8; }
+  #impression.rapport .r-chiffres b { display: block; font-size: 16px; color: #15803D; }
+  #impression.rapport .r-deux { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  #impression.rapport .r-pastille { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #impression.rapport .r-change { font-weight: 700; }
+  #impression.rapport .r-doux { color: #4B5E52; }
+  #impression.rapport .r-pied { margin-top: 10px; padding-top: 4px; border-top: 1px solid #CFE3D6; color: #4B5E52; font-size: 9px; }
 }
 .anim-chiffre { font-variant-numeric: tabular-nums; }
 
@@ -450,6 +471,12 @@ tr.urgence-ouverte td { background: #FEF2F2; }
         <select id="export-courses-jours" aria-label="Période"><option value="7">7 derniers jours</option><option value="30">30 derniers jours</option><option value="1">Aujourd'hui (24 h)</option></select></span>
       <button class="btn sec" id="btn-export-pdf" type="button">🖨️ Imprimer / PDF</button>
       <span class="doux">Les exports sont enregistrés dans le journal d'audit.</span>
+    </div>
+    <div class="bloc ligne" id="bloc-rapport">
+      <b>📋 Rapport journalier des statuts</b>
+      <label class="ligne" style="gap:6px">Journée du <input type="date" id="rapport-jour" aria-label="Journée du rapport"></label>
+      <button class="btn" id="btn-rapport-jour" type="button">📄 Rapport du jour (PDF)</button>
+      <span class="doux">À envoyer chaque soir : dans la fenêtre qui s'ouvre, choisissez « Enregistrer au format PDF ».</span>
     </div>
     <div class="grille2" id="synthese"></div>
   </section>
@@ -675,7 +702,7 @@ const ACTIONS_JOURNAL = {
   modification_chauffeur: 'Chauffeur modifié', ajout_chauffeur: 'Chauffeur ajouté', suppression_chauffeur: 'Chauffeur supprimé',
   consultation_alertes: 'Consultation des alertes Panne / Urgence', alerte_traitee: 'Alerte Panne / Urgence prise en charge',
   export_courses: 'Export des courses et passagers', consultation_courses_direct: 'Consultation des courses en direct', consultation_trajet: "Consultation du trajet d'une course",
-  duree_site: 'Durée du séjour sur site modifiée',
+  duree_site: 'Durée du séjour sur site modifiée', rapport_journalier: 'Rapport journalier (PDF)',
   relance: 'Chauffeur relancé (WhatsApp)', rappels_push: 'Rappels automatiques envoyés aux chauffeurs',
   photo_envoyee: "Photo d'identité envoyée par le chauffeur", photo_refusee: "Photo d'identité refusée", photo_supprimee: "Photo d'identité supprimée par le chauffeur",
 };
@@ -2059,6 +2086,7 @@ function sonnerUrgence() {
 
 let minuteurTitre = null;
 const TITRE = document.title;
+let titreImpression = null;   // v1.14 : nom du fichier PDF pendant l'impression (le clignotement ne l'écrase pas)
 function majSignalUrgence() {
   const ouvertes = urgencesOuvertes();
   const n = ouvertes.length || etat.urgencesEtat.ouvertes || 0;
@@ -2069,7 +2097,7 @@ function majSignalUrgence() {
   $('#bandeau-urgence-texte').textContent = `🚨 ${n} alerte${n > 1 ? 's' : ''} Panne / Urgence à prendre en charge${detail ? ' : ' + detail : ''}`;
   if (!minuteurTitre) {
     let bascule = false;
-    minuteurTitre = setInterval(() => { bascule = !bascule; document.title = bascule ? `🚨 (${urgencesOuvertes().length || etat.urgencesEtat.ouvertes}) URGENCE` : TITRE; }, 1000);
+    minuteurTitre = setInterval(() => { if (titreImpression) { document.title = titreImpression; return; } bascule = !bascule; document.title = bascule ? `🚨 (${urgencesOuvertes().length || etat.urgencesEtat.ouvertes}) URGENCE` : TITRE; }, 1000);
   }
 }
 function arreterSignalUrgence() {
@@ -2375,7 +2403,140 @@ $('#btn-export-pdf').addEventListener('click', () => {
     + `<h2>Détail par chauffeur</h2><table><thead><tr>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>`
     + lignes.map(l => `<tr>${cols.map(c => `<td>${esc(l[c])}</td>`).join('')}</tr>`).join('') + '</tbody></table>';
   rpc('loc_journaliser', { p_action: 'export_pdf', p_details: { lignes: lignes.length } }).catch(() => {});
+  $('#impression').className = '';
   window.print();
+});
+
+/* ===========================================================================
+   VERSION 1.14 : RAPPORT JOURNALIER DES STATUTS (PDF du soir pour la hiérarchie)
+   Toute l'activité d'une journée (heure du Gabon) : répartition en fin de journée,
+   chaque changement de statut, courses, Panne / Urgence, relances, sans nouvelles.
+   Aucune position GPS dans le rapport. Consultation journalisée dans la base.
+   =========================================================================== */
+/** Date « AAAA-MM-JJ » à Libreville, il y a `jours` jours. */
+const jourRapport = (jours = 0) => new Date(Date.now() + 3600e3 - jours * 86400e3).toISOString().slice(0, 10);
+function bornerRapportJour() {
+  const c = $('#rapport-jour');
+  c.max = jourRapport(); c.min = jourRapport(30);
+  if (!c.value || c.value > c.max || c.value < c.min) c.value = c.max;
+}
+bornerRapportJour();
+
+/** Détail lisible d'un pointage (sans aucune position). */
+function detailPointage(m) {
+  const d = [];
+  if (m.statut === 'en_course') {
+    if (m.destination) d.push('vers ' + m.destination);
+    if (m.passagers != null) d.push(`${m.passagers} passager${m.passagers > 1 ? 's' : ''}`);
+  } else if (m.statut === 'en_mission' && m.destination) d.push('vers ' + m.destination);
+  if (m.statut === 'dispo_libreville') {
+    if (m.lieu_dispo && LIEUX_DISPO[m.lieu_dispo]) d.push(LIEUX_DISPO[m.lieu_dispo].libelle);
+    if (m.quartier) d.push(m.quartier);
+  }
+  if (m.statut === 'autre_province' && m.province) d.push(m.province + (m.ville ? ' (' + m.ville + ')' : ''));
+  if (m.statut === 'malade' && m.jours_maladie) d.push(`${m.jours_maladie} jour${m.jours_maladie > 1 ? 's' : ''} d'arrêt`);
+  if (m.hors_ligne) d.push('envoyé sans réseau');
+  if (m.contestation) d.push('position contestée');
+  return d.join(' · ');
+}
+
+/** Contenu HTML du rapport journalier à partir de la réponse de loc_rapport_journalier. */
+function contenuRapportJournalier(r, auteur) {
+  const jour = new Date(r.jour + 'T12:00:00Z');
+  const jourLong = jour.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Libreville' });
+  const enCours = r.jour === jourRapport();
+  const moment = enCours ? `à ${heure(r.genere_le)}` : 'en fin de journée';
+  const situation = r.situation || [], mouv = r.mouvements || [], alertes = r.alertes || [];
+  const nom = (x) => esc(`${x.prenom ? x.prenom + ' ' : ''}${x.nom}`) + ` <span class="r-doux">(${esc(x.matricule)})</span>`;
+  const pastille = (code) => `<span class="r-pastille" style="background:${STATUTS[code]?.couleur || '#9CA3AF'}"></span>`;
+  // Changement : autre statut, autre site, ou nouvelle course (autre destination). Sinon : simple confirmation (rappel).
+  const change = (m) => m.statut !== m.statut_avant || (m.statut === 'sur_site' && (m.site || null) !== (m.site_avant || null))
+    || (m.statut === 'en_course' && (m.destination || '') !== (m.destination_avant || ''));
+  const changements = mouv.filter(change);
+  const ontPointe = situation.filter(x => x.pointages_du_jour > 0).length;
+  const courses = mouv.filter(m => m.statut === 'en_course');
+  const passagers = courses.reduce((n, m) => n + (Number(m.passagers) || 0), 0);
+  const finJour = enCours ? new Date(r.genere_le).getTime() : new Date(r.jour + 'T23:59:59+01:00').getTime();
+  const sansNouvelles = situation.filter(x => !x.depuis || finJour - new Date(x.depuis).getTime() > 6 * 86400e3)
+    .sort((a, b) => (a.depuis ? new Date(a.depuis) : 0) - (b.depuis ? new Date(b.depuis) : 0));
+  const pct = (n) => situation.length ? Math.round(n * 100 / situation.length) + ' %' : '';
+  const table = (entetes, lignes, vide) => `<table><thead><tr>${entetes.map(h => `<th${h.startsWith('#') ? ' class="num"' : ''}>${esc(h.replace(/^#/, ''))}</th>`).join('')}</tr></thead><tbody>`
+    + (lignes.length ? lignes.join('') : `<tr><td colspan="${entetes.length}" class="r-doux">${esc(vide)}</td></tr>`) + '</tbody></table>';
+
+  // Répartition des statuts (les 8 statuts, toujours dans le même ordre)
+  const parStatut = Object.keys(STATUTS).map(code => [code, situation.filter(x => x.statut === code).length]);
+  const aucun = situation.filter(x => !x.statut).length;
+  const lignesStatuts = parStatut.map(([code, n]) => `<tr><td>${pastille(code)}${esc(STATUTS[code].libelle)}</td><td class="num">${n}</td><td class="num">${pct(n)}</td></tr>`);
+  if (aucun) lignesStatuts.push(`<tr><td>${pastille('')}Aucun pointage</td><td class="num">${aucun}</td><td class="num">${pct(aucun)}</td></tr>`);
+  lignesStatuts.push(`<tr><th>Total chauffeurs actifs</th><th class="num">${situation.length}</th><th class="num">${situation.length ? '100 %' : ''}</th></tr>`);
+  const parSite = Object.entries(SITES).map(([code, lib]) => [lib, situation.filter(x => x.statut === 'sur_site' && x.site === code).length]);
+  const siteInconnu = situation.filter(x => x.statut === 'sur_site' && !SITES[x.site]).length;
+  if (siteInconnu) parSite.push(['Site non précisé', siteInconnu]);
+
+  return `<div class="r-tete"><div><h1>Rapport journalier des statuts</h1>`
+    + `<div><b>Belinga Localisation</b> · Logistique Fortescue Belinga</div></div>`
+    + `<div style="text-align:right"><b style="font-size:13px">${esc(jourLong.charAt(0).toUpperCase() + jourLong.slice(1))}</b><br><span class="r-doux">heure du Gabon (Libreville)</span></div></div>`
+    + `<div class="r-chiffres">`
+    + `<div><b>${situation.length}</b>chauffeurs actifs</div>`
+    + `<div><b>${ontPointe}</b>ont pointé ce jour</div>`
+    + `<div><b>${changements.length}</b>changements de statut</div>`
+    + `<div><b>${mouv.length}</b>pointages reçus</div>`
+    + `<div><b>${courses.length}</b>course${courses.length > 1 ? 's' : ''} · ${passagers} passager${passagers > 1 ? 's' : ''}</div>`
+    + `<div><b>${alertes.length}</b>Panne / Urgence${alertes.filter(a => !a.traitee_le).length ? ` (${alertes.filter(a => !a.traitee_le).length} non traitée${alertes.filter(a => !a.traitee_le).length > 1 ? 's' : ''})` : ''}</div>`
+    + `<div><b>${r.relances?.whatsapp || 0}</b>relances WhatsApp</div>`
+    + `<div><b>${sansNouvelles.length}</b>sans nouvelles depuis plus de 6 jours</div>`
+    + `</div>`
+    + `<div class="r-deux"><div><h2>Répartition des statuts ${esc(moment)}</h2>${table(['Statut', '#Chauffeurs', '#Part'], lignesStatuts, '')}</div>`
+    + `<div><h2>Sur site — par site de travail</h2>${table(['Site', '#Chauffeurs'], parSite.map(([l, n]) => `<tr><td>${esc(l)}</td><td class="num">${n}</td></tr>`), '')}</div></div>`
+    + `<h2>Activité de la journée — changements de statut (${changements.length})</h2>`
+    + table(['Heure', 'Chauffeur', 'Statut précédent', 'Nouveau statut', 'Détail', 'Véhicule'],
+        changements.map(m => `<tr><td>${esc(heure(m.horodatage))}</td><td>${nom(m)}</td>`
+          + `<td class="r-doux">${m.statut_avant ? esc(libelleStatut({ statut: m.statut_avant, site: m.site_avant })) : '—'}</td>`
+          + `<td class="r-change">${pastille(m.statut)}${esc(libelleStatut(m))}</td><td>${esc(detailPointage(m))}</td><td>${esc(m.vehicule || '')}</td></tr>`),
+        'Aucun changement de statut ce jour.')
+    + `<h2>Confirmations (statut inchangé) — ${mouv.length - changements.length}</h2>`
+    + table(['Heure', 'Chauffeur', 'Statut confirmé', 'Détail'],
+        mouv.filter(m => !change(m)).map(m => `<tr><td>${esc(heure(m.horodatage))}</td><td>${nom(m)}</td><td>${pastille(m.statut)}${esc(libelleStatut(m))}</td><td>${esc(detailPointage(m))}</td></tr>`),
+        'Aucune confirmation ce jour.')
+    + `<h2>Panne / Urgence (${alertes.length})</h2>`
+    + table(['Heure', 'Chauffeur', 'Motif', 'Message', 'Véhicule', 'Suivi'],
+        alertes.map(a => `<tr><td>${esc(heure(a.horodatage))}</td><td>${nom(a)}</td><td>${esc(MOTIFS[a.motif]?.libelle || a.motif)}</td>`
+          + `<td>${esc(a.message || '')}</td><td>${esc(a.vehicule || '')}</td>`
+          + `<td>${a.traitee_le ? `Prise en charge ${esc(dateHeure(a.traitee_le))}${a.commentaire ? ' — ' + esc(a.commentaire) : ''}` : '<b style="color:#B91C1C">Non traitée</b>'}</td></tr>`),
+        'Aucune panne ni urgence ce jour.')
+    + `<h2>Sans nouvelles depuis plus de 6 jours (${sansNouvelles.length})</h2>`
+    + table(['Chauffeur', 'Équipe', 'Dernier statut', 'Dernier pointage'],
+        sansNouvelles.map(x => `<tr><td>${nom(x)}</td><td>${x.equipe === 'libreville' ? 'Libreville' : 'Site'}</td>`
+          + `<td>${x.statut ? pastille(x.statut) + esc(libelleStatut(x)) : '—'}</td><td>${x.depuis ? esc(dateHeure(x.depuis)) : 'Jamais pointé'}</td></tr>`),
+        'Tous les chauffeurs ont donné des nouvelles dans les 6 derniers jours.')
+    + `<h2>Situation de chaque chauffeur ${esc(moment)}</h2>`
+    + table(['Chauffeur', 'Équipe', 'Statut', 'Depuis le', '#Pointages du jour'],
+        situation.map(x => `<tr><td>${nom(x)}</td><td>${x.equipe === 'libreville' ? 'Libreville' : 'Site'}</td>`
+          + `<td>${x.statut ? pastille(x.statut) + esc(libelleStatut(x)) : '—'}</td><td>${x.depuis ? esc(dateHeure(x.depuis)) : 'Jamais pointé'}</td><td class="num">${x.pointages_du_jour}</td></tr>`),
+        'Aucun chauffeur actif.')
+    + `<div class="r-pied">Rapport édité le ${esc(dateHeure(r.genere_le))} (heure du Gabon) par ${esc(auteur)}`
+    + `${enCours ? ' — journée en cours : la situation est celle de l\'heure d\'édition.' : '.'}`
+    + ` Rappels automatiques envoyés ce jour : ${r.relances?.rappels_push || 0}. Document interne — données personnelles, ne pas diffuser.`
+    + ` Aucune position GPS n'apparaît dans ce rapport.</div>`;
+}
+
+$('#btn-rapport-jour').addEventListener('click', async () => {
+  bornerRapportJour();
+  const b = $('#btn-rapport-jour');
+  b.disabled = true;
+  try {
+    const r = await rpc('loc_rapport_journalier', { p_jour: $('#rapport-jour').value });
+    const imp = $('#impression');
+    imp.className = 'rapport';
+    imp.innerHTML = contenuRapportJournalier(r, etat.user.email);
+    // Le titre devient le nom proposé pour le fichier PDF
+    const fin = () => { titreImpression = null; document.title = TITRE; };
+    titreImpression = document.title = `Rapport-journalier-statuts-${r.jour}`;
+    window.addEventListener('afterprint', fin, { once: true });
+    setTimeout(fin, 60000);
+    window.print();
+  } catch (e) { toast(e.message, 'ko', 6000); }
+  finally { b.disabled = false; }
 });
 
 /* ===========================================================================

@@ -23,7 +23,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.13.0';   // 1.13.0 : tableau de bord logistique harmonisé (vert clair, 16 px, animations)
+const VERSION = 'v1.14.0';   // 1.14.0 : rapport journalier des statuts en PDF (logistique)
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',
