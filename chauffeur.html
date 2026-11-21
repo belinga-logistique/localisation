@@ -1252,6 +1252,11 @@ function choisirStatut(code, mettreFocus = true) {
   btn.classList.toggle('prive', !def.position);
   if (code === 'en_course' && mettreFocus) setTimeout(() => $('#destination').focus(), 50);
   if (code === 'autre_province' && mettreFocus && !$('#province').value) setTimeout(() => $('#province').focus(), 50);
+  // Version 1.9.1 : à chaque « Sur site », le chauffeur DOIT choisir lui-même son site (rien de pré-coché)
+  if (code === 'sur_site' && mettreFocus) {
+    choisirSite(null);
+    setTimeout(() => $('#bloc-site').scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+  }
 }
 
 /** Crée les boutons « Sur quel site ? » (version 1.6). */
@@ -1268,7 +1273,6 @@ function construireSites() {
 }
 function choisirSite(code) {
   etat.site = SITES[code] ? code : null;
-  lsSet('loc.site', etat.site);
   document.querySelectorAll('[data-site]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.site === etat.site)));
   $('#grille-sites').classList.remove('a-remplir');
 }
@@ -1426,7 +1430,8 @@ function rendrePrincipal() {
   $('#province').value = PROVINCES.includes(provinceMemo) ? provinceMemo : '';
   $('#ville').value = lsGet('loc.ville', '');
   choisirLieuDispo(lsGet('loc.lieuDispo', null));
-  choisirSite(lsGet('loc.site', null));
+  try { localStorage.removeItem('loc.site'); } catch (e) {}
+  choisirSite(null);   // version 1.9.1 : le site n'est plus pré-sélectionné
   construireVehicules();
   rendreAlertes();
   majCarteSuivi();

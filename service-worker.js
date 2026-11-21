@@ -23,7 +23,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.9.0';   // 1.9.0 : rotations (séjour sur site, repos, congé, maladie)
+const VERSION = 'v1.9.1';   // 1.9.1 : choix du site obligatoire à chaque « Sur site »
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',
