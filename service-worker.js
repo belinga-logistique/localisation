@@ -23,7 +23,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.16.1';   // 1.16.1 : photos ouvertes à taille réduite (mémoire des téléphones modestes)
+const VERSION = 'v1.16.2';   // 1.16.1 : photos ouvertes à taille réduite (mémoire des téléphones modestes)
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',

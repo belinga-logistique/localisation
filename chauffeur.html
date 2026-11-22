@@ -2816,13 +2816,10 @@ function photoDanger() {
       const f = champ.files && champ.files[0];
       if (!f || !/^image\//.test(f.type)) return resolve(null);
       try {
-        const img = await ouvrirReduite(f, 1024);   // version 1.16.1 : ouverte déjà réduite (mémoire)
-        const cv = document.createElement('canvas');
-        cv.width = img.width; cv.height = img.height;
-        cv.getContext('2d').drawImage(img, 0, 0);
-        img.close();
+        const cv = await ouvrirReduite(f, 1024);   // ouverte déjà réduite (mémoire), 3 méthodes de secours
         let q = 0.7, url = cv.toDataURL('image/jpeg', q);
         while (url.length > 380000 && q > 0.3) { q -= 0.1; url = cv.toDataURL('image/jpeg', q); }
+        cv.width = 0; cv.height = 0;
         resolve(url.length <= 380000 ? url : null);
       } catch { resolve(null); }
     };
@@ -3259,19 +3256,50 @@ function dimensionsPhoto(fichier) {
     i.src = url;
   });
 }
-async function ouvrirReduite(fichier, coteMax) {
-  const { l, h } = await dimensionsPhoto(fichier);
+const MSG_MEMOIRE = 'Mémoire du téléphone insuffisante pour cette photo : fermez les autres applications, ou choisissez la photo dans vos photos.';
+const MSG_FORMAT = 'Ce téléphone n\'arrive pas à lire ce format de photo. Choisissez une photo JPEG ou PNG, ou faites une capture d\'écran de la photo et choisissez cette capture.';
+function dessinReduit(src, l, h, coteMax) {
   const r = Math.min(1, coteMax / Math.max(l, h));
-  const opts = { imageOrientation: 'from-image' };
-  if (r < 1) Object.assign(opts, { resizeWidth: Math.max(1, Math.round(l * r)), resizeHeight: Math.max(1, Math.round(h * r)), resizeQuality: 'high' });
-  return createImageBitmap(fichier, opts);
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(l * r)); c.height = Math.max(1, Math.round(h * r));
+  const g = c.getContext('2d');
+  if (!g) { c.width = 0; c.height = 0; throw new Error('canvas'); }
+  g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+  g.drawImage(src, 0, 0, c.width, c.height);
+  return c;
+}
+/* Version 1.16.2 : 3 méthodes de secours (certains navigateurs refusent la réduction directe) ;
+   le message « mémoire » n'apparaît que si TOUTES échouent. Renvoie un canvas déjà réduit. */
+async function ouvrirReduite(fichier, coteMax) {
+  let d = null;
+  try { d = await dimensionsPhoto(fichier); } catch { /* format non lu par <img> */ }
+  // 1. décodage directement à la taille réduite (le plus économe)
+  if (d && d.l && d.h) {
+    try {
+      const r = Math.min(1, coteMax / Math.max(d.l, d.h));
+      const opts = { imageOrientation: 'from-image' };
+      if (r < 1) Object.assign(opts, { resizeWidth: Math.max(1, Math.round(d.l * r)), resizeHeight: Math.max(1, Math.round(d.h * r)), resizeQuality: 'high' });
+      const b = await createImageBitmap(fichier, opts);
+      try { return dessinReduit(b, b.width, b.height, coteMax); } finally { b.close(); }
+    } catch { /* méthode suivante */ }
+  }
+  // 2. décodage simple (navigateurs qui refusent les options de réduction)
+  try {
+    const b = await createImageBitmap(fichier);
+    try { return dessinReduit(b, b.width, b.height, coteMax); } finally { b.close(); }
+  } catch { /* méthode suivante */ }
+  // 3. image classique (navigateurs sans createImageBitmap)
+  try {
+    const url = URL.createObjectURL(fichier);
+    try {
+      const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = url; });
+      try { return dessinReduit(img, img.naturalWidth, img.naturalHeight, coteMax); } finally { img.src = ''; }
+    } finally { URL.revokeObjectURL(url); }
+  } catch { /* échec */ }
+  throw new Error(d ? MSG_MEMOIRE : MSG_FORMAT);
 }
 async function preparerPhoto(fichier) {
-  let source;
-  try { source = await ouvrirReduite(fichier, 900); }
-  catch {
-    throw new Error('Mémoire du téléphone insuffisante pour cette photo : fermez les autres applications, ou choisissez la photo dans vos photos.');
-  }
+  const source = await ouvrirReduite(fichier, 900);
   const sw = source.width, sh = source.height, ratio = PHOTO.L / PHOTO.H;
   let cw = sw, ch = sw / ratio;
   if (ch > sh) { ch = sh; cw = sh * ratio; }
@@ -3280,7 +3308,7 @@ async function preparerPhoto(fichier) {
   c.getContext('2d').drawImage(source, cx, cy, cw, ch, 0, 0, PHOTO.L, PHOTO.H);
   let q = PHOTO.QUALITE, data = c.toDataURL('image/jpeg', q);
   while (data.length > PHOTO.MAX && q > 0.3) { q -= 0.1; data = c.toDataURL('image/jpeg', q); }
-  if (source.close) source.close();
+  source.width = 0; source.height = 0;
   c.width = 0; c.height = 0;
   return data;
 }
@@ -3294,7 +3322,7 @@ async function photoChoisie(champ) {
   if (f.size > 30 * 1024 * 1024) return toast('Photo trop lourde (plus de 30 Mo). Choisissez-en une autre.', 'erreur', 6000);
   let data;
   try { data = await preparerPhoto(f); }
-  catch (e) { return toast(/Mémoire/.test(e.message) ? e.message : galerie ? 'Format de photo non pris en charge. Choisissez une photo JPEG ou PNG.' : 'Image illisible. Reprenez la photo.', 'erreur', 8000); }
+  catch (e) { return toast(/Mémoire|format de photo/.test(e.message) ? e.message : galerie ? 'Format de photo non pris en charge. Choisissez une photo JPEG ou PNG.' : 'Image illisible. Reprenez la photo.', 'erreur', 8000); }
   const choix = await dialogue({
     titre: 'Envoyer cette photo ?',
     html: `<img class="apercu-photo" src="${data}" alt="Aperçu de la photo">`
