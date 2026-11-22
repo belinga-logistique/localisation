@@ -1687,7 +1687,8 @@ function rendrePrincipal() {
    - autres statuts (sauf « Disponible à Libreville ») : après 6 jours sans pointage.
    Repos, congé, maladie : on demande seulement de CONFIRMER le statut (aucune position).
    =========================================================================== */
-const RAPPEL = { JOURS: 6, COURSE_MIN: 60, COURSE_MAX_H: 16 };
+// Version 1.16 : pointage attendu toutes les 24 h, pour les 8 statuts (« En course » : toutes les heures)
+const RAPPEL = { HEURES: 24, COURSE_MIN: 60, COURSE_MAX_H: 16 };
 const pushPossible = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && !!CFG.VAPID_PUBLIC;
 function octetsB64u(t) {
   const s = atob(t.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((t.length + 3) % 4));
@@ -1741,7 +1742,7 @@ function majCarteNotif() {
   const bloque = Notification.permission === 'denied';
   $('#notif-texte').innerHTML = bloque
     ? 'Les notifications sont <b>bloquées</b> sur ce téléphone. Pour recevoir les rappels : touchez le cadenas 🔒 de Chrome › Notifications › Autoriser.'
-    : 'Activez les notifications : un rappel vous sera envoyé si vous n\'avez pas pointé depuis <b>6 jours</b>, et <b>toutes les heures</b> pendant une course.';
+    : 'Activez les notifications : un rappel vous sera envoyé si vous n\'avez pas pointé depuis <b>24 heures</b>, et <b>toutes les heures</b> pendant une course.';
   $('#btn-notif').hidden = bloque;
   carte.hidden = false;
 }
@@ -1760,12 +1761,11 @@ function dureeTexte(min) {
 function rappelEnRetard(maintenant = Date.now()) {
   const d = lsGet('loc.dernier');
   if (!d || !etat.profil || d.chauffeur_id !== etat.profil.chauffeur.id || !STATUTS[d.statut]) return null;
-  if (d.statut === 'dispo_libreville') return null;
   const min = (maintenant - Date.parse(d.horodatage)) / 60000;
   if (d.statut === 'en_course' && min < RAPPEL.COURSE_MAX_H * 60) {
     return !courseActive() && min >= RAPPEL.COURSE_MIN ? { d, min } : null;
   }
-  return min >= RAPPEL.JOURS * 1440 ? { d, min } : null;
+  return min >= RAPPEL.HEURES * 60 ? { d, min } : null;
 }
 function majBandeauRappel6() {
   const zone = $('#bandeau-rappel6');
@@ -1773,13 +1773,13 @@ function majBandeauRappel6() {
   if (!r) { zone.hidden = true; return; }
   const s = STATUTS[r.d.statut];
   if (!s.position) {
-    $('#rappel6-texte').innerHTML = `⏰ Dernier pointage il y a <b>${esc(dureeTexte(r.min))}</b>. Êtes-vous toujours <b>« ${esc(s.libelle)} »</b> ?`
+    $('#rappel6-texte').innerHTML = `⏰ Confirmez votre statut pour un bon suivi des activités (dernier pointage il y a <b>${esc(dureeTexte(r.min))}</b>). Êtes-vous toujours <b>« ${esc(s.libelle)} »</b> ?`
       + '<br><small>Confirmez en un geste : aucune position n\'est envoyée.</small>';
     $('#btn-rappel6').textContent = `✅ Je confirme : ${s.libelle}`;
   } else {
     $('#rappel6-texte').innerHTML = r.d.statut === 'en_course'
       ? `📍 Course en cours : pas de position depuis <b>${esc(dureeTexte(r.min))}</b>. Donnez votre position.`
-      : `📍 Votre dernier pointage date de <b>${esc(dureeTexte(r.min))}</b>. Donnez votre position.`;
+      : `📍 <b>Pointez votre localisation</b> pour un bon suivi des activités (dernier pointage il y a <b>${esc(dureeTexte(r.min))}</b>).`;
     $('#btn-rappel6').textContent = `📍 Donner ma position (${s.libelle})`;
   }
   zone.hidden = false;

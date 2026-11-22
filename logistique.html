@@ -1114,7 +1114,8 @@ const couleurChauffeur = (c) => c._dispoEtat === 'orange' ? COULEUR_A_VERIFIER
    Rappels (version 1.10) : le serveur relance seul les chauffeurs abonnés ;
    la logistique peut aussi relancer par WhatsApp (message prêt), ce qui est noté.
    --------------------------------------------------------------------------- */
-const RELANCE = { JOURS: 6, COURSE_MIN: 60, COURSE_MAX_H: 16 };
+// Version 1.16 : à relancer après 24 h sans pointage, pour les 8 statuts (« En course » : 1 h)
+const RELANCE = { HEURES: 24, COURSE_MIN: 60, COURSE_MAX_H: 16 };
 function dureeRelance(min) {
   if (min < 120) return `${Math.floor(min)} min`;
   if (min < 2 * 1440) return `${Math.floor(min / 60)} h`;
@@ -1125,8 +1126,8 @@ function texteRelance(c) {
   const s = STATUTS[d.statut];
   const debut = `Bonjour ${c.prenom || c.nom}, ici la logistique Fortescue Belinga. `;
   if (c._relance && c._relance.course) return debut + 'Course en cours : merci de pointer votre position dans l\'application Belinga Localisation.';
-  if (!s.position) return debut + `Êtes-vous toujours « ${s.libelle} » ? Merci de le confirmer dans l'application Belinga Localisation (aucune position n'est demandée).`;
-  return debut + 'Merci de pointer votre position dans l\'application Belinga Localisation.';
+  if (!s.position) return debut + `Confirmez votre statut pour un bon suivi des activités : êtes-vous toujours « ${s.libelle} » ? Faites-le dans l'application Belinga Localisation (aucune position n'est demandée).`;
+  return debut + 'Pointez votre localisation pour un bon suivi des activités, dans l\'application Belinga Localisation.';
 }
 function boutonRelance(c) {
   const u = lienWhatsApp(c.telephone, texteRelance(c));
@@ -1176,11 +1177,11 @@ function enrichir(c) {
 
   // Version 1.10 : sans nouvelles (« En course » : 1 heure sans position ; sinon 6 jours), sauf « Disponible »
   c._relance = null;
-  if (c.actif && c._consent && d && d.statut !== 'dispo_libreville') {
+  if (c.actif && c._consent && d) {
     const derniere = Math.max(Date.parse(d.horodatage), c.derniere_trace ? Date.parse(c.derniere_trace) : 0);
     const min = (Date.now() - derniere) / 60000;
     const course = d.statut === 'en_course' && Date.now() - Date.parse(d.horodatage) < RELANCE.COURSE_MAX_H * 3600e3;
-    if (min >= (course ? RELANCE.COURSE_MIN : RELANCE.JOURS * 1440)) c._relance = { min, course };
+    if (min >= (course ? RELANCE.COURSE_MIN : RELANCE.HEURES * 60)) c._relance = { min, course };
   }
 
   // Alertes (chauffeurs actifs uniquement)
@@ -1953,7 +1954,7 @@ function telecharger(nom, contenu, type = 'text/csv;charset=utf-8') {
 function rendreAlertes() {
   $('#alertes-regles').textContent = `Seuils : pas de pointage depuis ${etat.params.seuil_alerte_h} h (équipe site) ou ${etat.params.seuil_alerte_libreville_h} h (équipe Libreville). `
     + 'Pas d\'alerte pendant un repos, un congé ou une maladie. « Hors zone » : statut déclaré incohérent avec la position. '
-    + '« À relancer » : en course sans position depuis 1 h, ou sans pointage depuis 6 jours (sauf « Disponible ») — le téléphone reçoit aussi un rappel automatique (de 6 h à 22 h pour les courses).';
+    + '« À relancer » : en course sans position depuis 1 h, ou sans pointage depuis 24 h (tous les statuts) — le téléphone reçoit aussi un rappel automatique (de 6 h à 22 h).';
   const lignes = [];
   etat.chauffeurs.forEach(c => c._alertes.forEach(a => lignes.push({ c, a })));
   const ordre = { ko: 0, att: 1 };

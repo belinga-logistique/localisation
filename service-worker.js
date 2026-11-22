@@ -23,7 +23,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.15.0';   // 1.15.0 : sécurité routière (trajet, aptitude à conduire, dangers sur la route)
+const VERSION = 'v1.16.0';   // 1.16.0 : pointage attendu toutes les 24 h (rappel pour les 8 statuts)
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',
