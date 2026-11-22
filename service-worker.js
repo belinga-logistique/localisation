@@ -23,7 +23,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.16.0';   // 1.16.0 : pointage attendu toutes les 24 h (rappel pour les 8 statuts)
+const VERSION = 'v1.16.1';   // 1.16.1 : photos ouvertes à taille réduite (mémoire des téléphones modestes)
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',
