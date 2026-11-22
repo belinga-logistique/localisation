@@ -186,6 +186,29 @@ input:focus-visible, button:focus-visible { outline: 3px solid #F59E0B; outline-
 }
 .motif .ico { font-size: 1.5rem; }
 .motif:last-child:nth-child(odd) { grid-column: 1 / -1; }
+/* --- Version 1.15 : sécurité routière (trajet, aptitude, pause, dangers) --- */
+.btn-danger-route { min-height: 52px; margin: -4px 0 14px; font-size: 1rem; background: #fff; color: #B45309;
+  border: 2px solid #F59E0B; box-shadow: 0 4px 12px rgba(245, 158, 11, .18); }
+.durees { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; border-radius: 12px; border: 2px solid transparent; padding: 2px; }
+.durees.a-remplir { border-color: var(--danger); }
+.duree { min-height: 48px; border-radius: 12px; border: 1.5px solid var(--bord-fort); background: #fff; font-weight: 700; font-size: 1rem; color: var(--texte); }
+.duree[aria-checked=true] { border-color: #1D4ED8; background: #EFF6FF; color: #1D4ED8; box-shadow: 0 0 0 3px rgba(29, 78, 216, .15); }
+.carte-trajet { border-left: 6px solid #1D4ED8; }
+.carte-trajet.retard { border-left-color: var(--danger); background: var(--danger-fond); }
+.carte-trajet .grand { font-size: 1.125rem; font-weight: 800; margin: 2px 0 6px; }
+.carte-trajet .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.apt-question { margin: 12px 0 4px; font-weight: 700; }
+.apt-choix { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.apt-choix.deux { grid-template-columns: 1fr 1fr; }
+.apt-choix button { min-height: 46px; border-radius: 12px; border: 1.5px solid var(--bord-fort); background: #fff; font-weight: 700; font-size: .9375rem; color: var(--texte); }
+.apt-choix button[aria-pressed=true] { border-color: var(--primaire); background: var(--succes-fond); color: #14532D; }
+.types-danger { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 4px; }
+.type-danger { min-height: 64px; border-radius: 14px; border: 1.5px solid #FCD34D; background: #FFFBEB; color: #92400E;
+  font-weight: 700; font-size: .875rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.type-danger .ico { font-size: 1.375rem; }
+.type-danger[aria-pressed=true] { border-color: #B45309; background: #FEF3C7; box-shadow: 0 0 0 3px rgba(245, 158, 11, .25); }
+.danger-ligne { border-left: 5px solid #F59E0B; padding: 6px 0 6px 10px; margin: 8px 0; }
+.danger-ligne.proche { border-left-color: var(--danger); }
 textarea { width: 100%; min-height: 70px; padding: 10px 12px; border: 1.5px solid var(--bord-fort); border-radius: 12px; font-size: 1rem; resize: vertical; }
 a.btn { text-decoration: none; }
 .alerte-suivi { border-left: 6px solid var(--danger); padding: 8px 0 8px 12px; margin: 8px 0; }
@@ -270,7 +293,7 @@ a.btn { text-decoration: none; }
 .anim-chiffre { font-variant-numeric: tabular-nums; }
 
 /* --- Version 1.12 : animation à chaque toucher (enfoncement + onde) --- */
-.btn, .statut, .lieu-dispo, .motif, .choix-lieu, .nav button, .carte-photo-choix {
+.btn, .statut, .lieu-dispo, .motif, .choix-lieu, .nav button, .carte-photo-choix, .duree, .type-danger, .apt-choix button {
   position: relative; overflow: hidden;
   transition: transform var(--transition), box-shadow var(--transition), background-color var(--transition), border-color var(--transition);
 }
@@ -397,7 +420,18 @@ a.btn { text-decoration: none; }
     <h2 id="bonjour">Bonjour</h2>
 
     <div class="carte carte-periode" id="carte-periode" hidden role="status" aria-live="polite"></div>
+    <div class="carte carte-trajet" id="carte-trajet" hidden role="status" aria-live="polite"></div>
+    <div id="bandeau-pause" class="bandeau attente message" role="alert" hidden>
+      <span id="pause-texte">⏸️ 2 h de conduite : arrêtez-vous 15 minutes (boire, marcher, vous étirer).</span>
+      <button id="btn-pause" type="button" class="btn" style="margin-top:8px;width:100%">✅ J'ai fait ma pause</button>
+    </div>
     <button id="btn-urgence" class="btn btn-urgence" type="button">🚨 PANNE / URGENCE</button>
+    <button id="btn-danger" class="btn btn-danger-route" type="button">⚠️ SIGNALER UN DANGER SUR LA ROUTE</button>
+    <input id="photo-danger" type="file" accept="image/*" capture="environment" hidden>
+    <div class="carte" id="carte-dangers" hidden>
+      <h3>⚠️ Dangers signalés sur la route</h3>
+      <div id="liste-dangers" aria-live="polite"></div>
+    </div>
     <div class="carte" id="carte-alertes" hidden>
       <h3>Mes alertes</h3>
       <div id="liste-alertes" aria-live="polite"></div>
@@ -426,6 +460,14 @@ a.btn { text-decoration: none; }
       <div id="bloc-site" hidden>
         <label id="site-titre">Sur quel site ? *</label>
         <div id="grille-sites" class="lieux-dispo" role="radiogroup" aria-labelledby="site-titre"></div>
+      </div>
+      <div id="bloc-trajet" hidden>
+        <label for="trajet-destination">Destination du trajet *</label>
+        <input id="trajet-destination" type="text" maxlength="80" list="liste-destinations" placeholder="Ex. Makokou, Libreville, BELINGA VILLAGE…">
+        <datalist id="liste-destinations"></datalist>
+        <label id="trajet-duree-titre">Durée prévue du trajet *</label>
+        <div id="grille-durees" class="durees" role="radiogroup" aria-labelledby="trajet-duree-titre"></div>
+        <p id="trajet-arrivee" class="aide">La logistique est prévenue si vous n'êtes pas arrivé 30 minutes après l'heure prévue.</p>
       </div>
       <div id="bloc-destination" hidden>
         <label for="destination">Destination de la course</label>
@@ -1314,6 +1356,7 @@ function choisirStatut(code, mettreFocus = true) {
   document.querySelectorAll('.statut').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.statut === code)));
   const def = STATUTS[code];
   $('#bloc-destination').hidden = code !== 'en_course';
+  $('#bloc-trajet').hidden = code !== 'en_mission';
   $('#bloc-province').hidden = code !== 'autre_province';
   $('#bloc-lieu-dispo').hidden = code !== 'dispo_libreville';
   $('#bloc-site').hidden = code !== 'sur_site';
@@ -1324,6 +1367,7 @@ function choisirStatut(code, mettreFocus = true) {
   btn.textContent = def.position ? '📍 POINTER MA POSITION' : '📤 ENVOYER MON STATUT';
   btn.classList.toggle('prive', !def.position);
   if (code === 'en_course' && mettreFocus) setTimeout(() => $('#destination').focus(), 50);
+  if (code === 'en_mission' && mettreFocus && !$('#trajet-destination').value) setTimeout(() => $('#trajet-destination').focus(), 50);
   if (code === 'autre_province' && mettreFocus && !$('#province').value) setTimeout(() => $('#province').focus(), 50);
   // Version 1.9.1 : à chaque « Sur site », le chauffeur DOIT choisir lui-même son site (rien de pré-coché)
   if (code === 'sur_site' && mettreFocus) {
@@ -1597,6 +1641,10 @@ function rendrePrincipal() {
   rendreAlertes();
   majCarteSuivi();
   majPhoto();
+  if (!$('#liste-destinations').options.length || etat.ref) construireDestinations();   // version 1.15
+  majCarteTrajet();
+  verifierPause();
+  majCarteDangers();
 
   // Dernier pointage
   const d = lsGet('loc.dernier');
@@ -1604,6 +1652,7 @@ function rendrePrincipal() {
   if (d && d.chauffeur_id === c.id) {
     const s = STATUTS[d.statut] || { libelle: d.statut, couleur: '#555' };
     zone.innerHTML = `<b style="color:${s.couleur}">${esc(s.libelle)}</b>`
+      + (d.arrivee_prevue ? ` — arrivée prévue ${esc(heure(d.arrivee_prevue))}` : '')
       + (d.site && SITES[d.site] ? ` — ⛏️ ${esc(SITES[d.site])}` : '')
       + (d.lieu ? ` — ${esc(d.lieu)}` : '')
       + (d.destination ? ` — vers ${esc(d.destination)}` : '')
@@ -1831,7 +1880,18 @@ async function pointer() {
     return;
   }
   const def = STATUTS[statut];
-  let destination = null;
+  let destination = null, arriveePrevue = null;
+  // Version 1.15 : « En mission (trajet) » = destination + durée prévue (heure d'arrivée surveillée par la logistique)
+  if (statut === 'en_mission') {
+    destination = $('#trajet-destination').value.trim().slice(0, 80);
+    if (!destination) { signalerChamp('#trajet-destination'); toast('Indiquez la destination du trajet.', 'erreur'); return; }
+    if (!DUREES_TRAJET.includes(etat.dureeTrajet)) {
+      const g = $('#grille-durees'); g.classList.add('a-remplir'); g.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toast('Indiquez la durée prévue du trajet.', 'erreur');
+      return;
+    }
+    lsSet('loc.destinationTrajet', destination);
+  }
   if (statut === 'en_course') {
     destination = $('#destination').value.trim();
     if (!destination) { signalerChamp('#destination'); toast('Indiquez la destination de la course.', 'erreur'); return; }
@@ -1896,9 +1956,13 @@ async function pointer() {
   etat.pointageEnCours = true;
   $('#btn-pointer').disabled = true;
   try {
+    // Version 1.15 : aptitude à conduire, demandée avant le premier départ de la journée
+    if (CONDUITE.includes(statut) && !(await verifierAptitude())) return;
+    if (statut === 'en_mission') arriveePrevue = new Date(Date.now() + etat.dureeTrajet * 60000).toISOString();
     // Véhicule : seulement pour les statuts avec position (jamais en repos / congé / maladie)
     const p = { statut, destination, province, ville, lieu_dispo: lieuDispo, site, passagers,
-                jours_maladie: joursMaladie, vehicule_id: def.position ? vehiculeChoisi() : null };
+                jours_maladie: joursMaladie, vehicule_id: def.position ? vehiculeChoisi() : null,
+                arrivee_prevue: arriveePrevue };
     let lieuNom = null;
 
     if (def.position) {
@@ -1906,6 +1970,8 @@ async function pointer() {
       if (pos === undefined) return; // annulé par le chauffeur
       if (pos) {
         p.latitude = pos.lat; p.longitude = pos.lon; p.precision_m = Math.round(pos.precision);
+        lsSet('loc.dernierePos', { cid: etat.profil.chauffeur.id, lat: pos.lat, lon: pos.lon, t: Date.now() });
+        alerterDangersProches(pos);
         // Version 1.4 : le GPS doit correspondre au lieu déclaré, sinon le chauffeur corrige
         // (seule exception : « Mon GPS se trompe » -> pointage marqué « position contestée »)
         const inc = controleCoherence(statut, lieuDispo, province, pos, site);
@@ -1929,6 +1995,7 @@ async function pointer() {
     }
     await enregistrerPointage(p, lieuNom);
     if (statut === 'en_course') $('#passagers').value = '';   // à ressaisir pour la course suivante
+    if (statut === 'en_mission') choisirDuree(null);              // durée à redonner au prochain trajet
   } finally {
     etat.pointageEnCours = false;
     $('#btn-pointer').disabled = false;
@@ -2175,7 +2242,9 @@ async function enregistrerPointage(p, lieuNom) {
     vehicule: p.vehicule_id ? (vehiculeParId(p.vehicule_id) || {}).immatriculation || null : null,
     contestation: p.contestation || null, site: p.site || null, passagers: p.passagers ?? null,
     sans_position: STATUTS[p.statut].position && p.latitude == null,
+    arrivee_prevue: p.arrivee_prevue || null,
   });
+  majConduite(p.statut, item.horodatage);   // version 1.15 : temps au volant (pause toutes les 2 h)
   lsSet('loc.dernierRappel', Date.now());
   // Version 1.9 : décompte mis à jour tout de suite (même sans réseau), comme le fera le serveur
   const avantPer = etat.profil.periode;
@@ -2205,6 +2274,7 @@ function versServeur(i) {
     province: i.province || null, ville: i.ville || null, lieu_dispo: i.lieu_dispo || null,
     vehicule_id: i.vehicule_id ?? null, contestation: i.contestation || null, site: i.site || null,
     passagers: i.passagers ?? null, jours_maladie: i.jours_maladie ?? null,
+    arrivee_prevue: i.arrivee_prevue || null,
     hors_ligne: Date.now() - (i.cree_ms || Date.now()) > 2 * 60 * 1000, // envoyé en différé
   };
 }
@@ -2496,6 +2566,394 @@ function rendreAlertes() {
   }).join('') + (l.some(a => a.etat !== 'traitee') ? liensAppelUrgence() : '');
 }
 
+
+/* ===========================================================================
+   SÉCURITÉ ROUTIÈRE (version 1.15) — inspirée des pratiques HSE de Fortescue
+   1. Trajet : « En mission (trajet) » = destination + durée prévue. La logistique est
+      alertée si le chauffeur n'est pas arrivé 30 min après l'heure prévue.
+   2. Aptitude à conduire : 3 questions avant le PREMIER départ de la journée (En mission,
+      En course). Inapte : « ne prenez pas le volant », la logistique est prévenue.
+      Pause conseillée toutes les 2 heures de conduite (rappel sur le téléphone).
+   3. Dangers sur la route : signalés avec la position (et une photo si possible),
+      vus par la logistique et par les autres chauffeurs (alerte à moins de 5 km).
+   Aptitudes et dangers partent tout de suite, ou dès le retour du réseau.
+   =========================================================================== */
+const CONDUITE = ['en_mission', 'en_course'];
+const DUREES_TRAJET = [60, 120, 180, 240, 300, 360, 480, 600, 720];
+const PAUSE_MS = 2 * 3600 * 1000;
+const DANGER_PROCHE_M = 5000;
+const TYPES_DANGER = {
+  pont:       { ico: '🌉', libelle: 'Pont abîmé' },
+  route:      { ico: '🕳️', libelle: 'Route dégradée / trou' },
+  eboulement: { ico: '⛰️', libelle: 'Éboulement' },
+  inondation: { ico: '🌊', libelle: 'Route inondée' },
+  arbre:      { ico: '🌳', libelle: 'Arbre sur la route' },
+  animal:     { ico: '🐘', libelle: 'Animal sur la route' },
+  accident:   { ico: '💥', libelle: 'Accident' },
+  autre:      { ico: '⚠️', libelle: 'Autre danger' },
+};
+const SOMMEIL = { moins_5: 'Moins de 5 h', '5_6': '5 à 6 h', '7_plus': '7 h ou plus' };
+const dureeLisible = (min) => min < 60 ? `${min} min` : `${Math.floor(min / 60)} h${min % 60 ? ' ' + String(min % 60).padStart(2, '0') : ''}`;
+
+/* --- 1. Trajet --- */
+function construireDurees() {
+  const g = $('#grille-durees');
+  g.innerHTML = '';
+  DUREES_TRAJET.forEach(m => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'duree'; b.dataset.duree = m;
+    b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', 'false');
+    b.textContent = dureeLisible(m);
+    b.addEventListener('click', () => choisirDuree(m));
+    g.appendChild(b);
+  });
+}
+function choisirDuree(m) {
+  etat.dureeTrajet = m;
+  document.querySelectorAll('.duree').forEach(b => b.setAttribute('aria-checked', String(Number(b.dataset.duree) === m)));
+  $('#grille-durees').classList.remove('a-remplir');
+  $('#trajet-arrivee').innerHTML = m
+    ? `🕒 Arrivée prévue vers <b>${esc(heure(new Date(Date.now() + m * 60000)))}</b> (heure du Gabon). La logistique est prévenue si vous n'êtes pas arrivé 30 minutes après.`
+    : "La logistique est prévenue si vous n'êtes pas arrivé 30 minutes après l'heure prévue.";
+}
+/** Propositions de destinations : villes, sites et quartiers connus. */
+function construireDestinations() {
+  const noms = new Set(['Libreville', 'Makokou', 'Ovan', 'Booué', 'Ndjolé', 'Lalara', 'Mitzic', 'Oyem', 'Franceville', 'Lambaréné', 'Owendo', 'Ntoum', 'Kango']);
+  Object.values(SITES).forEach(n => noms.add(n));
+  ((etat.ref && etat.ref.zones) || []).forEach(z => noms.add(z.nom));
+  $('#liste-destinations').innerHTML = [...noms].map(n => `<option value="${esc(n)}"></option>`).join('');
+  if (!$('#trajet-destination').value) $('#trajet-destination').value = lsGet('loc.destinationTrajet', '');
+}
+/** Trajet en cours : dernier pointage « En mission » avec heure d'arrivée prévue. */
+function trajetEnCours() {
+  const d = lsGet('loc.dernier');
+  const c = etat.profil && etat.profil.chauffeur;
+  return d && c && d.chauffeur_id === c.id && d.statut === 'en_mission' && d.arrivee_prevue ? d : null;
+}
+function majCarteTrajet() {
+  const t = trajetEnCours();
+  const carte = $('#carte-trajet');
+  carte.hidden = !t;
+  if (!t) return;
+  const reste = Math.round((new Date(t.arrivee_prevue).getTime() - Date.now()) / 60000);
+  const conduite = lsGet('loc.conduite');
+  const auVolant = conduite && conduite.debut ? Math.max(0, Math.round((Date.now() - new Date(conduite.debut).getTime()) / 60000)) : null;
+  carte.classList.toggle('retard', reste < 0);
+  carte.innerHTML = `<div class="petit">🚙 Trajet en cours</div>`
+    + `<div class="grand">Vers ${esc(t.destination || '—')}</div>`
+    + `<div>Arrivée prévue : <b>${esc(heure(t.arrivee_prevue))}</b> — `
+    + (reste >= 0 ? `dans ${esc(dureeLisible(reste))}` : `<b style="color:var(--danger)">en retard de ${esc(dureeLisible(-reste))}</b>`) + '</div>'
+    + (auVolant != null ? `<div class="petit">Au volant depuis ${esc(dureeLisible(auVolant))}</div>` : '')
+    + (reste < 0 ? '<p class="petit" style="margin:6px 0 0">Si tout va bien, indiquez une nouvelle heure d\'arrivée. Sinon : 🚨 Panne / Urgence.</p>' : '')
+    + `<div class="actions"><button type="button" class="btn" id="btn-arrive">🏁 Je suis arrivé</button>`
+    + `<button type="button" class="btn secondaire" id="btn-retard">🕒 Nouvelle heure</button></div>`;
+  $('#btn-arrive').addEventListener('click', () => {
+    $('#grille-statuts').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    toast('Choisissez votre statut d\'arrivée (Sur site, Disponible…), puis pointez.', 'attente', 7000);
+  });
+  $('#btn-retard').addEventListener('click', nouvelleHeureArrivee);
+}
+async function nouvelleHeureArrivee() {
+  const t = trajetEnCours();
+  if (!t) return;
+  const v = await dialogue({
+    titre: '🕒 Nouvelle heure d\'arrivée',
+    html: `<p style="margin-top:0">Trajet vers <b>${esc(t.destination || '—')}</b>. Il vous reste encore combien de temps de route ?</p>`,
+    boutons: [30, 60, 120, 180, 240, 360].map(m => ({ libelle: dureeLisible(m), valeur: String(m), classe: 'secondaire' }))
+      .concat([{ libelle: 'Annuler', valeur: 'annuler', classe: 'lien' }]),
+  });
+  const m = Number(v);
+  if (!m) return;
+  // Nouveau pointage « En mission » avec la nouvelle heure (la position est envoyée en même temps)
+  choisirStatut('en_mission', false);
+  $('#trajet-destination').value = t.destination || '';
+  etat.dureeTrajet = m;
+  if (!DUREES_TRAJET.includes(m)) DUREES_TRAJET.push(m);
+  await pointer();
+}
+
+/* --- 2. Aptitude à conduire et pauses --- */
+function aptitudeDuJour() {
+  const a = lsGet('loc.aptitude');
+  const c = etat.profil && etat.profil.chauffeur;
+  return a && c && a.cid === c.id && a.jour === jourGabon(Date.now()) ? a : null;
+}
+function resultatAptitude(r) {
+  if (r.sommeil === 'moins_5' || r.en_forme === false || r.substances === true) return 'inapte';
+  return r.sommeil === '5_6' ? 'vigilance' : 'apte';
+}
+/** Renvoie true si le chauffeur peut partir (aptitude déjà déclarée aujourd'hui, ou déclarée maintenant). */
+async function verifierAptitude() {
+  if (aptitudeDuJour()) return true;
+  const rep = {};
+  let erreur = '';
+  for (;;) {
+    const choix = (q, options, classe = '') => `<p class="apt-question">${q}</p><div class="apt-choix ${classe}" data-q="${options.q}">`
+      + options.l.map(([v, lib]) => `<button type="button" data-v="${v}" aria-pressed="${String(rep[options.q]) === v}">${lib}</button>`).join('') + '</div>';
+    const html = '<p style="margin-top:0">Avant votre premier départ de la journée, 3 questions rapides pour votre sécurité.</p>'
+      + choix('1. Combien d\'heures avez-vous dormi cette nuit ?', { q: 'sommeil', l: Object.entries(SOMMEIL) })
+      + choix('2. Vous sentez-vous en forme pour conduire ?', { q: 'en_forme', l: [['true', 'Oui'], ['false', 'Non']] }, 'deux')
+      + choix('3. Avez-vous pris de l\'alcool ou un médicament qui endort ?', { q: 'substances', l: [['false', 'Non'], ['true', 'Oui']] }, 'deux')
+      + (erreur ? `<div class="bandeau erreur" style="margin-top:12px">${esc(erreur)}</div>` : '');
+    const attente = dialogue({ titre: '🩺 Aptitude à conduire', html,
+      boutons: [{ libelle: 'Valider', valeur: 'ok' }, { libelle: 'Annuler', valeur: 'annuler', classe: 'lien' }] });
+    $('#modale-corps').querySelectorAll('.apt-choix').forEach(g => g.addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b) return;
+      const v = b.dataset.v;
+      rep[g.dataset.q] = g.dataset.q === 'sommeil' ? v : v === 'true';
+      g.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    }));
+    if (await attente !== 'ok') return false;
+    if (rep.sommeil && rep.en_forme !== undefined && rep.substances !== undefined) break;
+    erreur = 'Répondez aux 3 questions.';
+  }
+  const resultat = resultatAptitude(rep);
+  const decl = { ...rep, resultat, maintenu: false };
+  if (resultat === 'inapte') {
+    const motifs = [rep.sommeil === 'moins_5' && 'moins de 5 h de sommeil', rep.en_forme === false && 'pas en forme',
+      rep.substances === true && 'alcool ou médicament qui endort'].filter(Boolean).join(', ');
+    const tel = telLogistique();
+    const v = await dialogue({
+      titre: '⛔ Ne prenez pas le volant',
+      html: `<div class="bandeau erreur">${esc(motifs.charAt(0).toUpperCase() + motifs.slice(1))} : conduire maintenant est dangereux pour vous et vos passagers.</div>`
+        + '<p>La logistique est prévenue. Reposez-vous et attendez ses consignes.</p>'
+        + (tel ? lienAppel(tel, '📞 Appeler la logistique') : ''),
+      boutons: [{ libelle: 'Je ne conduis pas', valeur: 'non' },
+                { libelle: 'La logistique m\'autorise à partir', valeur: 'maintenu', classe: 'lien' }],
+    });
+    decl.maintenu = v === 'maintenu';
+    await declarerAptitude(decl);
+    if (!decl.maintenu) { toast('Déclaration envoyée à la logistique. Ne conduisez pas.', 'attente', 7000); return false; }
+  } else {
+    if (resultat === 'vigilance') {
+      await dialogue({ titre: '⚠️ Soyez vigilant',
+        html: '<p style="margin-top:0">Vous avez peu dormi. Faites une <b>pause toutes les 2 heures</b>, et arrêtez-vous dès que vous avez sommeil.</p>',
+        boutons: [{ libelle: 'Compris', valeur: 'ok' }] });
+    }
+    await declarerAptitude(decl);
+  }
+  lsSet('loc.aptitude', { cid: etat.profil.chauffeur.id, jour: jourGabon(Date.now()), resultat, maintenu: decl.maintenu });
+  return true;
+}
+async function declarerAptitude(r) {
+  const c = etat.profil.chauffeur;
+  const item = { id: uuid(), chauffeur_id: c.id, horodatage: new Date().toISOString(), cree_ms: Date.now(),
+    sommeil: r.sommeil, en_forme: r.en_forme, substances: r.substances, maintenu: !!r.maintenu };
+  try { await DB.put('kv', [...(await fileSecurite('aptitudesFile')), item], 'aptitudesFile'); } catch { /* envoi direct ci-dessous */ }
+  await envoyerSecurite(item);
+}
+/** Temps au volant : démarre au premier pointage En mission / En course, s'arrête à un autre statut. */
+function majConduite(statut, horodatage) {
+  const c = etat.profil.chauffeur;
+  if (!CONDUITE.includes(statut)) { lsDel('loc.conduite'); $('#bandeau-pause').hidden = true; return; }
+  const k = lsGet('loc.conduite');
+  if (!k || k.cid !== c.id) lsSet('loc.conduite', { cid: c.id, debut: horodatage, pause: null });
+}
+function verifierPause() {
+  const k = lsGet('loc.conduite');
+  const c = etat.profil && etat.profil.chauffeur;
+  const bandeau = $('#bandeau-pause');
+  if (!k || !c || k.cid !== c.id) { bandeau.hidden = true; return; }
+  const depuis = Math.max(new Date(k.debut).getTime(), k.pause || 0);
+  const due = Date.now() - depuis >= PAUSE_MS;
+  bandeau.hidden = !due;
+  if (due && lsGet('loc.pauseNotif') !== depuis) {
+    lsSet('loc.pauseNotif', depuis);
+    notifier('⏸️ Pause conseillée', '2 h de conduite : arrêtez-vous 15 minutes.');
+    try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch { /* ignoré */ }
+  }
+}
+$('#btn-pause').addEventListener('click', () => {
+  const k = lsGet('loc.conduite');
+  if (k) { k.pause = Date.now(); lsSet('loc.conduite', k); }
+  $('#bandeau-pause').hidden = true;
+  toast('Merci ! Prochaine pause conseillée dans 2 heures.', 'succes');
+});
+
+/* --- 3. Dangers sur la route --- */
+async function fileSecurite(cle) { try { return (await DB.get('kv', cle)) || []; } catch { return []; } }
+let dangerEnCours = false;
+$('#btn-danger').addEventListener('click', signalerDanger);
+
+async function signalerDanger() {
+  if (dangerEnCours || !etat.profil) return;
+  let type = null, erreur = '';
+  for (;;) {
+    const attente = dialogue({
+      titre: '⚠️ Danger sur la route',
+      html: '<p style="margin-top:0">Quel danger ? Il sera signalé à la logistique et aux autres chauffeurs, avec votre position actuelle.</p>'
+        + '<div class="types-danger">' + Object.entries(TYPES_DANGER).map(([code, d]) =>
+          `<button type="button" class="type-danger" data-type="${code}" aria-pressed="${type === code}"><span class="ico" aria-hidden="true">${d.ico}</span>${esc(d.libelle)}</button>`).join('') + '</div>'
+        + '<label for="d-message">Précisions (facultatif)</label>'
+        + '<textarea id="d-message" maxlength="200" placeholder="Ex. pont du PK 45 après Ovan, une seule voie praticable"></textarea>'
+        + (erreur ? `<div class="bandeau erreur" style="margin-top:10px">${esc(erreur)}</div>` : ''),
+      boutons: [{ libelle: '📷 Continuer avec une photo', valeur: 'photo' }, { libelle: 'Envoyer sans photo', valeur: 'sans', classe: 'secondaire' },
+                { libelle: 'Annuler', valeur: 'annuler', classe: 'lien' }],
+    });
+    $('#modale-corps').querySelector('.types-danger').addEventListener('click', (e) => {
+      const b = e.target.closest('.type-danger'); if (!b) return;
+      type = b.dataset.type;
+      document.querySelectorAll('.type-danger').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    });
+    const message = () => (($('#d-message') && $('#d-message').value) || '').trim().slice(0, 200) || null;
+    const v = await attente;
+    const msg = message();
+    if (v !== 'photo' && v !== 'sans') return;
+    if (!type) { erreur = 'Touchez le type de danger.'; continue; }
+    dangerEnCours = true;
+    try { await envoyerDanger(type, msg, v === 'photo'); } finally { dangerEnCours = false; }
+    return;
+  }
+}
+
+/** Photo du danger : réduite (1024 px, JPEG) pour partir même avec un réseau faible. */
+function photoDanger() {
+  return new Promise((resolve) => {
+    const champ = $('#photo-danger');
+    champ.value = '';
+    const fin = async () => {
+      champ.removeEventListener('change', fin);
+      const f = champ.files && champ.files[0];
+      if (!f || !/^image\//.test(f.type)) return resolve(null);
+      try {
+        const img = await createImageBitmap(f);
+        const r = Math.min(1, 1024 / Math.max(img.width, img.height));
+        const cv = document.createElement('canvas');
+        cv.width = Math.round(img.width * r); cv.height = Math.round(img.height * r);
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        let q = 0.7, url = cv.toDataURL('image/jpeg', q);
+        while (url.length > 380000 && q > 0.3) { q -= 0.1; url = cv.toDataURL('image/jpeg', q); }
+        resolve(url.length <= 380000 ? url : null);
+      } catch { resolve(null); }
+    };
+    champ.addEventListener('change', fin);
+    champ.click();
+  });
+}
+
+async function envoyerDanger(type, message, avecPhoto) {
+  const photo = avecPhoto ? await photoDanger() : null;
+  if (avecPhoto && !photo) toast('Pas de photo : le danger est envoyé sans photo.', 'attente');
+  const pos = await positionUrgence();
+  if (!pos) {
+    const tel = telLogistique();
+    await dialogue({ titre: '📡 Position introuvable',
+      html: '<p style="margin-top:0">Un danger ne peut pas être signalé sans sa position. Sortez du véhicule à découvert et réessayez, ou appelez la logistique.</p>'
+        + (tel ? lienAppel(tel, '📞 Appeler la logistique') : ''),
+      boutons: [{ libelle: 'Fermer', valeur: 'ok', classe: 'secondaire' }] });
+    return;
+  }
+  const c = etat.profil.chauffeur;
+  const item = { id: uuid(), chauffeur_id: c.id, type, message, photo,
+    horodatage: new Date().toISOString(), cree_ms: Date.now(),
+    latitude: pos.lat, longitude: pos.lon, precision_m: Math.round(pos.precision) };
+  try { await DB.put('kv', [...(await fileSecurite('dangersFile')), item], 'dangersFile'); } catch { /* envoi direct ci-dessous */ }
+  lsSet('loc.dernierePos', { cid: c.id, lat: pos.lat, lon: pos.lon, t: Date.now() });
+  const r = await envoyerSecurite(null, item);
+  const parti = r && r.dangers === 'ok';
+  await dialogue({
+    titre: parti ? '✅ Danger signalé' : '⏳ Danger enregistré sur le téléphone',
+    html: parti ? `<p style="margin-top:0"><b>${esc(TYPES_DANGER[type].libelle)}</b> : la logistique et les autres chauffeurs sont prévenus. Merci !</p>`
+      : '<div class="bandeau attente">Pas de réseau : le signalement partira automatiquement dès le retour du réseau.</div>',
+    boutons: [{ libelle: 'Fermer', valeur: 'ok', classe: 'secondaire' }],
+  });
+  majCarteDangers();
+}
+
+/**
+ * Envoie les déclarations d'aptitude et les dangers en attente, puis récupère les dangers en cours.
+ * `aptDirect` / `dangerDirect` : envoi direct si la file locale est indisponible.
+ */
+let securiteEnCours = null;
+async function envoyerSecurite(aptDirect = null, dangerDirect = null) {
+  if (!etat.jeton || !etat.profil) return null;
+  if (securiteEnCours && !aptDirect && !dangerDirect) return securiteEnCours;
+  const tache = (async () => {
+    const id = etat.profil.chauffeur.id, res = {};
+    for (const [cle, rpcNom, champ, direct] of [['aptitudesFile', 'loc_declarer_aptitudes', 'p_aptitudes', aptDirect],
+                                                ['dangersFile', 'loc_signaler_dangers', 'p_dangers', dangerDirect]]) {
+      let l = (await fileSecurite(cle)).filter(x => x.chauffeur_id === id);
+      if (direct && !l.some(x => x.id === direct.id)) l = [direct];
+      if (!l.length) { res[cle === 'aptitudesFile' ? 'aptitudes' : 'dangers'] = 'vide'; continue; }
+      try {
+        const envoi = l.slice(0, 10).map(x => {
+          const { chauffeur_id, cree_ms, ...reste } = x;
+          return { ...reste, hors_ligne: Date.now() - (cree_ms || Date.now()) > 2 * 60 * 1000 };
+        });
+        const r = await rpc(rpcNom, { p_jeton: etat.jeton, [champ]: envoi });
+        if (!r.ok) {
+          if (r.erreur === 'session_invalide') finSession('Votre session a expiré. Reconnectez-vous.');
+          res[cle === 'aptitudesFile' ? 'aptitudes' : 'dangers'] = 'refus';
+          if (r.message) toast(r.message, 'erreur', 7000);
+          continue;
+        }
+        const faits = new Set([...r.acceptes, ...r.rejetes.map(x => x.id)]);
+        try { await DB.put('kv', (await fileSecurite(cle)).filter(x => !faits.has(x.id)), cle); } catch { /* ignoré */ }
+        if (r.rejetes.length) toast('Refusé : ' + r.rejetes.map(x => x.raison).join(', '), 'erreur', 7000);
+        res[cle === 'aptitudesFile' ? 'aptitudes' : 'dangers'] = r.acceptes.length ? 'ok' : 'refus';
+      } catch (e) {
+        res[cle === 'aptitudesFile' ? 'aptitudes' : 'dangers'] = 'hors_ligne';
+        if (e instanceof ErreurReseau) demanderEnvoiArrierePlan();
+      }
+    }
+    try {
+      const r = await rpc('loc_dangers_actifs', { p_jeton: etat.jeton });
+      if (r && r.ok) {
+        etat.dangers = { cid: id, liste: r.dangers, le: Date.now() };
+        try { await DB.put('kv', etat.dangers, 'dangersActifs'); } catch { /* ignoré */ }
+      }
+    } catch { /* hors ligne : on garde la dernière liste */ }
+    if (etat.ecran === 'principal') majCarteDangers();
+    return res;
+  })();
+  if (!aptDirect && !dangerDirect) { securiteEnCours = tache; tache.finally(() => { securiteEnCours = null; }); }
+  return tache;
+}
+
+/** Dangers en cours (serveur) + ceux du chauffeur pas encore envoyés. */
+async function dangersConnus() {
+  const c = etat.profil && etat.profil.chauffeur;
+  if (!c) return [];
+  const serveur = etat.dangers && etat.dangers.cid === c.id ? etat.dangers.liste : [];
+  const attente = (await fileSecurite('dangersFile')).filter(x => x.chauffeur_id === c.id && !serveur.some(s => s.id === x.id))
+    .map(x => ({ ...x, statut: 'attente', par_moi: true }));
+  return [...attente, ...serveur];
+}
+async function majCarteDangers() {
+  const l = await dangersConnus();
+  const carte = $('#carte-dangers');
+  carte.hidden = !l.length;
+  if (!l.length) return;
+  const p = lsGet('loc.dernierePos');
+  const ici = p && etat.profil && p.cid === etat.profil.chauffeur.id ? p : null;
+  const tri = l.map(d => ({ ...d, _d: ici ? haversine(ici.lat, ici.lon, d.latitude, d.longitude) : null }))
+    .sort((a, b) => ici ? a._d - b._d : String(b.horodatage).localeCompare(String(a.horodatage))).slice(0, 6);
+  const etats = { attente: '⏳ pas encore envoyé', signale: '', pris_en_charge: '🛠️ pris en charge par la logistique' };
+  $('#liste-dangers').innerHTML = tri.map(d => {
+    const t = TYPES_DANGER[d.type] || TYPES_DANGER.autre;
+    return `<div class="danger-ligne${d._d != null && d._d <= DANGER_PROCHE_M ? ' proche' : ''}"><b>${t.ico} ${esc(t.libelle)}</b>`
+      + (d._d != null ? ` — à ${esc(distanceTexte(d._d))}` : '')
+      + `<br><span class="petit">${[ilYa(d.horodatage), d.par_moi ? 'signalé par vous' : '', etats[d.statut] || ''].filter(Boolean).map(esc).join(' · ')}</span>`
+      + (d.message ? `<br><span class="petit">« ${esc(d.message)} »</span>` : '')
+      + (d.commentaire ? `<br><span class="petit">Logistique : « ${esc(d.commentaire)} »</span>` : '') + '</div>';
+  }).join('') + (l.length > tri.length ? `<p class="aide">… et ${l.length - tri.length} autre(s) plus loin.</p>` : '');
+}
+/** Prévient le chauffeur (une seule fois par danger) s'il passe à moins de 5 km d'un danger signalé. */
+async function alerterDangersProches(pos) {
+  if (!pos || !etat.profil) return;
+  const vus = lsGet('loc.dangersVus', []) || [];
+  const proches = (await dangersConnus()).filter(d => !d.par_moi && !vus.includes(d.id)
+    && haversine(pos.lat, pos.lon, d.latitude, d.longitude) <= DANGER_PROCHE_M);
+  if (!proches.length) return;
+  lsSet('loc.dangersVus', [...vus, ...proches.map(d => d.id)].slice(-200));
+  const d = proches[0], t = TYPES_DANGER[d.type] || TYPES_DANGER.autre;
+  const txt = `${t.ico} ${t.libelle} signalé à ${distanceTexte(haversine(pos.lat, pos.lon, d.latitude, d.longitude))}`
+    + (proches.length > 1 ? ` (+${proches.length - 1} autre${proches.length > 2 ? 's' : ''})` : '') + '. Ralentissez.';
+  toast('⚠️ ' + txt, 'erreur', 9000);
+  notifier('⚠️ Danger sur votre route', txt);
+  try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch { /* ignoré */ }
+}
+
 /* ===========================================================================
    SUIVI DES COURSES (version 1.5)
    - Proposé après un pointage « En course » ou « En mission » ; démarré par le chauffeur.
@@ -2630,6 +3088,8 @@ async function enregistrerPointSuivi() {
   if (!c || !suivi.fix) return;
   const f = suivi.fix;
   suivi.dernierPoint = { lat: f.lat, lon: f.lon, t: Date.now() };
+  lsSet('loc.dernierePos', { cid: c.chauffeur_id, lat: f.lat, lon: f.lon, t: Date.now() });
+  alerterDangersProches({ lat: f.lat, lon: f.lon });   // version 1.15
   await ajouterFileCourse({ point: {
     id: uuid(), course_id: c.id, chauffeur_id: c.chauffeur_id, latitude: f.lat, longitude: f.lon,
     precision_m: Math.round(f.precision), vitesse_kmh: f.vitesse != null && f.vitesse >= 0 ? Math.round(f.vitesse * 3.6) : null,
@@ -3069,6 +3529,7 @@ window.addEventListener('online', async () => {
   await envoyerAlertes();                  // les alertes d'urgence partent en premier
   suivreAlertes();
   envoyerSuivi();
+  envoyerSecurite();
   const r = await synchroniser();
   if (r.statut === 'ok') afficherResultatSync(r);
 });
@@ -3078,6 +3539,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible' || !etat.jeton) return;
   envoyerAlertes().then(suivreAlertes);
   synchroniser();
+  envoyerSecurite();
   verifierRappel();
   if (etat.ecran === 'principal') rendrePrincipal();
 });
@@ -3088,9 +3550,13 @@ setInterval(async () => {
   if ((await fileAlertes()).length) await envoyerAlertes();
   await suivreAlertes();                   // seulement s'il y a une alerte en cours
   if ((await pointagesEnAttente()).length) await synchroniser();
+  if ((await fileSecurite('aptitudesFile')).length || (await fileSecurite('dangersFile')).length) await envoyerSecurite();
   verifierRappel();
+  verifierPause();
   if (etat.ecran === 'principal' && !etat.pointageEnCours) rendrePrincipal();
 }, 60 * 1000);
+// Dangers en cours : mis à jour toutes les 15 minutes (et à chaque ouverture)
+setInterval(() => { if (etat.jeton && navigator.onLine) envoyerSecurite(); }, 15 * 60 * 1000);
 
 /* ===========================================================================
    MODE HORS LIGNE (service worker) ET INSTALLATION SUR LE TÉLÉPHONE
@@ -3166,6 +3632,8 @@ async function demarrer() {
   construireProvinces();
   construireLieuxDispo();
   construireSites();
+  construireDurees();
+  try { etat.dangers = (await DB.get('kv', 'dangersActifs')) || null; } catch { etat.dangers = null; }
   etat.jeton = lsGet('loc.jeton');
   etat.profil = lsGet('loc.profil');
   etat.statut = lsGet('loc.statut');
@@ -3183,6 +3651,8 @@ async function demarrer() {
     await rafraichirProfil();             // vérifie la session si réseau
     await envoyerAlertes();               // alertes d'urgence en attente : en premier
     await chargerReferentiel();
+    construireDestinations();
+    envoyerSecurite();                    // version 1.15 : aptitudes, dangers signalés, dangers en cours
     suivreAlertes();
     reprendreSuivi();                     // version 1.5 : course suivie interrompue
     chargerMaPhoto();                     // version 1.7 : photo (et refus éventuel)

@@ -222,6 +222,10 @@ tr.urgence-ouverte td { background: #FEF2F2; }
 .toast.ok { background: var(--succes); } .toast.ko { background: var(--danger); }
 
 /* --- Impression / PDF : seule la zone #impression est imprimée --- */
+.marq-danger { width: 28px; height: 28px; border-radius: 50%; background: #FEF3C7; border: 2px solid #F59E0B; display: grid; place-items: center;
+  font-size: 15px; box-shadow: 0 2px 6px rgba(146, 64, 14, .35); }
+tr.danger-ouvert td { background: #FFFBEB; }
+.photo-danger { max-width: 100%; max-height: 70vh; display: block; margin: 0 auto; border-radius: 10px; }
 #impression { display: none; }
 @media print {
   html, body { background: #fff !important; }
@@ -426,6 +430,16 @@ tr.urgence-ouverte td { background: #FEF2F2; }
 
   <!-- ===================== VUE ALERTES ===================== -->
   <section class="vue" id="v-alertes" hidden>
+    <div class="bloc" id="bloc-dangers">
+      <div class="ligne"><h2 style="margin:0">⚠️ Dangers sur la route signalés par les chauffeurs <span id="nb-dangers" class="badge zero">0</span></h2>
+        <button class="btn sec petit" id="btn-dangers-recharger" type="button">⟳ Recharger</button></div>
+      <p class="doux">Dangers en cours, et dangers réglés des 7 derniers jours. Les chauffeurs voient les dangers en cours et sont prévenus à moins de 5 km.
+        Marquez « Réglé » quand la route est de nouveau sûre.</p>
+      <table>
+        <thead><tr><th>Signalé</th><th>Danger</th><th>Lieu</th><th>Signalé par</th><th>Photo</th><th>Suivi</th><th>Actions</th></tr></thead>
+        <tbody id="tab-dangers"></tbody>
+      </table>
+    </div>
     <div class="bloc">
       <div class="ligne"><h2 style="margin:0">🚨 Pannes et urgences signalées par les chauffeurs</h2>
         <button class="btn sec petit" id="btn-urgences-recharger" type="button">⟳ Recharger</button></div>
@@ -664,6 +678,21 @@ const LIEUX_DISPO = {
 };
 const COULEUR_A_VERIFIER = '#D97706';
 
+/* Version 1.15 : dangers sur la route (mêmes codes que la base) et aptitude à conduire */
+const TYPES_DANGER = {
+  pont: { ico: '🌉', libelle: 'Pont abîmé' }, route: { ico: '🕳️', libelle: 'Route dégradée / trou' },
+  eboulement: { ico: '⛰️', libelle: 'Éboulement' }, inondation: { ico: '🌊', libelle: 'Route inondée' },
+  arbre: { ico: '🌳', libelle: 'Arbre sur la route' }, animal: { ico: '🐘', libelle: 'Animal sur la route' },
+  accident: { ico: '💥', libelle: 'Accident' }, autre: { ico: '⚠️', libelle: 'Autre danger' },
+};
+const SOMMEIL = { moins_5: 'moins de 5 h de sommeil', '5_6': '5 à 6 h de sommeil', '7_plus': '7 h de sommeil ou plus' };
+const RETARD_TRAJET_MIN = 30;
+/** Motifs d'une déclaration d'aptitude, en clair. */
+function motifsAptitude(a) {
+  return [a.sommeil === 'moins_5' && SOMMEIL.moins_5, a.sommeil === '5_6' && SOMMEIL['5_6'], a.en_forme === false && 'pas en forme',
+    a.substances === true && 'alcool ou médicament qui endort'].filter(Boolean).join(', ');
+}
+
 /* Sites de travail (statut « Sur site », version 1.6), mêmes codes que la base */
 const SITES = {
   belinga_village: 'BELINGA VILLAGE', batouala: 'BATOUALA', makokou: 'MAKOKOU',
@@ -703,6 +732,7 @@ const ACTIONS_JOURNAL = {
   consultation_alertes: 'Consultation des alertes Panne / Urgence', alerte_traitee: 'Alerte Panne / Urgence prise en charge',
   export_courses: 'Export des courses et passagers', consultation_courses_direct: 'Consultation des courses en direct', consultation_trajet: "Consultation du trajet d'une course",
   duree_site: 'Durée du séjour sur site modifiée', rapport_journalier: 'Rapport journalier (PDF)',
+  consultation_dangers: 'Consultation des dangers sur la route', danger_traite: 'Danger sur la route traité',
   relance: 'Chauffeur relancé (WhatsApp)', rappels_push: 'Rappels automatiques envoyés aux chauffeurs',
   photo_envoyee: "Photo d'identité envoyée par le chauffeur", photo_refusee: "Photo d'identité refusée", photo_supprimee: "Photo d'identité supprimée par le chauffeur",
 };
@@ -714,6 +744,7 @@ const etat = {
   modeCarte: null,  // 'pc' (prise en charge), 'lieu', 'zone'
   vehicules: [],    // version 1.3 : liste des véhicules
   urgences: [],     // version 1.3 : alertes Panne / Urgence (en cours + traitées récentes)
+  dangers: [],      // version 1.15 : dangers sur la route signalés par les chauffeurs
   urgencesEtat: { ouvertes: 0, derniere: null },
   filtreSpecial: null,  // compteurs : 'dispo' | 'verifier' | 'sans_nouvelles'
   courses: [],          // version 1.5 : courses suivies en direct (avec leur trajet)
@@ -991,6 +1022,7 @@ async function chargerTout() {
     const premier = !etat.maj;
     etat.maj = new Date();
     rendreTout();
+    if (premier) chargerDangers();   // version 1.15
     if (premier) animerChiffres($('#v-' + etat.vue));   // version 1.11 : à l'ouverture du tableau de bord
   } catch (e) {
     toast('Chargement impossible : ' + e.message, 'ko', 7000);
@@ -1187,6 +1219,17 @@ function enrichir(c) {
       detail: (c._relance.course ? 'En course sans position depuis ' : `« ${STATUTS[d.statut].libelle} » sans pointage depuis `) + dureeRelance(c._relance.min)
         + (c.dernier_rappel ? ` · dernier rappel ${c.dernier_rappel_canal === 'push' ? 'automatique' : 'WhatsApp'} ${ilYa(c.dernier_rappel)}` : '')
         + (c.push ? '' : ' · rappels NON activés sur son téléphone : relancez par WhatsApp') });
+    // Version 1.15 : trajet en retard (30 min après l'heure d'arrivée prévue) et aptitude à conduire du jour
+    if (d && d.statut === 'en_mission' && d.arrivee_prevue) {
+      const retard = Math.round((Date.now() - new Date(d.arrivee_prevue).getTime()) / 60000);
+      if (retard >= RETARD_TRAJET_MIN) c._alertes.unshift({ type: 'Trajet en retard', niveau: 'ko',
+        detail: `Vers ${d.destination || '—'} : arrivée prévue à ${heure(d.arrivee_prevue)}, retard de ${dureeRelance(retard)} — appelez le chauffeur` });
+    }
+    const apt = c.aptitude_jour;
+    if (apt && apt.resultat === 'inapte') c._alertes.unshift({ type: apt.maintenu ? 'Inapte mais parti' : 'Inapte à conduire', niveau: 'ko',
+      detail: `Déclaré à ${heure(apt.horodatage)} : ${motifsAptitude(apt)}` + (apt.maintenu ? ' — a pris la route en disant avoir l\'accord de la logistique : vérifiez' : ' — ne doit pas conduire') });
+    else if (apt && apt.resultat === 'vigilance') c._alertes.push({ type: 'Vigilance fatigue', niveau: 'att',
+      detail: `Déclaré à ${heure(apt.horodatage)} : ${motifsAptitude(apt)} — pauses toutes les 2 h` });
     if (c._contestation) c._alertes.unshift({ type: 'Position contestée', niveau: 'ko',
     detail: `${c._contestation} — le chauffeur affirme que son GPS se trompe : appelez-le pour vérifier` });
   }
@@ -1237,7 +1280,7 @@ function afficherVue(vue) {
   if (vue === 'libreville') { initCarte('lbv', 'map-lbv', [0.41, 9.47], 12); }
   if (vue === 'lieux') { initCarte('lieux', 'map-lieux', [0.41, 9.47], 12); chargerStatsLieux(); }
   if (vue === 'journal') chargerJournal();
-  if (vue === 'alertes' && etat.user) chargerUrgences();
+  if (vue === 'alertes' && etat.user) { chargerUrgences(); chargerDangers(); }
   rendreVue(vue);
   Object.values(etat.cartes).forEach(m => setTimeout(() => m.invalidateSize(), 50));
   animerChiffres($('#v-' + vue));                       // version 1.11 : les chiffres de la rubrique défilent
@@ -1254,7 +1297,7 @@ function rendreTout() {
 function rendreVue(vue) {
   if (!etat.maj) return;
   ({ carte: rendreCarte, libreville: rendreLibreville, chauffeurs: rendreChauffeurs,
-     alertes: () => { rendreUrgences(); rendreAlertes(); }, vehicules: rendreVehicules,
+     alertes: () => { rendreDangers(); rendreUrgences(); rendreAlertes(); }, vehicules: rendreVehicules,
      synthese: rendreSynthese, lieux: rendreLieux, parametres: rendreParametres }[vue] || (() => {}))();
 }
 
@@ -1302,6 +1345,8 @@ function popupChauffeur(c) {
     + (d && d.destination ? ` → ${esc(d.destination)}` : '')
     + (d && d.passagers != null ? ` · 👥 ${d.passagers} passager${d.passagers > 1 ? 's' : ''}` : '')
     + (d && d.jours_maladie ? ` · ${d.jours_maladie} j accordés` : '') + '<br>'
+    + (d && d.arrivee_prevue ? `🕒 Arrivée prévue : <b>${esc(heure(d.arrivee_prevue))}</b><br>` : '')
+    + (c.aptitude_jour && c.aptitude_jour.resultat !== 'apte' ? `<span class="etiq ${c.aptitude_jour.resultat === 'inapte' ? 'ko' : 'att'}">🩺 ${c.aptitude_jour.resultat === 'inapte' ? 'Inapte' : 'Vigilance'}</span> ${esc(motifsAptitude(c.aptitude_jour))}<br>` : '')
     + (c._decompte ? etiquetteDecompte(c) + (c.periode ? ` <span class="doux">depuis le ${esc(dateCourte(c.periode.debut))}</span>` : '') + '<br>' : '')
     + (c._dispoEtat ? `<span class="etiq ${c._dispoEtat === 'vert' ? 'ok' : 'att'}">${c._dispoEtat === 'vert' ? '✓' : '⚠ à vérifier'}</span> ${esc(c._dispoMotif)}<br>` : '')
     + (d ? `<span class="doux">${esc(dateHeure(d.horodatage))} · <b>${esc(ilYa(d.horodatage))}</b></span><br>` : '')
@@ -1488,6 +1533,14 @@ function rendreCarte() {
       icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: '<div class="pulse">🚨</div>' }) })
       .bindPopup(() => popupUrgence(u)).addTo(couche);
   });
+  // Version 1.15 : dangers en cours (triangle orange, au-dessus des chauffeurs)
+  etat.marqueursDanger = {};
+  etat.dangers.filter(x => x.statut !== 'regle').forEach(x => {
+    const t = TYPES_DANGER[x.type] || TYPES_DANGER.autre;
+    etat.marqueursDanger[x.id] = L.marker([x.latitude, x.longitude], { zIndexOffset: 900, title: 'Danger : ' + t.libelle,
+      icon: L.divIcon({ className: '', iconSize: [28, 28], iconAnchor: [14, 14], html: `<div class="marq-danger">${t.ico}</div>` }) })
+      .bindPopup(() => popupDanger(x)).addTo(couche);
+  });
   dessinerCourses(couche);
   // Zones en arrière-plan
   zonesActives().forEach(z => L.circle([z.latitude, z.longitude], { radius: z.rayon_m, color: z.couleur, weight: 1, fill: false, dashArray: '4', interactive: false }).addTo(couche));
@@ -1634,6 +1687,9 @@ document.addEventListener('click', (e) => {
     'suivre-course': () => suivreCourse(id),
     'arreter-suivre': () => { etat.suivre = null; rendreListeCourses(); },
     'urgence-voir': () => voirUrgence(id),
+    'danger-voir': () => voirDanger(id),
+    'danger-photo': () => voirPhotoDanger(id),
+    'danger-traiter': () => traiterDanger(id, el.dataset.statut),
     'veh-enregistrer': () => enregistrerVehicule(Number(id)),
     'veh-supprimer': () => supprimerVehicule(Number(id)),
   };
@@ -2206,6 +2262,103 @@ function voirUrgence(id) {
 }
 
 /* ===========================================================================
+   DANGERS SUR LA ROUTE (version 1.15) : signalés par les chauffeurs (photo facultative).
+   Rechargés toutes les 2 minutes ; « Pris en charge » / « Réglé » avec un message
+   que les chauffeurs voient sur leur téléphone.
+   =========================================================================== */
+async function chargerDangers() {
+  if (!etat.user) return;
+  try {
+    const avant = new Set(etat.dangers.map(x => x.id));
+    etat.dangers = await rpc('loc_dangers_liste', { p_jours: 7 }) || [];
+    const nouveaux = etat.dangers.filter(x => x.statut === 'signale' && !avant.has(x.id));
+    if (etat.dangersCharges && nouveaux.length) toast(`⚠️ Nouveau danger signalé : ${(TYPES_DANGER[nouveaux[0].type] || TYPES_DANGER.autre).libelle}`, 'ko', 8000);
+    etat.dangersCharges = true;
+    rendreTout();
+  } catch (e) { /* base sans dangers (version antérieure) : rien à afficher */ }
+}
+setInterval(() => chargerDangers(), 2 * 60 * 1000);
+$('#btn-dangers-recharger').addEventListener('click', () => chargerDangers());
+
+const ETATS_DANGER = { signale: ['ko', 'À TRAITER'], pris_en_charge: ['att', '🛠️ pris en charge'], regle: ['ok', '✓ réglé'] };
+function popupDanger(x) {
+  const t = TYPES_DANGER[x.type] || TYPES_DANGER.autre;
+  return `<b style="color:#B45309">${t.ico} ${esc(t.libelle)}</b><br>`
+    + (x.message ? `« ${esc(x.message)} »<br>` : '')
+    + `<span class="doux">${esc(dateHeure(x.horodatage))} · <b>${esc(ilYa(x.horodatage))}</b></span><br>`
+    + `${esc(zoneDe(x.latitude, x.longitude).nom)}<br>`
+    + (x.nom ? `Signalé par ${esc(nomComplet(x))} <span class="doux">(${esc(x.matricule)})</span><br>` : '')
+    + `<span class="etiq ${ETATS_DANGER[x.statut][0]}">${ETATS_DANGER[x.statut][1]}</span><br>`
+    + (x.a_photo ? `<button class="btn sec petit" type="button" data-action="danger-photo" data-id="${esc(x.id)}">📷 Photo</button> ` : '')
+    + (x.statut === 'signale' ? `<button class="btn petit" type="button" data-action="danger-traiter" data-statut="pris_en_charge" data-id="${esc(x.id)}">🛠️ Pris en charge</button> ` : '')
+    + (x.statut !== 'regle' ? `<button class="btn sec petit" type="button" data-action="danger-traiter" data-statut="regle" data-id="${esc(x.id)}">✓ Réglé</button>` : '');
+}
+function rendreDangers() {
+  const zone = $('#tab-dangers');
+  if (!zone) return;
+  const ouverts = etat.dangers.filter(x => x.statut !== 'regle').length;
+  const nb = $('#nb-dangers'); nb.textContent = ouverts; nb.className = 'badge' + (ouverts ? '' : ' zero');
+  zone.innerHTML = etat.dangers.length ? etat.dangers.map(x => {
+    const t = TYPES_DANGER[x.type] || TYPES_DANGER.autre;
+    const [cl, lib] = ETATS_DANGER[x.statut];
+    return `<tr class="${x.statut === 'regle' ? '' : 'danger-ouvert'}">`
+      + `<td>${esc(dateHeure(x.horodatage))}<br><b>${esc(ilYa(x.horodatage))}</b>${x.hors_ligne ? '<br><span class="etiq att">envoyé en différé</span>' : ''}</td>`
+      + `<td><b>${t.ico} ${esc(t.libelle)}</b>${x.message ? `<br>« ${esc(x.message)} »` : ''}</td>`
+      + `<td>${esc(zoneDe(x.latitude, x.longitude).nom)}${x.precision_m != null ? `<br><span class="doux">± ${Math.round(x.precision_m)} m</span>` : ''}</td>`
+      + `<td>${x.nom ? `<b>${esc(nomComplet(x))}</b><br><span class="doux">${esc(x.matricule)} · ${esc(x.telephone)}</span>` : '<span class="doux">chauffeur supprimé</span>'}</td>`
+      + `<td>${x.a_photo ? `<button class="btn sec petit" data-action="danger-photo" data-id="${esc(x.id)}">📷 Voir</button>` : '<span class="doux">—</span>'}</td>`
+      + `<td><span class="etiq ${cl}">${lib}</span>${x.traite_le ? `<br><span class="doux">${esc(dateHeure(x.traite_le))} par ${esc(x.traite_par_email || '—')}</span>` : ''}${x.commentaire ? `<br>« ${esc(x.commentaire)} »` : ''}</td>`
+      + `<td><div class="ligne"><button class="btn sec petit" data-action="danger-voir" data-id="${esc(x.id)}">🗺️ Voir</button>`
+      + (x.telephone ? `<a class="btn appel petit" href="tel:${esc(x.telephone)}">📞 Appeler</a>` : '')
+      + (x.statut === 'signale' ? `<button class="btn petit" data-action="danger-traiter" data-statut="pris_en_charge" data-id="${esc(x.id)}">🛠️ Pris en charge</button>` : '')
+      + (x.statut !== 'regle' ? `<button class="btn sec petit" data-action="danger-traiter" data-statut="regle" data-id="${esc(x.id)}">✓ Réglé</button>` : '')
+      + '</div></td></tr>';
+  }).join('') : '<tr><td colspan="7" class="vide">Aucun danger signalé ces 7 derniers jours. ✓</td></tr>';
+}
+function voirDanger(id) {
+  const x = etat.dangers.find(d => d.id === id);
+  if (!x) return;
+  afficherVue('carte');
+  etat.cartes.carte?.setView([x.latitude, x.longitude], 13);
+  setTimeout(() => (etat.marqueursDanger && etat.marqueursDanger[id])?.openPopup(), 300);
+}
+async function voirPhotoDanger(id) {
+  const x = etat.dangers.find(d => d.id === id);
+  if (!x) return;
+  try {
+    const photo = await rpc('loc_danger_photo', { p_danger: id });
+    if (!photo || !/^data:image\/jpeg;base64,/.test(photo)) return toast('Photo indisponible (effacée après 30 jours).', 'ko');
+    const t = TYPES_DANGER[x.type] || TYPES_DANGER.autre;
+    await modale(`${t.ico} ${t.libelle} — ${dateHeure(x.horodatage)}`, `<img class="photo-danger" src="${photo}" alt="Photo du danger">`
+      + (x.message ? `<p style="text-align:center">« ${esc(x.message)} »</p>` : ''), [{ libelle: 'Fermer', valeur: 'ok', classe: 'sec' }]);
+  } catch (e) { toast(e.message, 'ko', 6000); }
+}
+async function traiterDanger(id, statut) {
+  const x = etat.dangers.find(d => d.id === id);
+  if (!x || !['pris_en_charge', 'regle'].includes(statut)) return;
+  const t = TYPES_DANGER[x.type] || TYPES_DANGER.autre;
+  const titre = statut === 'regle' ? `Danger réglé — ${t.libelle}` : `Prendre en charge — ${t.libelle}`;
+  const puces = statut === 'regle' ? ['Route de nouveau praticable', 'Obstacle retiré', 'Fausse alerte']
+    : ['Équipe d\'entretien prévenue', 'Contournement conseillé', 'Roulez au pas sur ce tronçon'];
+  const choix = await modale(titre,
+    `<p>Les chauffeurs voient votre message sur leur téléphone${statut === 'regle' ? ' ; le danger disparaît de leur liste' : ''}.</p>
+     <label class="champ" for="dg-com">Message (facultatif, 200 caractères)</label>
+     <textarea id="dg-com" class="champ-l" rows="2" maxlength="200" style="width:100%"></textarea>
+     <div class="puces" style="margin-top:6px">${puces.map(p => `<button type="button" class="puce" data-texte-danger="${esc(p)}">${esc(p)}</button>`).join('')}</div>`,
+    [{ libelle: statut === 'regle' ? '✓ Réglé' : '🛠️ Pris en charge', valeur: 'ok' }, { libelle: 'Annuler', valeur: 'annuler', classe: 'sec' }],
+    async () => {
+      const r = await rpc('loc_traiter_danger', { p_danger: id, p_statut: statut, p_commentaire: $('#dg-com').value.trim() || null });
+      if (r && r.ok === false) throw new Error(r.message);
+      return true;
+    });
+  if (choix === 'ok') { toast(statut === 'regle' ? 'Danger marqué réglé ✓' : 'Danger pris en charge ✓', 'ok'); await chargerDangers(); }
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('#modale-corps .puce[data-texte-danger]');
+  if (b) $('#dg-com').value = b.dataset.texteDanger;
+});
+
+/* ===========================================================================
    VUE VÉHICULES (version 1.3)
    =========================================================================== */
 $('#veh-inactifs').addEventListener('change', rendreVehicules);
@@ -2434,6 +2587,7 @@ function detailPointage(m) {
     if (m.quartier) d.push(m.quartier);
   }
   if (m.statut === 'autre_province' && m.province) d.push(m.province + (m.ville ? ' (' + m.ville + ')' : ''));
+  if (m.statut === 'en_mission' && m.arrivee_prevue) d.push('arrivée prévue ' + heure(m.arrivee_prevue));
   if (m.statut === 'malade' && m.jours_maladie) d.push(`${m.jours_maladie} jour${m.jours_maladie > 1 ? 's' : ''} d'arrêt`);
   if (m.hors_ligne) d.push('envoyé sans réseau');
   if (m.contestation) d.push('position contestée');
@@ -2504,6 +2658,18 @@ function contenuRapportJournalier(r, auteur) {
           + `<td>${esc(a.message || '')}</td><td>${esc(a.vehicule || '')}</td>`
           + `<td>${a.traitee_le ? `Prise en charge ${esc(dateHeure(a.traitee_le))}${a.commentaire ? ' — ' + esc(a.commentaire) : ''}` : '<b style="color:#B91C1C">Non traitée</b>'}</td></tr>`),
         'Aucune panne ni urgence ce jour.')
+    + `<h2>Aptitude à conduire (${(r.aptitudes || []).length} alerte${(r.aptitudes || []).length > 1 ? 's' : ''} sur ${r.nb_aptitudes || 0} déclaration${(r.nb_aptitudes || 0) > 1 ? 's' : ''})</h2>`
+    + table(['Heure', 'Chauffeur', 'Résultat', 'Motifs'],
+        (r.aptitudes || []).map(a => `<tr><td>${esc(heure(a.horodatage))}</td><td>${nom(a)}</td>`
+          + `<td>${a.resultat === 'inapte' ? `<b style="color:#B91C1C">Inapte${a.maintenu ? ' — parti quand même' : ''}</b>` : '<b style="color:#B45309">Vigilance</b>'}</td>`
+          + `<td>${esc(motifsAptitude(a))}</td></tr>`),
+        'Tous les chauffeurs qui ont pris la route se sont déclarés aptes.')
+    + `<h2>Dangers sur la route signalés (${(r.dangers || []).length})</h2>`
+    + table(['Heure', 'Danger', 'Lieu', 'Signalé par', 'Suivi'],
+        (r.dangers || []).map(x => `<tr><td>${esc(heure(x.horodatage))}</td><td>${esc((TYPES_DANGER[x.type] || TYPES_DANGER.autre).libelle)}${x.message ? ' — « ' + esc(x.message) + ' »' : ''}</td>`
+          + `<td>${esc(zoneDe(x.latitude, x.longitude).nom)}</td><td>${x.nom ? nom(x) : '—'}</td>`
+          + `<td>${esc(ETATS_DANGER[x.statut] ? ETATS_DANGER[x.statut][1] : x.statut)}${x.commentaire ? ' — « ' + esc(x.commentaire) + ' »' : ''}</td></tr>`),
+        'Aucun danger signalé ce jour.')
     + `<h2>Sans nouvelles depuis plus de 6 jours (${sansNouvelles.length})</h2>`
     + table(['Chauffeur', 'Équipe', 'Dernier statut', 'Dernier pointage'],
         sansNouvelles.map(x => `<tr><td>${nom(x)}</td><td>${x.equipe === 'libreville' ? 'Libreville' : 'Site'}</td>`

@@ -23,7 +23,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.14.0';   // 1.14.0 : rapport journalier des statuts en PDF (logistique)
+const VERSION = 'v1.15.0';   // 1.15.0 : sécurité routière (trajet, aptitude à conduire, dangers sur la route)
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',
