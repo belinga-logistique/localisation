@@ -23,7 +23,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.16.3';   // 1.16.3 : site « BELINGA VILLAGE » renommé « BELINGA »
+const VERSION = 'v1.17.0';   // 1.17.0 : lieu choisi dans une liste (repos, mission, course, autre province, congé, malade) ; 1.16.3 : site « BELINGA VILLAGE » renommé « BELINGA »
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',
@@ -145,6 +145,7 @@ function versServeur(i) {
     province: i.province || null, ville: i.ville || null, lieu_dispo: i.lieu_dispo || null,
     vehicule_id: i.vehicule_id ?? null, contestation: i.contestation || null, site: i.site || null,
     passagers: i.passagers ?? null, jours_maladie: i.jours_maladie ?? null,
+    arrivee_prevue: i.arrivee_prevue || null, lieu_statut: i.lieu_statut || null,   // version 1.17
     hors_ligne: Date.now() - (i.cree_ms || Date.now()) > 2 * 60 * 1000,
   };
 }

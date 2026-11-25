@@ -698,8 +698,11 @@ const SITES = {
   belinga_village: 'BELINGA', batouala: 'BATOUALA', makokou: 'MAKOKOU',
   ikei_boka_boka: 'IKEI BOKA BOKA', kobe_kobe: 'KOBE-KOBE', kango: 'KANGO',
 };
-/** Statut lisible, avec le site pour « Sur site » : « Sur site · KANGO ». */
-const libelleStatut = (d) => d ? (STATUTS[d.statut]?.libelle || d.statut) + (d.site && SITES[d.site] ? ' · ' + SITES[d.site] : '') : '';
+/** Statut lisible, avec le site pour « Sur site » : « Sur site · KANGO » ;
+    version 1.17 : avec le lieu choisi par le chauffeur : « En repos · Libreville »
+    (« Autre province » : la ville est déjà affichée avec la province). */
+const libelleStatut = (d) => d ? (STATUTS[d.statut]?.libelle || d.statut) + (d.site && SITES[d.site] ? ' · ' + SITES[d.site] : '')
+  + (d.lieu_statut && d.statut !== 'autre_province' ? ' · ' + d.lieu_statut : '') : '';
 
 /* Motifs des alertes Panne / Urgence (version 1.3, mêmes codes que la base) */
 const MOTIFS = {
@@ -2498,6 +2501,7 @@ function lignesExport() {
       Matricule: c.matricule, Nom: c.nom, 'Prénom': c.prenom || '', 'Téléphone': c.telephone,
       'Équipe': c.equipe === 'libreville' ? 'Libreville' : 'Site', Statut: d ? STATUTS[d.statut].libelle : 'Aucun pointage',
       'Site de travail': d && d.site ? SITES[d.site] || d.site : '',
+      'Lieu déclaré': d && d.lieu_statut || '',
       Disponible: c._dispo ? 'Oui' : 'Non', Zone: c._zoneNom,
       'Province déclarée': c._provinceDeclaree || '', 'Ville déclarée': c._provinceDeclaree && d.ville || '',
       'Disponibilité': c._dispoEtat ? `${c._dispoEtat === 'vert' ? 'Vert' : 'À vérifier'} — ${c._dispoMotif}` : '',

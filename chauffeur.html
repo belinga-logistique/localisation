@@ -109,6 +109,7 @@ input:focus-visible, button:focus-visible { outline: 3px solid #F59E0B; outline-
 }
 .lieu-dispo[aria-checked=true] { border-color: var(--primaire); background: var(--succes-fond); color: #14532D; box-shadow: 0 0 0 3px rgba(34, 197, 94, .15); }
 .lieu-dispo[aria-checked=true]::after { content: "✓"; margin-left: auto; font-size: 1.125rem; font-weight: 800; }
+.lieu-dispo[data-lieu-statut=autre][aria-checked=true],
 .lieu-dispo[data-lieu=ailleurs][aria-checked=true] { border-color: #B45309; background: var(--alerte-fond); color: var(--alerte); }
 .aide { font-size: .875rem; color: var(--texte-doux); margin: 6px 0 0; }
 .case { display: flex; gap: 12px; align-items: flex-start; font-weight: 500; margin: 14px 0; }
@@ -457,6 +458,14 @@ a.btn { text-decoration: none; }
     <div class="carte" style="margin-top:14px">
       <h3>1. Mon statut</h3>
       <div id="grille-statuts" class="statuts" role="group" aria-label="Choix du statut"></div>
+      <div id="bloc-lieu-statut" hidden>
+        <label id="lieu-statut-titre">Où êtes-vous ? *</label>
+        <div id="grille-lieux-statut" class="lieux-dispo" role="radiogroup" aria-labelledby="lieu-statut-titre"></div>
+        <div id="bloc-lieu-autre" hidden>
+          <label for="lieu-autre">Nom du lieu *</label>
+          <input id="lieu-autre" type="text" maxlength="60" placeholder="Ex. Ndjolé, Booué, Mitzic…">
+        </div>
+      </div>
       <div id="bloc-site" hidden>
         <label id="site-titre">Sur quel site ? *</label>
         <div id="grille-sites" class="lieux-dispo" role="radiogroup" aria-labelledby="site-titre"></div>
@@ -491,8 +500,8 @@ a.btn { text-decoration: none; }
         <select id="province">
           <option value="">— Choisir la province —</option>
         </select>
-        <label for="ville">Ville ou localité (facultatif)</label>
-        <input id="ville" type="text" maxlength="60" placeholder="Ex. Mouila, Lambaréné, Franceville…">
+        <p class="aide">Remplie toute seule quand vous choisissez une ville de la liste.</p>
+        <input id="ville" type="hidden">
       </div>
       <div id="bloc-maladie" hidden>
         <label for="jours-maladie">Nombre de jours de repos maladie accordés *</label>
@@ -741,6 +750,21 @@ const SITES = {
   belinga_village: 'BELINGA', batouala: 'BATOUALA', makokou: 'MAKOKOU',
   ikei_boka_boka: 'IKEI BOKA BOKA', kobe_kobe: 'KOBE-KOBE', kango: 'KANGO',
 };
+
+/* Version 1.17 : lieu choisi dans une liste pour les autres statuts (« Autre lieu » = à écrire).
+   Le libellé choisi est enregistré tel quel (colonne lieu_statut). */
+const LIEUX_REPOS = ['Libreville', 'Makokou', 'Lambaréné', 'Port-Gentil'];
+const LIEUX_STATUT = {
+  repos:          { titre: 'Où êtes-vous en repos ? *',          lieux: LIEUX_REPOS,                                       prefixe: 'Repos à' },
+  en_mission:     { titre: 'En mission à : *',                   lieux: ['Libreville', 'Makokou', 'Batouala', 'Ikei Boka Boka'], prefixe: 'En mission à' },
+  en_course:      { titre: 'Où se fait la course ? *',           lieux: ['Libreville', 'Owendo', 'Ntoum', 'Makokou'],     prefixe: 'Course à' },
+  autre_province: { titre: 'Dans quelle ville êtes-vous ? *',    lieux: ['Lambaréné', 'Port-Gentil', 'Franceville', 'Oyem', 'Mouila', 'Makokou'], prefixe: 'À' },
+  conge:          { titre: 'Où passez-vous votre congé ? *',     lieux: LIEUX_REPOS,                                       prefixe: 'Congé à' },
+  malade:         { titre: 'Où êtes-vous (maladie) ? *',         lieux: LIEUX_REPOS,                                       prefixe: 'Malade à' },
+};
+/* « Autre province » : la province est remplie toute seule d'après la ville choisie */
+const PROVINCE_DE_VILLE = { 'Lambaréné': 'Moyen-Ogooué', 'Port-Gentil': 'Ogooué-Maritime', 'Franceville': 'Haut-Ogooué',
+  'Oyem': 'Woleu-Ntem', 'Mouila': 'Ngounié', 'Makokou': 'Ogooué-Ivindo' };
 
 /* Lieux de disponibilité (statut « Disponible à Libreville »), mêmes codes que la base */
 const LIEUX_DISPO = {
@@ -1361,6 +1385,8 @@ function choisirStatut(code, mettreFocus = true) {
   $('#bloc-lieu-dispo').hidden = code !== 'dispo_libreville';
   $('#bloc-site').hidden = code !== 'sur_site';
   $('#bloc-maladie').hidden = code !== 'malade';
+  // Version 1.17 : le lieu est à rechoisir quand le chauffeur touche un statut (pas lors d'un simple rafraîchissement)
+  if (mettreFocus || etat.lieuStatutPour !== code) construireLieuxStatut(code);
   $('#note-prive').hidden = def.position;
   majCarteVehicule();
   const btn = $('#btn-pointer');
@@ -1394,6 +1420,50 @@ function choisirSite(code) {
   $('#grille-sites').classList.remove('a-remplir');
 }
 
+/** Version 1.17 : boutons du lieu pour le statut choisi (rien de pré-coché) + « Autre lieu ». */
+function construireLieuxStatut(code) {
+  const def = LIEUX_STATUT[code];
+  const zone = $('#grille-lieux-statut');
+  zone.innerHTML = '';
+  zone.classList.remove('a-remplir');
+  etat.lieuStatut = null;
+  etat.lieuStatutPour = code;
+  $('#lieu-autre').value = '';
+  $('#bloc-lieu-autre').hidden = true;
+  $('#bloc-lieu-statut').hidden = !def;
+  if (!def) return;
+  $('#lieu-statut-titre').textContent = def.titre;
+  [...def.lieux, 'autre'].forEach(lieu => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'lieu-dispo'; b.dataset.lieuStatut = lieu;
+    b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', 'false');
+    b.innerHTML = lieu === 'autre' ? '<span aria-hidden="true">✏️</span><span>Autre lieu (à écrire)</span>'
+      : `<span aria-hidden="true">📍</span><span>${esc(def.prefixe + ' ' + lieu)}</span>`;
+    b.addEventListener('click', () => choisirLieuStatut(lieu));
+    zone.appendChild(b);
+  });
+}
+function choisirLieuStatut(lieu) {
+  etat.lieuStatut = lieu;
+  document.querySelectorAll('[data-lieu-statut]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.lieuStatut === lieu)));
+  $('#grille-lieux-statut').classList.remove('a-remplir');
+  $('#bloc-lieu-autre').hidden = lieu !== 'autre';
+  if (lieu === 'autre') setTimeout(() => $('#lieu-autre').focus(), 50);
+  // « Autre province » : province remplie d'après la ville
+  if (etat.statut === 'autre_province' && PROVINCE_DE_VILLE[lieu]) {
+    $('#province').value = PROVINCE_DE_VILLE[lieu];
+    lsSet('loc.province', PROVINCE_DE_VILLE[lieu]);
+  }
+}
+
+/** Version 1.17 : remet le lieu du dernier pointage (confirmation d'un rappel en un geste). */
+function reprendreLieuStatut(code, lieu) {
+  const def = LIEUX_STATUT[code];
+  if (!def || !lieu) return;   // ancien pointage sans lieu : le chauffeur le choisira
+  if (def.lieux.includes(lieu)) choisirLieuStatut(lieu);
+  else { choisirLieuStatut('autre'); $('#lieu-autre').value = lieu; }
+}
+
 /** Crée les boutons « Où êtes-vous disponible ? ». */
 function construireLieuxDispo() {
   const zone = $('#grille-lieux-dispo');
@@ -1409,7 +1479,7 @@ function construireLieuxDispo() {
 function choisirLieuDispo(code) {
   etat.lieuDispo = LIEUX_DISPO[code] ? code : null;
   lsSet('loc.lieuDispo', etat.lieuDispo);
-  document.querySelectorAll('.lieu-dispo').forEach(b => b.setAttribute('aria-checked', String(b.dataset.lieu === etat.lieuDispo)));
+  document.querySelectorAll('[data-lieu]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.lieu === etat.lieuDispo)));
   $('#grille-lieux-dispo').classList.remove('a-remplir');
 }
 
@@ -1654,6 +1724,7 @@ function rendrePrincipal() {
     zone.innerHTML = `<b style="color:${s.couleur}">${esc(s.libelle)}</b>`
       + (d.arrivee_prevue ? ` — arrivée prévue ${esc(heure(d.arrivee_prevue))}` : '')
       + (d.site && SITES[d.site] ? ` — ⛏️ ${esc(SITES[d.site])}` : '')
+      + (d.lieu_statut && d.statut !== 'autre_province' ? ` — 📍 ${esc(d.lieu_statut)}` : '')
       + (d.lieu ? ` — ${esc(d.lieu)}` : '')
       + (d.destination ? ` — vers ${esc(d.destination)}` : '')
       + (d.passagers != null ? ` — 👥 ${d.passagers} passager${d.passagers > 1 ? 's' : ''}` : '')
@@ -1794,6 +1865,7 @@ $('#btn-rappel6').addEventListener('click', async () => {
     return;
   }
   choisirStatut(st, false);
+  reprendreLieuStatut(st, r.d.lieu_statut);   // version 1.17 : même lieu que le dernier pointage
   if (st === 'en_course') {   // même course : destination et passagers repris du dernier pointage
     if (!$('#destination').value.trim() && r.d.destination) $('#destination').value = r.d.destination;
     if (!$('#passagers').value.trim() && r.d.passagers != null) $('#passagers').value = String(r.d.passagers);
@@ -1918,6 +1990,24 @@ async function pointer() {
       return;
     }
   }
+  // Version 1.17 : lieu obligatoire (liste ou « Autre lieu » écrit)
+  let lieuStatut = null;
+  if (LIEUX_STATUT[statut]) {
+    if (!etat.lieuStatut) {
+      const grille = $('#grille-lieux-statut');
+      grille.classList.add('a-remplir');
+      grille.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toast('Choisissez le lieu où vous êtes dans la liste.', 'erreur');
+      return;
+    }
+    lieuStatut = etat.lieuStatut === 'autre' ? $('#lieu-autre').value.trim().replace(/\s+/g, ' ').slice(0, 60) : etat.lieuStatut;
+    if (lieuStatut.length < 2) {
+      signalerChamp('#lieu-autre');
+      toast('Écrivez le nom du lieu où vous êtes.', 'erreur');
+      return;
+    }
+    if (statut === 'autre_province') { $('#ville').value = lieuStatut; lsSet('loc.ville', lieuStatut); }
+  }
   let province = null, ville = null;
   if (statut === 'autre_province') {
     province = $('#province').value;
@@ -1960,7 +2050,7 @@ async function pointer() {
     if (CONDUITE.includes(statut) && !(await verifierAptitude())) return;
     if (statut === 'en_mission') arriveePrevue = new Date(Date.now() + etat.dureeTrajet * 60000).toISOString();
     // Véhicule : seulement pour les statuts avec position (jamais en repos / congé / maladie)
-    const p = { statut, destination, province, ville, lieu_dispo: lieuDispo, site, passagers,
+    const p = { statut, destination, province, ville, lieu_dispo: lieuDispo, site, passagers, lieu_statut: lieuStatut,
                 jours_maladie: joursMaladie, vehicule_id: def.position ? vehiculeChoisi() : null,
                 arrivee_prevue: arriveePrevue };
     let lieuNom = null;
@@ -2239,6 +2329,7 @@ async function enregistrerPointage(p, lieuNom) {
   lsSet('loc.dernier', {
     chauffeur_id: c.id, statut: p.statut, horodatage: item.horodatage, lieu: lieuNom,
     destination: p.destination, province: p.province, ville: p.ville, lieu_dispo: p.lieu_dispo,
+    lieu_statut: p.lieu_statut || null,
     vehicule: p.vehicule_id ? (vehiculeParId(p.vehicule_id) || {}).immatriculation || null : null,
     contestation: p.contestation || null, site: p.site || null, passagers: p.passagers ?? null,
     sans_position: STATUTS[p.statut].position && p.latitude == null,
@@ -2274,7 +2365,7 @@ function versServeur(i) {
     province: i.province || null, ville: i.ville || null, lieu_dispo: i.lieu_dispo || null,
     vehicule_id: i.vehicule_id ?? null, contestation: i.contestation || null, site: i.site || null,
     passagers: i.passagers ?? null, jours_maladie: i.jours_maladie ?? null,
-    arrivee_prevue: i.arrivee_prevue || null,
+    arrivee_prevue: i.arrivee_prevue || null, lieu_statut: i.lieu_statut || null,
     hors_ligne: Date.now() - (i.cree_ms || Date.now()) > 2 * 60 * 1000, // envoyé en différé
   };
 }
@@ -2666,6 +2757,7 @@ async function nouvelleHeureArrivee() {
   if (!m) return;
   // Nouveau pointage « En mission » avec la nouvelle heure (la position est envoyée en même temps)
   choisirStatut('en_mission', false);
+  reprendreLieuStatut('en_mission', (lsGet('loc.dernier') || {}).lieu_statut);   // version 1.17 : même lieu de mission
   $('#trajet-destination').value = t.destination || '';
   etat.dureeTrajet = m;
   if (!DUREES_TRAJET.includes(m)) DUREES_TRAJET.push(m);
@@ -3367,6 +3459,7 @@ function ligneHistorique(p, enAttente) {
   const s = STATUTS[p.statut] || { libelle: p.statut, couleur: '#555' };
   const details = [];
   if (p.site && SITES[p.site]) details.push('⛏️ ' + esc(SITES[p.site]));
+  if (p.lieu_statut && p.statut !== 'autre_province') details.push('📍 ' + esc(p.lieu_statut));
   if (p.quartier) details.push(esc(p.quartier));
   if (p.repere) details.push('« ' + esc(p.repere) + ' »');
   if (p.destination) details.push('vers ' + esc(p.destination));
