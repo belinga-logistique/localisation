@@ -23,7 +23,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.16.2';   // 1.16.1 : photos ouvertes à taille réduite (mémoire des téléphones modestes)
+const VERSION = 'v1.16.3';   // 1.16.3 : site « BELINGA VILLAGE » renommé « BELINGA »
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',
