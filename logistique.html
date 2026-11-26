@@ -354,6 +354,7 @@ tr.danger-ouvert td { background: #FFFBEB; }
     <button role="tab" data-vue="synthese">📊 Synthèse</button>
     <button role="tab" data-vue="lieux">📍 Lieux et zones</button>
     <button role="tab" data-vue="journal">📜 Journal</button>
+    <button role="tab" data-vue="hse" id="onglet-hse" hidden>🔒 HSE <span id="badge-hse" class="badge zero">0</span></button>
     <button role="tab" data-vue="parametres">⚙️ Paramètres</button>
   </nav>
 
@@ -557,6 +558,28 @@ tr.danger-ouvert td { background: #FFFBEB; }
     </div>
   </section>
 
+  <!-- ===================== VUE HSE (version 1.20, réservée au responsable HSE) ===================== -->
+  <section class="vue" id="v-hse" hidden>
+    <div class="bloc">
+      <div class="ligne"><h2 style="margin:0">🔒 Messages confidentiels des chauffeurs</h2>
+        <button class="btn sec petit" id="btn-hse-recharger" type="button">⟳ Recharger</button></div>
+      <p class="doux">Visible seulement par le(s) responsable(s) HSE. Messages non traités, et messages traités des 30 derniers jours.
+        Un message « anonyme » n'est enregistré avec aucun nom.</p>
+      <table>
+        <thead><tr><th>Reçu</th><th>Sujet</th><th>Message</th><th>De</th><th>Suivi</th><th>Actions</th></tr></thead>
+        <tbody id="tab-hse"></tbody>
+      </table>
+    </div>
+    <div class="bloc">
+      <h2>✋ Droits d'arrêt (« Je m'arrête : situation dangereuse »)</h2>
+      <p class="doux">Arrêts déclarés par les chauffeurs (30 derniers jours). La prise en charge se fait par la logistique, dans l'onglet Alertes.</p>
+      <table>
+        <thead><tr><th>Date</th><th>Chauffeur</th><th>Précisions</th><th>Prise en charge (logistique)</th></tr></thead>
+        <tbody id="tab-hse-arrets"></tbody>
+      </table>
+    </div>
+  </section>
+
   <!-- ===================== VUE PARAMÈTRES ===================== -->
   <section class="vue" id="v-parametres" hidden>
     <div class="bloc" style="max-width:720px">
@@ -711,6 +734,7 @@ const MOTIFS = {
   accident:  { libelle: 'Accident',      ico: '💥' },
   malaise:   { libelle: 'Malaise',       ico: '🚑' },
   autre:     { libelle: 'Autre urgence', ico: '⚠️' },
+  arret:     { libelle: 'Droit d\'arrêt (situation dangereuse)', ico: '✋' },   // version 1.20
 };
 
 /* Villes de référence pour estimer la province hors des zones (approximatif) */
@@ -865,6 +889,7 @@ function afficherConnexion(message, type = 'ko', formulaire = 'connexion') {
   formulaireConnexion(formulaire);
   messageConnexion(message, type);
   etat.chauffeurs = []; etat.urgences = []; etat.courses = []; etat.suivre = null; etat.photos = new Map(); // rien ne reste affiché
+  etat.hse = false; etat.hseDonnees = null; $('#onglet-hse').hidden = true; $('#tab-hse').innerHTML = ''; $('#tab-hse-arrets').innerHTML = '';
   arreterSignalUrgence();
 }
 
@@ -990,8 +1015,12 @@ async function ouvrirApplication(user) {
   $('#utilisateur').textContent = user.email;
   $('#e-connexion').hidden = true; $('#app').hidden = false;
   initialiserFiltres();
+  etat.hse = await rpc('loc_est_hse').then(v => v === true, () => false);   // version 1.20
+  $('#onglet-hse').hidden = !etat.hse;
+  if (!etat.hse && etat.vue === 'hse') etat.vue = 'carte';
   afficherVue(etat.vue);
   await chargerTout();
+  if (etat.hse) chargerHse();
   await verifierUrgences(true);
   await chargerCourses();
   await chargerPhotos();
@@ -1012,16 +1041,19 @@ async function chargerTout() {
   etat.rechargerApres = false;
   $('#btn-actualiser').disabled = true;
   try {
-    const [positions, lieux, zones, params, vehicules] = await Promise.all([
+    const [positions, lieux, zones, params, vehicules, habil] = await Promise.all([
       rpc('loc_positions_actuelles'),           // consultation AUDITÉE
       api(sb.from('loc_lieux').select('id,nom,type,ville,latitude,longitude,rayon_m,approximatif,actif,code').order('nom')),
       api(sb.from('loc_zones').select('id,nom,type,latitude,longitude,rayon_m,ordre,couleur,approximatif,actif,code').order('ordre')),
       api(sb.from('loc_parametres').select('cle,valeur')),
       api(sb.from('loc_vehicules').select('id,immatriculation,modele,actif').order('immatriculation')),
+      api(sb.from('loc_chauffeurs').select('id,' + CHAMPS_HABIL.join(','))).catch(() => []),   // version 1.20
     ]);
     etat.lieux = lieux; etat.zones = zones; etat.vehicules = vehicules;
     etat.params = Object.fromEntries(params.map(p => [p.cle, p.valeur]));
     etat.chauffeurs = positions.map(enrichir);
+    const habParId = new Map((habil || []).map(h => [h.id, h]));
+    etat.chauffeurs.forEach(c => { const h = habParId.get(c.id) || {}; CHAMPS_HABIL.forEach(k => { c[k] = h[k] ?? null; }); });
     const premier = !etat.maj;
     etat.maj = new Date();
     rendreTout();
@@ -1285,6 +1317,7 @@ function afficherVue(vue) {
   if (vue === 'lieux') { initCarte('lieux', 'map-lieux', [0.41, 9.47], 12); chargerStatsLieux(); }
   if (vue === 'journal') chargerJournal();
   if (vue === 'alertes' && etat.user) { chargerUrgences(); chargerDangers(); }
+  if (vue === 'hse' && etat.hse) chargerHse();
   rendreVue(vue);
   Object.values(etat.cartes).forEach(m => setTimeout(() => m.invalidateSize(), 50));
   animerChiffres($('#v-' + vue));                       // version 1.11 : les chiffres de la rubrique défilent
@@ -1302,7 +1335,7 @@ function rendreVue(vue) {
   if (!etat.maj) return;
   ({ carte: rendreCarte, libreville: rendreLibreville, chauffeurs: rendreChauffeurs,
      alertes: () => { rendreDangers(); rendreUrgences(); rendreAlertes(); }, vehicules: rendreVehicules,
-     synthese: rendreSynthese, lieux: rendreLieux, parametres: rendreParametres }[vue] || (() => {}))();
+     synthese: rendreSynthese, lieux: rendreLieux, parametres: rendreParametres, hse: rendreHse }[vue] || (() => {}))();
 }
 
 /* --- Cartes Leaflet (créées à la première ouverture de l'onglet) --- */
@@ -1694,6 +1727,7 @@ document.addEventListener('click', (e) => {
     'danger-voir': () => voirDanger(id),
     'danger-photo': () => voirPhotoDanger(id),
     'danger-traiter': () => traiterDanger(id, el.dataset.statut),
+    'hse-traiter': () => traiterHse(id, el.dataset.statut),   // version 1.20
     'veh-enregistrer': () => enregistrerVehicule(Number(id)),
     'veh-supprimer': () => supprimerVehicule(Number(id)),
   };
@@ -1744,6 +1778,104 @@ async function afficherHistorique(id) {
 }
 
 /* ===========================================================================
+   VERSION 1.20 : HABILITATIONS DES CHAUFFEURS ET MESSAGES HSE
+   =========================================================================== */
+const CHAMPS_HABIL = ['permis_categories', 'permis_expire_le', 'defensive_expire_le', 'secours_expire_le', 'medicale_expire_le'];
+const HABILITATIONS = [
+  ['permis_expire_le', 'Permis de conduire'],
+  ['defensive_expire_le', 'Conduite défensive'],
+  ['secours_expire_le', 'Premiers secours'],
+  ['medicale_expire_le', 'Visite médicale'],
+];
+/** État d'une date d'expiration (heure du Gabon) : { cle: ok | bientot | expire, jours, texte } ou null. */
+function etatHabil(date) {
+  if (!date) return null;
+  const [a, m, j] = String(date).slice(0, 10).split('-').map(Number);
+  const g = new Date(Date.now() + 3600 * 1000);   // aujourd'hui à Libreville (UTC+1)
+  const jours = Math.round((Date.UTC(a, m - 1, j) - Date.UTC(g.getUTCFullYear(), g.getUTCMonth(), g.getUTCDate())) / 86400000);
+  const le = `${String(j).padStart(2, '0')}/${String(m).padStart(2, '0')}/${a}`;
+  if (jours < 0) return { cle: 'expire', jours, texte: `expirée le ${le}` };
+  if (jours <= 30) return { cle: 'bientot', jours, texte: jours === 0 ? `expire aujourd'hui (${le})` : `expire dans ${jours} j (${le})` };
+  return { cle: 'ok', jours, texte: `valable jusqu'au ${le}` };
+}
+function habilitationsARenouveler() {
+  const l = [];
+  etat.chauffeurs.filter(c => c.actif).forEach(c => HABILITATIONS.forEach(([k, nom]) => {
+    const e = etatHabil(c[k]);
+    if (e && e.cle !== 'ok') l.push({ c, nom, e });
+  }));
+  return l.sort((a, b) => a.e.jours - b.e.jours);
+}
+function etiquetteHabil(c) {
+  const etats = HABILITATIONS.map(([k, nom]) => [nom, etatHabil(c[k])]).filter(([, e]) => e && e.cle !== 'ok');
+  if (!etats.length) return '';
+  const expire = etats.some(([, e]) => e.cle === 'expire');
+  return `<span class="etiq ${expire ? 'ko' : 'att'}" title="${esc(etats.map(([n, e]) => n + ' : ' + e.texte).join(' · '))}">🪪 ${expire ? 'habilitation expirée' : 'habilitation à renouveler'}</span>`;
+}
+
+const CATEGORIES_HSE = { danger: '⚠️ Situation dangereuse', comportement: '🚗 Conduite / comportement', materiel: '🔧 Véhicule / matériel', arret: '✋ Arrêt', autre: '💬 Autre' };
+const ETATS_HSE = { nouveau: ['ko', 'NOUVEAU'], lu: ['att', '👁️ lu'], traite: ['ok', '✓ traité'] };
+async function chargerHse() {
+  if (!etat.user || !etat.hse) return;
+  try {
+    const r = await rpc('loc_hse_liste', { p_jours: 30 });
+    if (!r || r.ok !== true) return;
+    const avant = etat.hseDonnees ? new Set(etat.hseDonnees.messages.map(x => x.id)) : null;
+    etat.hseDonnees = r;
+    const nouveaux = r.messages.filter(x => x.statut === 'nouveau');
+    if (avant && nouveaux.some(x => !avant.has(x.id))) toast('🔒 Nouveau message confidentiel pour le HSE', 'ko', 8000);
+    const b = $('#badge-hse'); b.textContent = nouveaux.length; b.className = 'badge' + (nouveaux.length ? '' : ' zero');
+    if (etat.vue === 'hse') rendreHse();
+  } catch (e) { toast('Messages HSE : ' + e.message, 'ko', 6000); }
+}
+setInterval(() => { if (etat.hse) chargerHse(); }, 2 * 60 * 1000);
+$('#btn-hse-recharger').addEventListener('click', () => chargerHse());
+
+function rendreHse() {
+  const d = etat.hseDonnees;
+  if (!d) { $('#tab-hse').innerHTML = '<tr><td colspan="6" class="vide">Chargement…</td></tr>'; return; }
+  $('#tab-hse').innerHTML = d.messages.map(x => {
+    const de = x.anonyme ? '<span class="etiq">🕶️ anonyme</span>'
+      : (x.nom ? `<b>${esc(nomComplet(x))}</b> <span class="doux">(${esc(x.matricule)})</span><br><a href="tel:${esc(x.telephone)}">${esc(x.telephone)}</a>` : '<span class="doux">chauffeur supprimé</span>');
+    const st = ETATS_HSE[x.statut] || ETATS_HSE.nouveau;
+    return `<tr><td>${esc(dateHeure(x.recu_le))}<br><span class="doux">${esc(ilYa(x.recu_le))}</span></td>`
+      + `<td>${esc(CATEGORIES_HSE[x.categorie] || x.categorie)}</td>`
+      + `<td style="white-space:pre-wrap;max-width:420px">${esc(x.message)}</td><td>${de}</td>`
+      + `<td><span class="etiq ${st[0]}">${st[1]}</span>${x.traite_par_email ? `<br><span class="doux">${esc(x.traite_par_email)}</span>` : ''}${x.commentaire ? `<br>« ${esc(x.commentaire)} »` : ''}</td>`
+      + `<td><div class="ligne">${x.statut === 'nouveau' ? `<button class="btn sec petit" data-action="hse-traiter" data-statut="lu" data-id="${esc(x.id)}">👁️ Marquer lu</button>` : ''}`
+      + (x.statut !== 'traite' ? `<button class="btn petit" data-action="hse-traiter" data-statut="traite" data-id="${esc(x.id)}">✓ Traité</button>` : '') + '</div></td></tr>';
+  }).join('') || '<tr><td colspan="6" class="vide">Aucun message confidentiel.</td></tr>';
+  $('#tab-hse-arrets').innerHTML = d.arrets.map(a => `<tr><td>${esc(dateHeure(a.horodatage))}<br><span class="doux">${esc(ilYa(a.horodatage))}</span></td>`
+    + `<td><b>${esc(nomComplet(a))}</b> <span class="doux">(${esc(a.matricule)})</span><br><a href="tel:${esc(a.telephone)}">${esc(a.telephone)}</a></td>`
+    + `<td>${a.message ? '« ' + esc(a.message) + ' »' : '<span class="doux">—</span>'}</td>`
+    + `<td>${a.traitee_le ? `<span class="etiq ok">✓ ${esc(dateHeure(a.traitee_le))}</span>${a.commentaire ? '<br>« ' + esc(a.commentaire) + ' »' : ''}` : '<span class="etiq ko">EN COURS</span>'}</td></tr>`).join('')
+    || '<tr><td colspan="4" class="vide">Aucun arrêt déclaré.</td></tr>';
+}
+
+async function traiterHse(id, statut) {
+  if (!['lu', 'traite'].includes(statut)) return;
+  try {
+    if (statut === 'lu') {
+      const r = await rpc('loc_hse_traiter', { p_message: id, p_statut: 'lu', p_commentaire: null });
+      if (r && r.ok === false) throw new Error(r.message);
+    } else {
+      const choix = await modale('Message traité',
+        `<label class="champ" for="hse-com">Suite donnée (facultatif, 500 caractères, visible seulement par le HSE)</label>
+         <textarea id="hse-com" class="champ-l" rows="3" maxlength="500" style="width:100%"></textarea>`,
+        [{ libelle: '✓ Traité', valeur: 'ok' }, { libelle: 'Annuler', valeur: 'annuler', classe: 'sec' }],
+        async () => {
+          const r = await rpc('loc_hse_traiter', { p_message: id, p_statut: 'traite', p_commentaire: $('#hse-com').value.trim() || null });
+          if (r && r.ok === false) throw new Error(r.message);
+          return true;
+        });
+      if (choix !== 'ok') return;
+    }
+    toast(statut === 'lu' ? 'Message marqué lu.' : 'Message traité ✓', 'ok');
+    await chargerHse();
+  } catch (e) { toast(e.message, 'ko', 6000); }
+}
+
+/* ===========================================================================
    VUE CHAUFFEURS : liste, ajout, modification, PIN, import CSV
    =========================================================================== */
 $('#ch-inactifs').addEventListener('change', rendreChauffeurs);
@@ -1760,6 +1892,7 @@ function rendreChauffeurs() {
       c.est_demo ? '<span class="etiq">démo</span>' : '',
       etat.photos.get(c.id)?.statut === 'refusee' ? '<span class="etiq att">photo refusée</span>' : (etat.photos.get(c.id)?.image ? '' : '<span class="etiq">sans photo</span>'),
       c.actif ? '' : '<span class="etiq">inactif</span>',
+      etiquetteHabil(c),   // version 1.20
     ].join(' ');
     return `<tr class="${c.actif ? '' : 'inactif'}"><td>${vignette(c.id, c._nom)}</td><td>${esc(c.matricule)}</td><td><b>${esc(c._nom)}</b></td>`
       + `<td><a href="tel:${esc(c.telephone)}">${esc(c.telephone)}</a></td><td>${c.equipe === 'libreville' ? 'Libreville' : 'Site'}<br><span class="doux">séjour ${c.duree_site || 14} j</span></td>`
@@ -1790,6 +1923,14 @@ async function editerChauffeur(id) {
       <div><label class="champ" for="ce-binome">Binôme de remplacement</label><select id="ce-binome" class="champ-l"><option value="">— Aucun —</option>${options}</select></div>
       <div><label class="champ" for="ce-duree">Durée du séjour sur site</label><select id="ce-duree" class="champ-l"><option value="14">14 jours (puis 7 jours de repos)</option><option value="21"${c && c.duree_site === 21 ? ' selected' : ''}>21 jours (puis 14 jours de repos)</option></select></div>
     </div>
+    <h3 style="margin:16px 0 4px">🪪 Habilitations <span class="doux" style="font-weight:400">(dates d'expiration ; alerte 30 jours avant)</span></h3>
+    <div class="grille2" style="grid-template-columns:1fr 1fr">
+      <div><label class="champ" for="ce-permis-cat">Catégories du permis</label><input id="ce-permis-cat" class="champ-l" type="text" maxlength="30" placeholder="Ex. B, C" value="${esc(c ? c.permis_categories || '' : '')}"></div>
+      <div><label class="champ" for="ce-permis">Permis valable jusqu'au</label><input id="ce-permis" class="champ-l" type="date" value="${esc(c ? c.permis_expire_le || '' : '')}"></div>
+      <div><label class="champ" for="ce-defensive">Conduite défensive jusqu'au</label><input id="ce-defensive" class="champ-l" type="date" value="${esc(c ? c.defensive_expire_le || '' : '')}"></div>
+      <div><label class="champ" for="ce-secours">Premiers secours jusqu'au</label><input id="ce-secours" class="champ-l" type="date" value="${esc(c ? c.secours_expire_le || '' : '')}"></div>
+      <div><label class="champ" for="ce-medicale">Visite médicale valable jusqu'au</label><input id="ce-medicale" class="champ-l" type="date" value="${esc(c ? c.medicale_expire_le || '' : '')}"></div>
+    </div>
     <label class="ligne" style="margin-top:12px"><input type="checkbox" id="ce-actif"${!c || c.actif ? ' checked' : ''}> Chauffeur actif</label>
     ${c ? '' : '<p class="doux">Après l\'ajout, définissez un PIN provisoire (bouton « PIN ») et communiquez-le au chauffeur.</p>'}`;
   const boutons = [{ libelle: c ? 'Enregistrer' : 'Ajouter', valeur: 'ok' }];
@@ -1802,6 +1943,9 @@ async function editerChauffeur(id) {
       matricule: $('#ce-mat').value.trim(), nom: $('#ce-nom').value.trim(), prenom: $('#ce-prenom').value.trim() || null,
       telephone: normaliserTel($('#ce-tel').value), equipe: $('#ce-equipe').value,
       binome_id: $('#ce-binome').value || null, actif: $('#ce-actif').checked,
+      permis_categories: $('#ce-permis-cat').value.trim() || null,
+      permis_expire_le: $('#ce-permis').value || null, defensive_expire_le: $('#ce-defensive').value || null,
+      secours_expire_le: $('#ce-secours').value || null, medicale_expire_le: $('#ce-medicale').value || null,
     };
     if (!donnees.matricule || !donnees.nom) throw new Error('Le matricule et le nom sont obligatoires.');
     if (!/^\d{8,10}$/.test(donnees.telephone)) throw new Error('Téléphone invalide : 8 à 10 chiffres (sans +241).');
@@ -2489,7 +2633,13 @@ function contenuSynthese() {
         (() => { const l = compter(c => c.dernier && c.dernier.statut === 'sur_site' ? (SITES[c.dernier.site] || 'Site non précisé') : null).filter(([k]) => k !== null);
                  return l.length ? l : [['Aucun chauffeur sur site', 0]]; })())
     + tableauSynthese('Par zone', ['Zone', 'Chauffeurs'], parZone)
-    + tableauSynthese('Libreville — par quartier', ['Quartier', 'Chauffeurs', 'Disponibles'], parQuartier.length ? parQuartier : [['Aucun chauffeur à Libreville', 0, 0]]);
+    + tableauSynthese('Libreville — par quartier', ['Quartier', 'Chauffeurs', 'Disponibles'], parQuartier.length ? parQuartier : [['Aucun chauffeur à Libreville', 0, 0]])
+    + (() => {   // version 1.20
+      const l = habilitationsARenouveler();
+      return tableauSynthese('🪪 Habilitations à renouveler (expirées ou dans 30 jours)', ['Chauffeur', 'Habilitation', 'Échéance'],
+        l.length ? l.map(x => [x.c._nom + ' (' + x.c.matricule + ')', esc(x.nom), `<span class="etiq ${x.e.cle === 'expire' ? 'ko' : 'att'}">${esc(x.e.texte)}</span>`])
+                 : [['Aucune habilitation à renouveler', '—', '—']]);
+    })();
 }
 function rendreSynthese() { $('#synthese').innerHTML = contenuSynthese(); }
 

@@ -23,7 +23,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.18.0';   // 1.18.0 : « SITE BELINGA » et coordonnées des sites vérifiées ; 1.17.0 : lieu choisi dans une liste
+const VERSION = 'v1.20.0';   // 1.20.0 : habilitations, droit d'arrêt, message confidentiel au HSE ; 1.18.0 : « SITE BELINGA » et coordonnées des sites vérifiées ; 1.17.0 : lieu choisi dans une liste
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',

@@ -187,6 +187,20 @@ input:focus-visible, button:focus-visible { outline: 3px solid #F59E0B; outline-
 }
 .motif .ico { font-size: 1.5rem; }
 .motif:last-child:nth-child(odd) { grid-column: 1 / -1; }
+/* --- Version 1.20 : droit d'arrêt, message HSE, habilitations --- */
+.btn-arret { min-height: 52px; margin: -4px 0 14px; font-size: 1rem; background: #fff; color: var(--danger);
+  border: 2px solid var(--danger); box-shadow: 0 4px 12px rgba(185, 28, 28, .15); }
+.btn-hse { min-height: 50px; margin-top: 14px; background: #fff; color: #1E3A8A; border: 1.5px solid #93C5FD; box-shadow: none; }
+.habil { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--bord, #E5E7EB); }
+.habil:last-child { border-bottom: 0; }
+.habil .etat { font-weight: 700; font-size: .875rem; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.habil .ok { background: var(--succes-fond); color: var(--succes); }
+.habil .bientot { background: #FEF3C7; color: #92400E; }
+.habil .expire { background: var(--danger-fond); color: var(--danger); }
+.habil .inconnu { background: #F3F4F6; color: #4B5563; }
+.cats-hse { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 10px; }
+.cat-hse { min-height: 48px; border-radius: 12px; border: 1.5px solid var(--bord-fort); background: #fff; font-weight: 700; font-size: .9375rem; color: var(--texte); }
+.cat-hse[aria-checked=true] { border-color: #1D4ED8; background: #EFF6FF; color: #1D4ED8; box-shadow: 0 0 0 3px rgba(29, 78, 216, .15); }
 /* --- Version 1.15 : sécurité routière (trajet, aptitude, pause, dangers) --- */
 .btn-danger-route { min-height: 52px; margin: -4px 0 14px; font-size: 1rem; background: #fff; color: #B45309;
   border: 2px solid #F59E0B; box-shadow: 0 4px 12px rgba(245, 158, 11, .18); }
@@ -422,12 +436,14 @@ a.btn { text-decoration: none; }
 
     <div class="carte carte-periode" id="carte-periode" hidden role="status" aria-live="polite"></div>
     <div class="carte carte-trajet" id="carte-trajet" hidden role="status" aria-live="polite"></div>
+    <div id="bandeau-habil" class="bandeau erreur message" role="alert" hidden></div>
     <div id="bandeau-pause" class="bandeau attente message" role="alert" hidden>
       <span id="pause-texte">⏸️ 2 h de conduite : arrêtez-vous 15 minutes (boire, marcher, vous étirer).</span>
       <button id="btn-pause" type="button" class="btn" style="margin-top:8px;width:100%">✅ J'ai fait ma pause</button>
     </div>
     <button id="btn-urgence" class="btn btn-urgence" type="button">🚨 PANNE / URGENCE</button>
     <button id="btn-danger" class="btn btn-danger-route" type="button">⚠️ SIGNALER UN DANGER SUR LA ROUTE</button>
+    <button id="btn-arret" class="btn btn-arret" type="button">✋ JE M'ARRÊTE : SITUATION DANGEREUSE</button>
     <input id="photo-danger" type="file" accept="image/*" capture="environment" hidden>
     <div class="carte" id="carte-dangers" hidden>
       <h3>⚠️ Dangers signalés sur la route</h3>
@@ -550,6 +566,14 @@ a.btn { text-decoration: none; }
       <h3>Mon binôme de remplacement</h3>
       <div id="binome"></div>
     </div>
+
+    <div class="carte" id="carte-habilitations" hidden>
+      <h3>🪪 Mes habilitations</h3>
+      <div id="habilitations"></div>
+      <p class="aide">Dates enregistrées par la logistique. Une erreur ? Prévenez la logistique.</p>
+    </div>
+
+    <button id="btn-hse" class="btn btn-hse" type="button">🔒 Message confidentiel au HSE</button>
   </section>
 
   <!-- =====================================================================
@@ -782,6 +806,7 @@ const MOTIFS = {
   accident:  { libelle: 'Accident',  ico: '💥' },
   malaise:   { libelle: 'Malaise',   ico: '🚑' },
   autre:     { libelle: 'Autre urgence', ico: '⚠️' },
+  arret:     { libelle: 'Je m\'arrête : situation dangereuse', ico: '✋' },   // version 1.20 : droit d'arrêt
 };
 
 /* Valeurs par défaut si la liste des paramètres n'a pas encore été chargée */
@@ -1121,7 +1146,7 @@ async function rafraichirProfil() {
     }
     const avant = JSON.stringify(etat.profil);
     etat.profil = { chauffeur: r.chauffeur, consentement: r.consentement, consentement_version: r.consentement_version || null, pin_a_changer: r.pin_a_changer,
-                    duree_site: r.duree_site || 14, periode: r.periode || null };
+                    duree_site: r.duree_site || 14, periode: r.periode || null, habilitations: r.habilitations || null };
     // Pointages pas encore envoyés : le décompte du téléphone est plus récent que celui du serveur
     for (const q of await pointagesEnAttente()) etat.profil.periode = periodeApres(etat.profil.periode, q.statut, q.horodatage, q.jours_maladie, etat.profil.duree_site);
     sauverSession();
@@ -1709,6 +1734,7 @@ function rendrePrincipal() {
   choisirSite(null);   // version 1.9.1 : le site n'est plus pré-sélectionné
   construireVehicules();
   rendreAlertes();
+  rendreHabilitations();   // version 1.20
   majCarteSuivi();
   majPhoto();
   if (!$('#liste-destinations').options.length || etat.ref) construireDestinations();   // version 1.15
@@ -2478,19 +2504,31 @@ function liensAppelUrgence() {
     + (b && b.telephone ? lienAppel(b.telephone, `📞 Appeler mon binôme ${esc(b.prenom || b.nom)}`, 'secondaire') : '');
 }
 
-$('#btn-urgence').addEventListener('click', signalerUrgence);
+$('#btn-urgence').addEventListener('click', () => signalerUrgence());
+$('#btn-arret').addEventListener('click', () => signalerUrgence('arret'));   // version 1.20
 
-async function signalerUrgence() {
+async function signalerUrgence(impose = null) {
   if (urgenceEnCours || !etat.profil) return;
   const tel = telLogistique();
-  const motif = await dialogue({
+  const motif = impose === 'arret' ? await dialogue({
+    titre: '✋ Je m\'arrête : situation dangereuse',
+    html: '<p style="margin-top:0">Vous avez <b>le droit d\'arrêter</b> un trajet ou un travail dangereux. Personne ne peut vous le reprocher.</p>'
+      + '<p><b>Mettez-vous d\'abord en sécurité</b> (véhicule garé, feux de détresse).</p>'
+      + '<label for="u-message">Que se passe-t-il ? (facultatif)</label>'
+      + '<textarea id="u-message" maxlength="200" placeholder="Ex. pont effondré au PK 40, pluie trop forte, véhicule pas sûr"></textarea>'
+      + '<p class="aide">La logistique est prévenue tout de suite avec votre position. Le responsable HSE est informé.</p>',
+    boutons: [
+      { libelle: '✋ Envoyer : je m\'arrête', valeur: 'arret', classe: 'danger' },
+      { libelle: 'Annuler', valeur: 'annuler', classe: 'lien' },
+    ],
+  }) : await dialogue({
     titre: '🚨 Panne / Urgence',
     html: (tel ? `<p class="aide" style="margin-top:0">Danger immédiat ? Appelez tout de suite :</p>${lienAppel(tel, '📞 Appeler la logistique')}` : '')
       + '<label for="u-message">Précisions (facultatif)</label>'
       + '<textarea id="u-message" maxlength="200" placeholder="Ex. PK 120 après Ndjolé, moteur coupé, pas de blessé"></textarea>'
       + '<p style="margin:14px 0 0"><b>Touchez le motif</b> : l\'alerte part aussitôt avec votre position.</p>',
     boutons: [
-      ...Object.entries(MOTIFS).map(([code, m]) => ({ libelle: `${m.ico}  ${m.libelle}`, valeur: code, classe: 'danger-contour' })),
+      ...Object.entries(MOTIFS).filter(([code]) => code !== 'arret').map(([code, m]) => ({ libelle: `${m.ico}  ${m.libelle}`, valeur: code, classe: 'danger-contour' })),
       { libelle: 'Annuler', valeur: 'annuler', classe: 'lien' },
     ],
   });
@@ -2498,7 +2536,7 @@ async function signalerUrgence() {
   const message = (($('#u-message') && $('#u-message').value) || '').trim().slice(0, 200) || null;
 
   urgenceEnCours = true;
-  $('#btn-urgence').disabled = true;
+  $('#btn-urgence').disabled = true; $('#btn-arret').disabled = true;
   try {
     const pos = await positionUrgence();
     const c = etat.profil.chauffeur;
@@ -2545,7 +2583,7 @@ async function signalerUrgence() {
     });
   } finally {
     urgenceEnCours = false;
-    $('#btn-urgence').disabled = false;
+    $('#btn-urgence').disabled = false; $('#btn-arret').disabled = false;
   }
 }
 
@@ -2954,16 +2992,17 @@ async function envoyerDanger(type, message, avecPhoto) {
  * `aptDirect` / `dangerDirect` : envoi direct si la file locale est indisponible.
  */
 let securiteEnCours = null;
-async function envoyerSecurite(aptDirect = null, dangerDirect = null) {
+async function envoyerSecurite(aptDirect = null, dangerDirect = null, hseDirect = null) {
   if (!etat.jeton || !etat.profil) return null;
-  if (securiteEnCours && !aptDirect && !dangerDirect) return securiteEnCours;
+  if (securiteEnCours && !aptDirect && !dangerDirect && !hseDirect) return securiteEnCours;
   const tache = (async () => {
     const id = etat.profil.chauffeur.id, res = {};
-    for (const [cle, rpcNom, champ, direct] of [['aptitudesFile', 'loc_declarer_aptitudes', 'p_aptitudes', aptDirect],
-                                                ['dangersFile', 'loc_signaler_dangers', 'p_dangers', dangerDirect]]) {
+    for (const [cle, rpcNom, champ, direct, nomRes] of [['aptitudesFile', 'loc_declarer_aptitudes', 'p_aptitudes', aptDirect, 'aptitudes'],
+                                                        ['dangersFile', 'loc_signaler_dangers', 'p_dangers', dangerDirect, 'dangers'],
+                                                        ['hseFile', 'loc_envoyer_hse', 'p_messages', hseDirect, 'hse']]) {   // version 1.20
       let l = (await fileSecurite(cle)).filter(x => x.chauffeur_id === id);
       if (direct && !l.some(x => x.id === direct.id)) l = [direct];
-      if (!l.length) { res[cle === 'aptitudesFile' ? 'aptitudes' : 'dangers'] = 'vide'; continue; }
+      if (!l.length) { res[nomRes] = 'vide'; continue; }
       try {
         const envoi = l.slice(0, 10).map(x => {
           const { chauffeur_id, cree_ms, ...reste } = x;
@@ -2972,16 +3011,17 @@ async function envoyerSecurite(aptDirect = null, dangerDirect = null) {
         const r = await rpc(rpcNom, { p_jeton: etat.jeton, [champ]: envoi });
         if (!r.ok) {
           if (r.erreur === 'session_invalide') finSession('Votre session a expiré. Reconnectez-vous.');
-          res[cle === 'aptitudesFile' ? 'aptitudes' : 'dangers'] = 'refus';
+          res[nomRes] = 'refus';
           if (r.message) toast(r.message, 'erreur', 7000);
           continue;
         }
         const faits = new Set([...r.acceptes, ...r.rejetes.map(x => x.id)]);
         try { await DB.put('kv', (await fileSecurite(cle)).filter(x => !faits.has(x.id)), cle); } catch { /* ignoré */ }
         if (r.rejetes.length) toast('Refusé : ' + r.rejetes.map(x => x.raison).join(', '), 'erreur', 7000);
-        res[cle === 'aptitudesFile' ? 'aptitudes' : 'dangers'] = r.acceptes.length ? 'ok' : 'refus';
+        if (nomRes === 'hse') res.hseRejetes = r.rejetes;
+        res[nomRes] = r.acceptes.length ? 'ok' : 'refus';
       } catch (e) {
-        res[cle === 'aptitudesFile' ? 'aptitudes' : 'dangers'] = 'hors_ligne';
+        res[nomRes] = 'hors_ligne';
         if (e instanceof ErreurReseau) demanderEnvoiArrierePlan();
       }
     }
@@ -2995,7 +3035,7 @@ async function envoyerSecurite(aptDirect = null, dangerDirect = null) {
     if (etat.ecran === 'principal') majCarteDangers();
     return res;
   })();
-  if (!aptDirect && !dangerDirect) { securiteEnCours = tache; tache.finally(() => { securiteEnCours = null; }); }
+  if (!aptDirect && !dangerDirect && !hseDirect) { securiteEnCours = tache; tache.finally(() => { securiteEnCours = null; }); }
   return tache;
 }
 
@@ -3658,6 +3698,91 @@ async function deconnexion() {
 $('#btn-deconnexion').addEventListener('click', deconnexion);
 
 /* ===========================================================================
+   VERSION 1.20 : HABILITATIONS ET MESSAGE CONFIDENTIEL AU HSE
+   =========================================================================== */
+const HABILITATIONS = [
+  ['permis', 'Permis de conduire'],
+  ['defensive', 'Conduite défensive'],
+  ['secours', 'Premiers secours'],
+  ['medicale', 'Visite médicale'],
+];
+/** État d'une date d'expiration : { cle: ok | bientot | expire | inconnu, jours, texte }. */
+function etatHabilitation(date) {
+  if (!date) return { cle: 'inconnu', texte: 'Non renseignée' };
+  const [a, m, j] = String(date).slice(0, 10).split('-').map(Number);
+  const fin = new Date(a, m - 1, j), auj = new Date(); auj.setHours(0, 0, 0, 0);
+  const jours = Math.round((fin - auj) / 86400000);
+  const le = fin.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  if (jours < 0) return { cle: 'expire', jours, le, texte: `Expirée le ${le}` };
+  if (jours <= 30) return { cle: 'bientot', jours, le, texte: jours === 0 ? `Expire aujourd'hui` : `Expire dans ${jours} j (${le})` };
+  return { cle: 'ok', jours, le, texte: `Valable jusqu'au ${le}` };
+}
+function rendreHabilitations() {
+  const h = etat.profil && etat.profil.habilitations;
+  const carte = $('#carte-habilitations'), bandeau = $('#bandeau-habil');
+  const renseigne = h && HABILITATIONS.some(([k]) => h[k]);
+  carte.hidden = !renseigne;
+  if (!renseigne) { bandeau.hidden = true; return; }
+  const lignes = HABILITATIONS.map(([k, nom]) => {
+    const e = etatHabilitation(h[k]);
+    const det = k === 'permis' && h.permis_categories ? ` <span class="aide">(cat. ${esc(h.permis_categories)})</span>` : '';
+    return { k, nom, e, html: `<div class="habil"><span>${esc(nom)}${det}</span><span class="etat ${e.cle}">${esc(e.texte)}</span></div>` };
+  });
+  $('#habilitations').innerHTML = lignes.map(l => l.html).join('');
+  const urgentes = lignes.filter(l => l.e.cle === 'expire' || l.e.cle === 'bientot');
+  bandeau.hidden = !urgentes.length;
+  bandeau.innerHTML = urgentes.length
+    ? '<div>🪪 ' + urgentes.map(l => `<b>${esc(l.nom)}</b> : ${esc(l.e.cle === 'expire' ? 'expirée le ' + l.e.le : (l.e.jours === 0 ? 'expire aujourd\'hui' : 'expire dans ' + l.e.jours + ' jour(s)'))}`).join('<br>🪪 ')
+      + '<br>Prévenez la logistique pour le renouvellement.</div>'
+    : '';
+}
+
+const CATEGORIES_HSE = {
+  danger: '⚠️ Situation dangereuse',
+  comportement: '🚗 Conduite / comportement',
+  materiel: '🔧 Véhicule / matériel',
+  autre: '💬 Autre',
+};
+$('#btn-hse').addEventListener('click', messageHse);
+async function messageHse() {
+  if (!etat.profil) return;
+  let categorie = null;
+  const ouvrir = dialogue({
+    titre: '🔒 Message confidentiel au HSE',
+    html: '<p style="margin-top:0">Ce message va <b>seulement au responsable HSE</b>, pas à la logistique.</p>'
+      + '<label>Sujet</label><div class="cats-hse" role="radiogroup">'
+      + Object.entries(CATEGORIES_HSE).map(([c, l]) => `<button type="button" class="cat-hse" role="radio" aria-checked="false" data-cat-hse="${c}">${l}</button>`).join('')
+      + '</div><label for="hse-message">Votre message</label>'
+      + '<textarea id="hse-message" maxlength="1000" rows="5" placeholder="Décrivez ce que vous avez vu : où, quand, quoi."></textarea>'
+      + '<label class="case" style="margin-top:10px"><input id="hse-anonyme" type="checkbox"> <span>Envoyer <b>sans mon nom</b> (anonyme)</span></label>'
+      + '<p class="aide">Anonyme : votre nom n\'est pas enregistré avec le message ; le HSE ne pourra pas vous rappeler.</p>',
+    boutons: [
+      { libelle: '📨 Envoyer au HSE', valeur: 'envoyer' },
+      { libelle: 'Annuler', valeur: 'annuler', classe: 'lien' },
+    ],
+  });
+  document.querySelectorAll('[data-cat-hse]').forEach(b => b.addEventListener('click', () => {
+    categorie = b.dataset.catHse;
+    document.querySelectorAll('[data-cat-hse]').forEach(x => x.setAttribute('aria-checked', String(x === b)));
+  }));
+  if ((await ouvrir) !== 'envoyer') return;
+  const texte = ($('#hse-message').value || '').trim().slice(0, 1000);
+  const anonyme = $('#hse-anonyme').checked;
+  if (!categorie || texte.length < 3) {
+    toast(!categorie ? 'Choisissez le sujet du message.' : 'Écrivez votre message (au moins quelques mots).', 'erreur', 6000);
+    return;
+  }
+  const item = { id: uuid(), chauffeur_id: etat.profil.chauffeur.id, categorie, message: texte, anonyme,
+                 horodatage: new Date().toISOString(), cree_ms: Date.now() };
+  try { await DB.put('kv', [...(await fileSecurite('hseFile')), item], 'hseFile'); } catch { /* envoi direct ci-dessous */ }
+  const r = await envoyerSecurite(null, null, item);
+  const st = r && r.hse;
+  if (st === 'ok') toast(`✅ Message envoyé au HSE${anonyme ? ' (anonyme)' : ''}. Merci.`, 'succes', 7000);
+  else if (st === 'hors_ligne') toast('⏳ Pas de réseau : le message partira automatiquement dès le retour du réseau.', 'attente', 8000);
+  else if (!(r && r.hseRejetes && r.hseRejetes.length)) toast('Envoi impossible pour le moment : réessayez plus tard.', 'erreur', 7000);
+}
+
+/* ===========================================================================
    NAVIGATION, RÉSEAU ET TÂCHES PÉRIODIQUES
    =========================================================================== */
 document.querySelectorAll('#nav button').forEach(b => b.addEventListener('click', () => {
@@ -3691,7 +3816,7 @@ setInterval(async () => {
   if ((await fileAlertes()).length) await envoyerAlertes();
   await suivreAlertes();                   // seulement s'il y a une alerte en cours
   if ((await pointagesEnAttente()).length) await synchroniser();
-  if ((await fileSecurite('aptitudesFile')).length || (await fileSecurite('dangersFile')).length) await envoyerSecurite();
+  if ((await fileSecurite('aptitudesFile')).length || (await fileSecurite('dangersFile')).length || (await fileSecurite('hseFile')).length) await envoyerSecurite();
   verifierRappel();
   verifierPause();
   if (etat.ecran === 'principal' && !etat.pointageEnCours) rendrePrincipal();
