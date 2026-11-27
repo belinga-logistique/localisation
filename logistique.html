@@ -414,7 +414,7 @@ tr.danger-ouvert td { background: #FFFBEB; }
       <div class="panneau">
         <div class="ligne">
           <label class="ligne" style="font-weight:700"><input type="checkbox" id="f-dispo"> Disponibles maintenant</label>
-          <span class="doux" title="Statut « Disponible à Libreville » ou « Sur site », pointage récent, accord donné">ⓘ</span>
+          <span class="doux" title="Statut « Disponible à Libreville » ou « Belinga », pointage récent, accord donné">ⓘ</span>
         </div>
         <p class="doux" style="margin:6px 0 0">
           <span class="point" style="background:#15803D"></span>Disponible : chez lui, base MARIA, INFRATEC, fin de course, fin de repos / congé / maladie<br>
@@ -684,7 +684,7 @@ const CFG = window.LOC_CONFIG;
 
 /* Statuts : mêmes codes et couleurs que l'application chauffeur */
 const STATUTS = {
-  sur_site:         { libelle: 'Sur site',                couleur: '#B45309', position: true },
+  sur_site:         { libelle: 'Belinga',                 couleur: '#B45309', position: true },   // statut « sur_site » (libellé 1.23.2)
   en_mission:       { libelle: 'En mission (trajet)',     couleur: '#1D4ED8', position: true },
   dispo_libreville: { libelle: 'Disponible à Libreville', couleur: '#15803D', position: true },
   en_course:        { libelle: 'En course',               couleur: '#7C3AED', position: true },
@@ -706,7 +706,7 @@ const STATUTS_DISPONIBLES = ['dispo_libreville'];
    Jours calendaires, heure du Gabon.
    --------------------------------------------------------------------------- */
 const PERIODES = {
-  site:    { libelle: 'Sur site', ico: '⛏️', fin: 'Séjour sur site terminé' },
+  site:    { libelle: 'Belinga', ico: '⛏️', fin: 'Séjour sur site terminé' },
   repos:   { libelle: 'Repos',    ico: '🏠', fin: 'Fin de repos' },
   conge:   { libelle: 'Congé',    ico: '🌴', fin: 'Fin de congé' },
   maladie: { libelle: 'Maladie',  ico: '🤒', fin: 'Fin de repos maladie' },
@@ -1284,10 +1284,10 @@ function enrichir(c) {
         const zs = d.site ? etat.zones.find(z => z.code === d.site && z.actif) : null;
         if (d.site) {
           if (zs && !zs.approximatif && haversine(c._pos[0], c._pos[1], zs.latitude, zs.longitude) > zs.rayon_m + Math.min(Number(d.precision_m) || 0, 500)) {
-            c._alertes.push({ type: 'Hors zone', niveau: 'ko', detail: `Déclaré « Sur site : ${SITES[d.site]} » mais situé : ${c._zoneNom}` });
+            c._alertes.push({ type: 'Hors zone', niveau: 'ko', detail: `Déclaré « Belinga : ${SITES[d.site]} » mais situé : ${c._zoneNom}` });
           }
         } else if (c._zone.type !== 'site') {
-          c._alertes.push({ type: 'Hors zone', niveau: 'ko', detail: `Déclaré « Sur site » mais situé : ${c._zoneNom}` });
+          c._alertes.push({ type: 'Hors zone', niveau: 'ko', detail: `Déclaré « Belinga » mais situé : ${c._zoneNom}` });
         }
       }
       if (d.statut === 'dispo_libreville' && c._zone.type !== 'libreville') c._alertes.push({ type: 'Hors zone', niveau: 'ko', detail: `Déclaré « Disponible à Libreville » mais situé : ${c._zoneNom}` });
@@ -1563,7 +1563,7 @@ function testCompteur(cle) {
   const k = COMPTEURS.find(x => x.cle === cle) || COMPTEURS_STATUTS.find(x => x.cle === cle);
   return k ? k.test : () => true;
 }
-const libelleFiltre = (cle) => cle.startsWith('site:') ? 'Sur site · ' + (SITES[cle.slice(5)] || 'site non précisé')
+const libelleFiltre = (cle) => cle.startsWith('site:') ? 'Belinga · ' + (SITES[cle.slice(5)] || 'site non précisé')
   : ((COMPTEURS.find(x => x.cle === cle) || COMPTEURS_STATUTS.find(x => x.cle === cle) || {}).libelle || cle);
 function bandeStatutsHtml(actifs) {
   const n = actifs.length || 1;
@@ -1575,7 +1575,7 @@ function bandeStatutsHtml(actifs) {
     const surSite = actifs.filter(k.test);
     const puces = Object.entries(SITES).map(([code, nom]) => {
       const x = surSite.filter(c => c.dernier.site === code).length;
-      return `<button type="button" class="puce-site${x ? '' : ' vide'}" data-compteur="site:${code}" aria-pressed="${etat.filtreSpecial === 'site:' + code}" title="Sur site : ${esc(nom)}"><b>${x}</b>${esc(nom)}</button>`;
+      return `<button type="button" class="puce-site${x ? '' : ' vide'}" data-compteur="site:${code}" aria-pressed="${etat.filtreSpecial === 'site:' + code}" title="Belinga : ${esc(nom)}"><b>${x}</b>${esc(nom)}</button>`;
     });
     const sansSite = surSite.filter(c => !SITES[c.dernier.site]).length;
     if (sansSite) puces.push(`<button type="button" class="puce-site" data-compteur="site:?" aria-pressed="${etat.filtreSpecial === 'site:?'}"><b>${sansSite}</b>Site non précisé</button>`);
@@ -2787,7 +2787,7 @@ function contenuSynthese() {
       ['Sans consentement', actifs.filter(c => !c._consent).length],
       ['Sans photo d\'identité', actifs.filter(c => !(etat.photos.get(c.id) && etat.photos.get(c.id).image)).length]])
     + tableauSynthese('Par statut', ['Statut', 'Chauffeurs'], parStatut)
-    + tableauSynthese('Sur site — par site de travail', ['Site', 'Chauffeurs'],
+    + tableauSynthese('Belinga — par site de travail', ['Site', 'Chauffeurs'],
         (() => { const l = compter(c => c.dernier && c.dernier.statut === 'sur_site' ? (SITES[c.dernier.site] || 'Site non précisé') : null).filter(([k]) => k !== null);
                  return l.length ? l : [['Aucun chauffeur sur site', 0]]; })())
     + tableauSynthese('Par zone', ['Zone', 'Chauffeurs'], parZone)
@@ -2954,7 +2954,7 @@ function contenuRapportJournalier(r, auteur) {
     + `<div><b>${sansNouvelles.length}</b>sans nouvelles depuis plus de 6 jours</div>`
     + `</div>`
     + `<div class="r-deux"><div><h2>Répartition des statuts ${esc(moment)}</h2>${table(['Statut', '#Chauffeurs', '#Part'], lignesStatuts, '')}</div>`
-    + `<div><h2>Sur site — par site de travail</h2>${table(['Site', '#Chauffeurs'], parSite.map(([l, n]) => `<tr><td>${esc(l)}</td><td class="num">${n}</td></tr>`), '')}</div></div>`
+    + `<div><h2>Belinga — par site de travail</h2>${table(['Site', '#Chauffeurs'], parSite.map(([l, n]) => `<tr><td>${esc(l)}</td><td class="num">${n}</td></tr>`), '')}</div></div>`
     + `<h2>Activité de la journée — changements de statut (${changements.length})</h2>`
     + table(['Heure', 'Chauffeur', 'Statut précédent', 'Nouveau statut', 'Détail', 'Véhicule'],
         changements.map(m => `<tr><td>${esc(heure(m.horodatage))}</td><td>${nom(m)}</td>`

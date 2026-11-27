@@ -769,7 +769,7 @@ const CFG = window.LOC_CONFIG;
    position: false -> AUCUNE position n'est envoyée (vie privée)
    --------------------------------------------------------------------------- */
 const STATUTS = {
-  sur_site:         { libelle: 'Sur site',                couleur: '#B45309', ico: '⛏️', position: true },
+  sur_site:         { libelle: 'Belinga',                 couleur: '#B45309', ico: '⛏️', position: true },   // statut « sur_site » (libellé 1.23.2)
   en_mission:       { libelle: 'En mission (trajet)',     couleur: '#1D4ED8', ico: '🚙', position: true },
   dispo_libreville: { libelle: 'Disponible à Libreville', couleur: '#15803D', ico: '✅', position: true },
   en_course:        { libelle: 'En course',               couleur: '#7C3AED', ico: '📍', position: true },
@@ -1332,14 +1332,14 @@ function controleCoherence(statut, lieuDispo, province, pos, site = null) {
   const auSite = zones.some(z => z.type === 'site' && dans(z));
   // Conseil : le statut qui correspond au GPS (version 1.6 : avec le site de travail s'il est connu)
   const siteIci = zones.find(z => z.type === 'site' && z.code && SITES[z.code] && z.code !== site && dans(z));
-  const conseil = siteIci ? `« Sur site : ${SITES[siteIci.code]} »` : auSite ? '« Sur site »' : auxLbv ? '« Disponible à Libreville »'
+  const conseil = siteIci ? `« Belinga : ${SITES[siteIci.code]} »` : auSite ? '« Belinga »' : auxLbv ? '« Disponible à Libreville »'
     : `« En mission » ou « Autre province » (${provinceDe(pos.lat, pos.lon)})`;
 
   if (statut === 'sur_site') {
     // Version 1.6 : on contrôle le site CHOISI, seulement s'il est placé et vérifié sur la carte
     const z = site && zones.find(x => x.code === site);
     if (z && z.approximatif === false && !dans(z)) {
-      return { declare: `Sur site : ${SITES[site] || z.nom}`, constate: ici, conseil };
+      return { declare: `Belinga : ${SITES[site] || z.nom}`, constate: ici, conseil };
     }
   }
   if (statut === 'dispo_libreville') {
@@ -1516,7 +1516,7 @@ function detecterSite() {
       b.className = 'bandeau attente site-gps';
       b.innerHTML = '📍 Votre GPS ne vous situe sur aucun site de travail'
         + (r.proche ? ` (le plus proche : <b>${esc(SITES[r.proche.z.code])}</b>, à ${esc(distanceTexte(Math.max(0, r.proche.d - r.proche.z.rayon_m)))} de sa zone).` : '.')
-        + ' Si vous êtes bien sur un site, mettez-vous à découvert et touchez de nouveau « Sur site ».';
+        + ' Si vous êtes bien sur un site, mettez-vous à découvert et touchez de nouveau « Belinga ».';
     }
   }, () => {
     if (n !== detectionSite) return;
@@ -2177,8 +2177,8 @@ async function pointer() {
         const r = siteDuGps(pos);
         if (r.site) p.site = r.site.code;
         else {
-          const motif = await signalerIncoherence({ declare: `Sur site : ${lieuSite}`, constate: zoneDuPoint(pos.lat, pos.lon),
-            conseil: r.proche ? `« Sur site » seulement une fois arrivé sur ${SITES[r.proche.z.code]}` : '« En mission » ou « Autre province »' }, pos);
+          const motif = await signalerIncoherence({ declare: `Belinga : ${lieuSite}`, constate: zoneDuPoint(pos.lat, pos.lon),
+            conseil: r.proche ? `« Belinga » seulement une fois arrivé sur ${SITES[r.proche.z.code]}` : '« En mission » ou « Autre province »' }, pos);
           if (!motif) {
             $('#grille-statuts').scrollIntoView({ behavior: 'smooth', block: 'center' });
             toast('Choisis la bonne localisation, puis pointe de nouveau.', 'attente', 6000);
@@ -2883,7 +2883,7 @@ function majCarteTrajet() {
     + `<button type="button" class="btn secondaire" id="btn-retard">🕒 Nouvelle heure</button></div>`;
   $('#btn-arrive').addEventListener('click', () => {
     $('#grille-statuts').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    toast('Choisissez votre statut d\'arrivée (Sur site, Disponible…), puis pointez.', 'attente', 7000);
+    toast('Choisissez votre statut d\'arrivée (Belinga, Disponible…), puis pointez.', 'attente', 7000);
   });
   $('#btn-retard').addEventListener('click', nouvelleHeureArrivee);
 }
