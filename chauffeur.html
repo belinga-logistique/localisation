@@ -627,6 +627,27 @@ a.btn { text-decoration: none; }
         </div>
         <p class="aide">Indiquez le nombre de jours écrit sur votre arrêt maladie.</p>
       </div>
+      <!-- Version 1.26 : repos (ville vérifiée par le GPS + nombre de jours) ; congé (nombre de jours) -->
+      <div id="bloc-repos" hidden>
+        <label>Ville du repos (vérifiée par le GPS) *</label>
+        <div id="repos-gps" class="bandeau neutre site-gps" role="status" aria-live="polite">📡 Votre position sera vérifiée à l'envoi.</div>
+        <label for="jours-repos">Nombre de jours de repos (1 à 13) *</label>
+        <div class="compteur-passagers">
+          <button id="rep-moins" class="btn secondaire" type="button" aria-label="Un jour de moins">−</button>
+          <input id="jours-repos" type="number" inputmode="numeric" min="1" max="13" step="1" placeholder="?">
+          <button id="rep-plus" class="btn secondaire" type="button" aria-label="Un jour de plus">+</button>
+        </div>
+        <p class="aide">Le repos n'est validé que si votre GPS vous situe à <b>Libreville</b>, <b>Makokou</b> ou <b>Port-Gentil</b>. Votre position est seulement vérifiée sur le téléphone : elle n'est pas envoyée.</p>
+      </div>
+      <div id="bloc-conge" hidden>
+        <label for="jours-conge">Nombre de jours de congé (1 à 60) *</label>
+        <div class="compteur-passagers">
+          <button id="cng-moins" class="btn secondaire" type="button" aria-label="Un jour de moins">−</button>
+          <input id="jours-conge" type="number" inputmode="numeric" min="1" max="60" step="1" placeholder="?">
+          <button id="cng-plus" class="btn secondaire" type="button" aria-label="Un jour de plus">+</button>
+        </div>
+        <p class="aide">Indiquez le nombre de jours de congé accordés.</p>
+      </div>
       <p id="note-prive" class="aide" hidden>🔒 Pour ce statut, <b>aucune position</b> n'est envoyée.</p>
     </div>
 
@@ -919,7 +940,6 @@ const SITES = {
    Le libellé choisi est enregistré tel quel (colonne lieu_statut). */
 const LIEUX_REPOS = ['Libreville', 'Makokou', 'Lambaréné', 'Port-Gentil'];
 const LIEUX_STATUT = {
-  repos:          { titre: 'Où êtes-vous en repos ? *',          lieux: LIEUX_REPOS,                                       prefixe: 'Repos à' },
   en_mission:     { titre: 'En mission à : *',                   lieux: ['Libreville', 'Makokou', 'Batouala', 'Ikei Boka Boka'], prefixe: 'En mission à' },
   en_course:      { titre: 'Où se fait la course ? *',           lieux: ['Libreville', 'Owendo', 'Ntoum', 'Makokou'],     prefixe: 'Course à' },
   autre_province: { titre: 'Dans quelle ville êtes-vous ? *',    lieux: ['Lambaréné', 'Port-Gentil', 'Franceville', 'Oyem', 'Mouila', 'Makokou'], prefixe: 'À' },
@@ -1289,7 +1309,7 @@ async function rafraichirProfil() {
     etat.profil = { chauffeur: r.chauffeur, consentement: r.consentement, consentement_version: r.consentement_version || null, pin_a_changer: r.pin_a_changer,
                     duree_site: r.duree_site || 14, periode: r.periode || null, habilitations: r.habilitations || null };
     // Pointages pas encore envoyés : le décompte du téléphone est plus récent que celui du serveur
-    for (const q of await pointagesEnAttente()) etat.profil.periode = periodeApres(etat.profil.periode, q.statut, q.horodatage, q.jours_maladie, etat.profil.duree_site);
+    for (const q of await pointagesEnAttente()) etat.profil.periode = periodeApres(etat.profil.periode, q.statut, q.horodatage, q.jours_maladie ?? q.jours_declares, etat.profil.duree_site);
     sauverSession();
     if (avant !== JSON.stringify(etat.profil)) router();
   } catch { /* hors ligne : on garde le profil enregistré */ }
@@ -1552,6 +1572,9 @@ function choisirStatut(code, mettreFocus = true) {
   $('#bloc-lieu-dispo').hidden = code !== 'dispo_libreville';
   $('#bloc-site').hidden = code !== 'sur_site';
   $('#bloc-maladie').hidden = code !== 'malade';
+  $('#bloc-repos').hidden = code !== 'repos';   // version 1.26
+  $('#bloc-conge').hidden = code !== 'conge';
+  if (code === 'repos' && mettreFocus) detecterVilleRepos();
   // Version 1.17 : le lieu est à rechoisir quand le chauffeur touche un statut (pas lors d'un simple rafraîchissement)
   if (mettreFocus || etat.lieuStatutPour !== code) construireLieuxStatut(code);
   $('#note-prive').hidden = def.position;
@@ -1609,6 +1632,71 @@ function siteDuGps(pos) {
   const dedans = avec.filter(x => x.d <= x.z.rayon_m + prec).sort((a, b) => a.d - b.d);
   const proche = avec.sort((a, b) => (a.d - a.z.rayon_m) - (b.d - b.z.rayon_m))[0] || null;
   return { site: dedans.length ? dedans[0].z : null, proche };
+}
+/* Version 1.26 : « En repos » validé SEULEMENT à Libreville, Makokou ou Port-Gentil.
+   Le téléphone vérifie la position sur place ; seule la ville est envoyée (aucune position en repos). */
+const VILLES_REPOS = { ville_libreville: 'Libreville', ville_makokou: 'Makokou', ville_port_gentil: 'Port-Gentil' };
+const JOURS_MAX = { repos: 13, conge: 60 };
+const PRECISION_MAX_REPOS = 2000;   // au-delà, la position n'est pas assez sûre pour valider le repos
+function villeReposDuGps(pos) {
+  const zones = ((etat.ref && etat.ref.zones) || []).filter(z => VILLES_REPOS[z.code]);
+  const prec = Math.min(Number(pos.precision) || 0, 500);
+  const x = zones.map(z => ({ z, d: haversine(pos.lat, pos.lon, z.lat, z.lon) }))
+    .filter(v => v.d <= v.z.rayon_m + prec).sort((a, b) => a.d - b.d)[0];
+  return x ? VILLES_REPOS[x.z.code] : null;
+}
+const villesReposConnues = () => ((etat.ref && etat.ref.zones) || []).some(z => VILLES_REPOS[z.code]);
+let detectionRepos = 0;
+function detecterVilleRepos() {
+  const b = $('#repos-gps');
+  if (!('geolocation' in navigator) || !villesReposConnues()) return;
+  const n = ++detectionRepos;
+  b.className = 'bandeau neutre site-gps';
+  b.textContent = '📡 Vérification de votre position…';
+  navigator.geolocation.getCurrentPosition((p) => {
+    if (n !== detectionRepos || etat.statut !== 'repos') return;
+    const pos = { lat: p.coords.latitude, lon: p.coords.longitude, precision: p.coords.accuracy };
+    const ville = pos.precision <= PRECISION_MAX_REPOS ? villeReposDuGps(pos) : null;
+    if (ville) { b.className = 'bandeau ok site-gps'; b.innerHTML = `✅ Votre GPS vous situe à <b>${esc(ville)}</b> : repos autorisé.`; }
+    else if (pos.precision > PRECISION_MAX_REPOS) { b.className = 'bandeau attente site-gps'; b.textContent = '📡 Position trop imprécise : mettez-vous à découvert. Elle sera vérifiée de nouveau à l’envoi.'; }
+    else { b.className = 'bandeau erreur site-gps'; b.innerHTML = `⛔ Votre GPS vous situe : <b>${esc(zoneDuPoint(pos.lat, pos.lon))}</b>. Le repos n'est validé qu'à Libreville, Makokou ou Port-Gentil.`; }
+  }, () => {
+    if (n !== detectionRepos) return;
+    b.className = 'bandeau attente site-gps';
+    b.textContent = '📡 Position introuvable pour le moment : activez la localisation. Elle sera vérifiée à l’envoi.';
+  }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+}
+/** Vérification stricte avant l'envoi d'un repos : renvoie la ville, ou null (pointage refusé). */
+async function verifierVilleRepos() {
+  const ok = [{ libelle: 'Compris', valeur: 'ok' }];
+  if (!villesReposConnues()) {
+    await dialogue({ titre: '⚠️ Liste des villes à mettre à jour', html: '<p>Ouvrez <b>Réglages › Mettre à jour la liste</b> avec du réseau, puis pointez de nouveau.</p>', boutons: ok });
+    return null;
+  }
+  // Course suivie en cours : le GPS est déjà surveillé, on prend la position reçue il y a moins d'une minute
+  const frais = suivi.watchId !== null && suivi.fix && Date.now() - suivi.fix.t < 60000
+    ? { lat: suivi.fix.lat, lon: suivi.fix.lon, precision: suivi.fix.precision } : null;
+  const pos = frais || await localiser();
+  if (pos === undefined) return null;   // annulé
+  if (!pos) {
+    await dialogue({ titre: '📡 GPS obligatoire pour le repos', boutons: ok,
+      html: '<p>Le repos n\'est validé qu\'après vérification de votre position GPS.</p><p>Activez la localisation, mettez-vous à découvert, puis pointez de nouveau.</p>' });
+    return null;
+  }
+  if (pos.precision > PRECISION_MAX_REPOS) {
+    await dialogue({ titre: '📡 Position trop imprécise', boutons: ok,
+      html: `<p>Précision actuelle : <b>± ${Math.round(pos.precision)} m</b>. Il faut moins de ${PRECISION_MAX_REPOS} m pour valider le repos.</p><p>Mettez-vous à découvert et réessayez.</p>` });
+    return null;
+  }
+  const ville = villeReposDuGps(pos);
+  if (!ville) {
+    await dialogue({ titre: '⛔ Repos refusé', boutons: ok,
+      html: `<p>Votre GPS vous situe : <b>${esc(zoneDuPoint(pos.lat, pos.lon))}</b>.</p>`
+          + '<p>Le statut « En repos » n\'est validé qu\'à <b>Libreville</b>, <b>Makokou</b> ou <b>Port-Gentil</b>.</p>'
+          + '<p>Sur la route : pointez « En mission ». Dans une autre ville : pointez « Autre province ».</p>' });
+    return null;
+  }
+  return ville;
 }
 let detectionSite = 0;
 function detecterSite() {
@@ -1775,16 +1863,18 @@ function joursEcoules(debut, maintenant = Date.now()) {
 }
 /** Période qui suit un nouveau pointage (même calcul que le serveur). */
 function periodeApres(ancienne, statut, horodatage, joursMaladie, dureeSite) {
+  // joursMaladie : jours de maladie, ou (version 1.26) jours de repos / congé déclarés
   const type = TYPE_PERIODE[statut] || null;
   if (ancienne && ancienne.type === type) {
-    if (type === 'maladie' && joursMaladie) return { ...ancienne, duree_jours: joursMaladie };
+    if (['maladie', 'repos', 'conge'].includes(type) && joursMaladie) return { ...ancienne, duree_jours: joursMaladie };
     return ancienne;
   }
   if (!type) return null;
   let duree = null;
   if (type === 'site') duree = dureeSite || 14;
-  else if (type === 'conge') duree = 30;
+  else if (type === 'conge') duree = joursMaladie || 30;
   else if (type === 'maladie') duree = joursMaladie || null;
+  else if (joursMaladie) duree = joursMaladie;
   else if (ancienne && ancienne.type === 'site') duree = ancienne.duree_jours >= 21 ? 14 : 7;
   else {
     const f = finSiteMemo();
@@ -1922,6 +2012,7 @@ function rendrePrincipal() {
   rendreEtapeSejour();
   rendrePeriode();
   $('#jours-maladie').value = lsGet('loc.joursMaladie', '');
+  $('#jours-repos').value = lsGet('loc.joursRepos', ''); $('#jours-conge').value = lsGet('loc.joursConge', '');
   if (etat.statut) choisirStatut(etat.statut, false);
   $('#destination').value = lsGet('loc.destination', '');
   const provinceMemo = lsGet('loc.province', '');
@@ -2090,6 +2181,8 @@ $('#btn-rappel6').addEventListener('click', async () => {
   }
   choisirStatut(st, false);
   reprendreLieuStatut(st, r.d.lieu_statut);   // version 1.17 : même lieu que le dernier pointage
+  // Version 1.26 : même nombre de jours de repos / congé que le dernier pointage (le repos est revérifié par le GPS)
+  if ((st === 'repos' || st === 'conge') && r.d.jours_declares) $(st === 'repos' ? '#jours-repos' : '#jours-conge').value = String(r.d.jours_declares);
   if (st === 'en_course') {   // même course : destination et passagers repris du dernier pointage
     if (!$('#destination').value.trim() && r.d.destination) $('#destination').value = r.d.destination;
     if (!$('#passagers').value.trim() && r.d.passagers != null) $('#passagers').value = String(r.d.passagers);
@@ -2145,6 +2238,18 @@ function ajusterJoursMaladie(delta) {
   champ.classList.remove('a-remplir');
   lsSet('loc.joursMaladie', champ.value);
 }
+// Version 1.26 : jours de repos (1 à 13) et de congé (1 à 60)
+function ajusterJours(id, cle, max, delta) {
+  const champ = $(id), v = Number(champ.value) || 0;
+  champ.value = Math.min(max, Math.max(1, champ.value === '' ? 1 : v + delta));
+  champ.classList.remove('a-remplir'); lsSet(cle, champ.value);
+}
+$('#rep-moins').addEventListener('click', () => ajusterJours('#jours-repos', 'loc.joursRepos', 13, -1));
+$('#rep-plus').addEventListener('click', () => ajusterJours('#jours-repos', 'loc.joursRepos', 13, +1));
+$('#cng-moins').addEventListener('click', () => ajusterJours('#jours-conge', 'loc.joursConge', 60, -1));
+$('#cng-plus').addEventListener('click', () => ajusterJours('#jours-conge', 'loc.joursConge', 60, +1));
+$('#jours-repos').addEventListener('input', () => lsSet('loc.joursRepos', $('#jours-repos').value));
+$('#jours-conge').addEventListener('input', () => lsSet('loc.joursConge', $('#jours-conge').value));
 $('#mal-moins').addEventListener('click', () => ajusterJoursMaladie(-1));
 $('#mal-plus').addEventListener('click', () => ajusterJoursMaladie(+1));
 $('#jours-maladie').addEventListener('input', () => lsSet('loc.joursMaladie', $('#jours-maladie').value));
@@ -2219,6 +2324,18 @@ async function pointer() {
       return;
     }
   }
+  // Version 1.26 : nombre de jours OBLIGATOIRE pour « En repos » (1 à 13) et « Congé » (1 à 60)
+  let joursDeclares = null;
+  if (statut === 'repos' || statut === 'conge') {
+    const id = statut === 'repos' ? '#jours-repos' : '#jours-conge', max = JOURS_MAX[statut];
+    const v = $(id).value.trim();
+    joursDeclares = /^\d{1,2}$/.test(v) ? Number(v) : NaN;
+    if (!(joursDeclares >= 1 && joursDeclares <= max)) {
+      signalerChamp(id);
+      toast(statut === 'repos' ? 'Indiquez le nombre de jours de repos (1 à 13).' : 'Indiquez le nombre de jours de congé (1 à 60).', 'erreur');
+      return;
+    }
+  }
   // Version 1.17 : lieu obligatoire (liste ou « Autre lieu » écrit)
   let lieuStatut = null;
   if (LIEUX_STATUT[statut]) {
@@ -2286,8 +2403,14 @@ async function pointer() {
     if (lieuSite) lieuStatut = lieuSite;
     const p = { statut, destination, province, ville, lieu_dispo: lieuDispo, site, passagers, lieu_statut: lieuStatut,
                 jours_maladie: joursMaladie, vehicule_id: def.position ? vehiculeChoisi() : null,
-                arrivee_prevue: arriveePrevue };
+                arrivee_prevue: arriveePrevue, jours_declares: joursDeclares };
     let lieuNom = null;
+    // Version 1.26 : « En repos » seulement si le GPS situe le chauffeur à Libreville, Makokou ou Port-Gentil
+    if (statut === 'repos') {
+      const ville = await verifierVilleRepos();
+      if (!ville) return;
+      p.ville_gps = ville; p.lieu_statut = ville;
+    }
 
     if (def.position) {
       const pos = await localiser();
@@ -2593,7 +2716,7 @@ async function enregistrerPointage(p, lieuNom) {
   const avantPer = etat.profil.periode;
   if (avantPer && avantPer.type === 'site' && p.statut !== 'sur_site') lsSet('loc.finSite', { cid: c.id, fin: item.horodatage, duree: avantPer.duree_jours || 14 });
   if (p.statut === 'sur_site') lsDel('loc.finSite');
-  etat.profil.periode = periodeApres(avantPer, p.statut, item.horodatage, p.jours_maladie, etat.profil.duree_site);
+  etat.profil.periode = periodeApres(avantPer, p.statut, item.horodatage, p.jours_maladie ?? p.jours_declares, etat.profil.duree_site);
   sauverSession();
   $('#bandeau-rappel').hidden = true;
   rendrePrincipal();
@@ -2617,6 +2740,7 @@ function versServeur(i) {
     province: i.province || null, ville: i.ville || null, lieu_dispo: i.lieu_dispo || null,
     vehicule_id: i.vehicule_id ?? null, contestation: i.contestation || null, site: i.site || null,
     passagers: i.passagers ?? null, jours_maladie: i.jours_maladie ?? null,
+    jours_declares: i.jours_declares ?? null, ville_gps: i.ville_gps || null,   // version 1.26
     arrivee_prevue: i.arrivee_prevue || null, lieu_statut: i.lieu_statut || null,
     hors_ligne: Date.now() - (i.cree_ms || Date.now()) > 2 * 60 * 1000, // envoyé en différé
   };
