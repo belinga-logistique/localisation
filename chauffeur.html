@@ -488,7 +488,7 @@ a.btn { text-decoration: none; }
       </div>
       <div id="bloc-trajet" hidden>
         <label for="trajet-destination">Destination du trajet *</label>
-        <input id="trajet-destination" type="text" maxlength="80" list="liste-destinations" placeholder="Ex. Makokou, Libreville, SITE BELINGA…">
+        <input id="trajet-destination" type="text" maxlength="80" list="liste-destinations" placeholder="Ex. Makokou, Libreville, Site Belinga…">
         <datalist id="liste-destinations"></datalist>
         <label id="trajet-duree-titre">Durée prévue du trajet *</label>
         <div id="grille-durees" class="durees" role="radiogroup" aria-labelledby="trajet-duree-titre"></div>
@@ -771,7 +771,7 @@ const VILLES_PROVINCES = [
 
 /* Sites de travail (statut « Sur site », version 1.6), mêmes codes que la base */
 const SITES = {
-  belinga_village: 'SITE BELINGA', batouala: 'BATOUALA', makokou: 'MAKOKOU',
+  belinga_village: 'Site Belinga', batouala: 'BATOUALA', makokou: 'MAKOKOU',
   ikei_boka_boka: 'IKEI BOKA BOKA', kobe_kobe: 'KOBE-KOBE', kango: 'KANGO',
 };
 
@@ -2750,7 +2750,9 @@ function construireDestinations() {
   const noms = new Set(['Libreville', 'Makokou', 'Ovan', 'Booué', 'Ndjolé', 'Lalara', 'Mitzic', 'Oyem', 'Franceville', 'Lambaréné', 'Owendo', 'Ntoum', 'Kango']);
   Object.values(SITES).forEach(n => noms.add(n));
   ((etat.ref && etat.ref.zones) || []).forEach(z => noms.add(z.nom));
-  $('#liste-destinations').innerHTML = [...noms].map(n => `<option value="${esc(n)}"></option>`).join('');
+  const vus = new Set();   // version 1.20.1 : un seul « Site Belinga » (majuscules ignorées)
+  $('#liste-destinations').innerHTML = [...noms].filter(n => { const k = String(n).toLowerCase(); if (vus.has(k)) return false; vus.add(k); return true; })
+    .map(n => `<option value="${esc(n)}"></option>`).join('');
   if (!$('#trajet-destination').value) $('#trajet-destination').value = lsGet('loc.destinationTrajet', '');
 }
 /** Trajet en cours : dernier pointage « En mission » avec heure d'arrivée prévue. */

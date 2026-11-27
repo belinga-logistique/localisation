@@ -20,7 +20,7 @@
 self.LOC_CONFIG = Object.freeze({
   SUPABASE_URL: 'https://pgoesbhdbmnjscmvsflv.supabase.co',
   SUPABASE_CLE: 'sb_publishable_QLqQLvr7DrGwfwXcM3EE2Q_x8vjMojB',
-  VERSION: '1.20.0',
+  VERSION: '1.20.1',
   // Version 1.10 : clé PUBLIQUE des notifications de rappel (la clé privée est seulement sur le serveur)
   VAPID_PUBLIC: 'BEhwh0QM8sdje8uNO-ZKXwILDsRNrROQpXSSS_GcbuhCAgEbgNs3RLVnJzAJkrN7V0ACDS9ZuF9RZ0Ooydkv4KU'
 });
