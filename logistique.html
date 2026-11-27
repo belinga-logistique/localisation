@@ -1257,6 +1257,9 @@ function enrichir(c) {
     if (p) c._quartier = p.l.nom + ' (calculé)';
   }
   // Version 1.9 : décompte de la période en cours ; fin de repos / congé / maladie = de nouveau disponible
+  // Version 1.25 : le séjour sur site suit les dates déclarées par le chauffeur (rubrique « Séjour »)
+  if (c._periodeServeur === undefined) c._periodeServeur = c.periode ?? null;
+  c.periode = periodeAvecSejour(c, c._periodeServeur);
   c._decompte = d ? decompte(c.periode) : null;
   if (c._decompte && d && (d.statut === 'sur_site') !== (c._decompte.type === 'site')) c._decompte = null;   // période d'un autre statut
   c._finPeriode = !!(c._decompte && c._decompte.fini && c._decompte.type !== 'site') ? PERIODES[c._decompte.type].fin : null;
@@ -2583,13 +2586,21 @@ function calculSejour(s, auj = aujourdhuiGabon()) {
 }
 const nomSiteSejour = (s) => s.site === 'autre' ? (s.lieu || 'Autre lieu') : (SITES[s.site] || s.site);
 const dateCourteIso = (iso) => String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7) + '/' + String(iso).slice(0, 4);
+/** Période « séjour sur site » calculée avec les dates déclarées, si le dernier statut est « Belinga ». */
+function periodeAvecSejour(c, base) {
+  const s = etat.sejours.get(c.id), d = c.dernier;
+  if (!s || !d || d.statut !== 'sur_site') return base;
+  const k = calculSejour(s);
+  if (k.etat === 'avenir') return base;
+  return { type: 'site', debut: String(s.date_entree).slice(0, 10) + 'T00:00:00+01:00', duree_jours: k.total, depuis_sejour: true };
+}
 async function chargerSejours() {
   if (!etat.user) return;
   try {
     const l = await rpc('loc_sejours_liste') || [];
     const avant = JSON.stringify([...etat.sejours.values()]);
     etat.sejours = new Map(l.map(s => [s.chauffeur_id, s]));
-    if (JSON.stringify(l) !== avant) rendreTout();   // redessiner seulement si quelque chose a changé
+    if (JSON.stringify(l) !== avant) { etat.chauffeurs.forEach(enrichir); rendreTout(); }   // redessiner seulement si quelque chose a changé
   } catch (e) { /* base sans séjours (version antérieure) : rien à afficher */ }
 }
 setInterval(() => chargerSejours(), 5 * 60 * 1000);
