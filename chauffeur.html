@@ -399,6 +399,80 @@ a.btn { text-decoration: none; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .onde { display: none; }
 }
+
+/* =========================================================================
+   QUANTUM ENERGY INTERFACE (version 1.27) — couche de PRÉSENTATION uniquement.
+   Deux animations : « Neon Border Flow » (bordure lumineuse qui circule) et
+   « AI Energy Pulse » (noyau lumineux + ondes) sur l'indicateur d'activité.
+   Niveaux : html.q-eco (aucune animation continue), html.q-standard, html.q-quantum.
+   États réels lus à l'écran : html.q-traitement, q-ok, q-erreur, q-hors-ligne.
+   Pour tout désactiver : choisir « ECO » dans les réglages (ou supprimer ce bloc).
+   ========================================================================= */
+:root {
+  --q-nuit: #050914; --q-surface: #101827; --q-energie: #2979FF; --q-flux: #00E5FF; --q-ia: #8B5CF6;
+  --q-succes: #10B981; --q-alerte: #F59E0B; --q-erreur: #EF4444; --q-texte: #F1F5F9; --q-texte-2: #94A3B8;
+  --q-flux-duree: 6s;          /* un tour de bordure (4 à 8 s) */
+  --q-flux-rapide: 3s;         /* pendant un traitement réel */
+  --q-pulse-duree: 3.2s;       /* une pulsation (2 à 4 s) */
+  --q-bord-ep: 1.5px;          /* épaisseur de la bordure lumineuse */
+  --q-c1: var(--q-flux); --q-c2: var(--q-energie); --q-c3: var(--q-ia);
+  --q-pc: var(--q-succes);     /* couleur du noyau (état « disponible ») */
+}
+@property --q-angle { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+@keyframes q-tour { to { --q-angle: 360deg; } }
+@keyframes q-onde { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(3.1); opacity: 0; } }
+@keyframes q-respire { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.14); } }
+@keyframes q-impulsion { 0% { transform: scale(1); opacity: .8; } 100% { transform: scale(3.6); opacity: 0; } }
+
+/* --- Neon Border Flow : anneau lumineux (bordure 1,5 px) --- */
+:is(.statut[aria-pressed=true], .btn-pointer:not(:disabled), .btn-pointer:disabled) { position: relative; }
+html.q-standard :is(.statut[aria-pressed=true])::before,
+html.q-quantum :is(.statut[aria-pressed=true], .btn-pointer:not(:disabled))::before,
+html.q-traitement:not(.q-eco) :is(.btn-pointer:disabled)::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: var(--q-bord-ep); pointer-events: none; z-index: 3;
+  background: conic-gradient(from var(--q-angle), transparent 0deg 200deg, var(--q-c2) 262deg, var(--q-c1) 318deg, var(--q-c3) 346deg, transparent 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: q-tour var(--q-flux-duree) linear infinite;
+}
+html.q-traitement { --q-flux-duree: var(--q-flux-rapide); }
+html.q-ok { --q-c1: #34D399; --q-c2: var(--q-succes); --q-c3: #6EE7B7; --q-pc: var(--q-succes); }
+html.q-erreur { --q-c1: #F87171; --q-c2: var(--q-erreur); --q-c3: #FCA5A5; --q-pc: var(--q-erreur); }
+html.q-pause *, html.q-pause *::before, html.q-pause *::after { animation-play-state: paused !important; }
+
+/* --- AI Energy Pulse : indicateur d'activité (noyau + ondes) --- */
+.q-noyau { position: relative; display: inline-block; flex: none; width: 13px; height: 13px; border-radius: 50%;
+  background: var(--q-pc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--q-pc) 22%, transparent), 0 0 12px color-mix(in srgb, var(--q-pc) 60%, transparent);
+  transition: background-color .6s ease, box-shadow .6s ease; }
+.q-noyau i { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--q-pc); opacity: 0; pointer-events: none; }
+html.q-standard .q-noyau, html.q-quantum .q-noyau { animation: q-respire 4s ease-in-out infinite; }
+html.q-quantum .q-noyau i { animation: q-onde var(--q-pulse-duree) cubic-bezier(.2, .6, .3, 1) infinite; }
+html.q-quantum .q-noyau i:nth-child(2) { animation-delay: calc(var(--q-pulse-duree) / 3); }
+html.q-quantum .q-noyau i:nth-child(3) { animation-delay: calc(var(--q-pulse-duree) * 2 / 3); }
+/* Traitement réel en cours : pulsations bleues et cyan (aussi en STANDARD) */
+html.q-traitement { --q-pc: var(--q-flux); }
+html.q-traitement:not(.q-eco) .q-noyau i { animation: q-onde 2s cubic-bezier(.2, .6, .3, 1) infinite; }
+html.q-traitement:not(.q-eco) .q-noyau i:nth-child(2) { border-color: var(--q-energie); animation-delay: .66s; }
+html.q-traitement:not(.q-eco) .q-noyau i:nth-child(3) { animation-delay: 1.33s; }
+/* Traitement terminé : une impulsion verte ; erreur : signal rouge modéré (pas de clignotement rapide) */
+html.q-ok:not(.q-eco) .q-noyau i:nth-child(1) { animation: q-impulsion 1.2s ease-out 1; }
+html.q-erreur:not(.q-eco) .q-noyau i { animation: q-onde 2.6s ease-out infinite; }
+/* Hors connexion : halo gris statique */
+html.q-hors-ligne { --q-pc: #94A3B8; }
+html.q-hors-ligne .q-noyau, html.q-hors-ligne .q-noyau i { animation: none !important; }
+html.q-hors-ligne .q-noyau i { opacity: 0; }
+
+/* Le téléphone demande moins d'animations : tout est figé, quel que soit le niveau */
+@media (prefers-reduced-motion: reduce) {
+  :is(.statut[aria-pressed=true], .btn-pointer:not(:disabled), .btn-pointer:disabled)::before { animation: none !important; }
+  .q-noyau, .q-noyau i { animation: none !important; }
+}
+
+/* Chauffeur : fond clair (lisible au soleil) ; seuls quelques éléments clés s'illuminent */
+.barre h1.q-avec-noyau::before { display: none; }
+.statut[aria-pressed=true] { --q-c3: #fff; }
+html:not(.q-eco) #modale .fenetre { box-shadow: 0 0 0 1px rgba(41, 121, 255, .35), 0 -8px 30px rgba(0, 229, 255, .18); }
+html:not(.q-eco) .btn-pointer:not(:disabled):hover { box-shadow: var(--ombre-forte), 0 0 0 3px rgba(0, 229, 255, .25); }
 </style>
 </head>
 <body>
@@ -763,6 +837,14 @@ a.btn { text-decoration: none; }
       <p id="etat-hors-ligne" class="petit">Vérification du mode hors ligne…</p>
       <button id="btn-installer-2" class="btn" type="button" hidden>📲 Installer l'application sur le téléphone</button>
       <p id="aide-installer" class="aide" hidden>Pour installer : menu ⋮ de Chrome › « Ajouter à l'écran d'accueil » ou « Installer l'application ».</p>
+      <!-- Version 1.27 : niveau des animations (gardé sur ce téléphone) -->
+      <label for="r-animations">Animations de l'écran</label>
+      <select id="r-animations">
+        <option value="eco">ECO — minimum (économise la batterie)</option>
+        <option value="standard">STANDARD — équilibré</option>
+        <option value="quantum">QUANTUM — effets lumineux complets</option>
+      </select>
+      <p class="aide">Réglage gardé sur ce téléphone. Si le téléphone demande « moins d'animations », le mode ECO est toujours appliqué.</p>
     </div>
 
     <div class="carte">
@@ -2250,6 +2332,12 @@ $('#cng-moins').addEventListener('click', () => ajusterJours('#jours-conge', 'lo
 $('#cng-plus').addEventListener('click', () => ajusterJours('#jours-conge', 'loc.joursConge', 60, +1));
 $('#jours-repos').addEventListener('input', () => lsSet('loc.joursRepos', $('#jours-repos').value));
 $('#jours-conge').addEventListener('input', () => lsSet('loc.joursConge', $('#jours-conge').value));
+// Version 1.27 : niveau des animations (présentation seulement)
+document.addEventListener('DOMContentLoaded', () => {
+  if (!window.qNiveau) return;
+  $('#r-animations').value = qNiveau.choisi();
+  $('#r-animations').addEventListener('change', () => { qNiveau.definir($('#r-animations').value); toast('Animations : ' + $('#r-animations').selectedOptions[0].textContent.split(' —')[0], 'ok'); });
+});
 $('#mal-moins').addEventListener('click', () => ajusterJoursMaladie(-1));
 $('#mal-plus').addEventListener('click', () => ajusterJoursMaladie(+1));
 $('#jours-maladie').addEventListener('input', () => lsSet('loc.joursMaladie', $('#jours-maladie').value));
@@ -4707,6 +4795,74 @@ document.addEventListener('pointerdown', (e) => {
 }, { passive: true });
 
 demarrer();
+</script>
+
+<script>
+/* QUANTUM ENERGY INTERFACE (version 1.27) — PRÉSENTATION UNIQUEMENT.
+   Lit l'état réel de l'écran (aucun appel au serveur, aucune donnée modifiée) et pose des classes
+   sur <html> : niveau (q-eco / q-standard / q-quantum) et état (q-traitement, q-ok, q-erreur, q-hors-ligne). */
+(function () {
+  const H = document.documentElement;
+  const NIVEAUX = ['eco', 'standard', 'quantum'];
+  const calme = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /** Niveau par défaut : ECO sur appareil modeste ou en économie de données, STANDARD ailleurs. */
+  function niveauParDefaut() {
+    const c = navigator.connection || {};
+    if (calme() || c.saveData) return 'eco';
+    if ((navigator.deviceMemory && navigator.deviceMemory <= 2) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2)) return 'eco';
+    return 'standard';
+  }
+  function niveauChoisi() { try { const n = localStorage.getItem('loc.animations'); return NIVEAUX.includes(n) ? n : null; } catch { return null; } }
+  function appliquerNiveau() {
+    const n = calme() ? 'eco' : (niveauChoisi() || niveauParDefaut());
+    NIVEAUX.forEach(x => H.classList.toggle('q-' + x, x === n));
+    return n;
+  }
+  window.qNiveau = { appliquer: appliquerNiveau, choisi: () => niveauChoisi() || niveauParDefaut(),
+    definir(n) { try { localStorage.setItem('loc.animations', n); } catch { /* stockage indisponible */ } return appliquerNiveau(); } };
+  appliquerNiveau();
+  if (window.matchMedia) window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener?.('change', appliquerNiveau);
+
+  // Indicateur d'activité (AI Energy Pulse) à la place du point du titre
+  const h1 = document.querySelector('.barre h1');
+  if (h1 && !h1.querySelector('.q-noyau')) {
+    const n = document.createElement('span');
+    n.className = 'q-noyau'; n.setAttribute('aria-hidden', 'true'); n.innerHTML = '<i></i><i></i><i></i>';
+    h1.prepend(n); h1.classList.add('q-avec-noyau');
+  }
+
+  // États temporaires (succès / erreur) : 1,6 s et 2,6 s, sans clignotement
+  const minuteurs = {};
+  function temporaire(cls, ms) {
+    H.classList.add(cls); clearTimeout(minuteurs[cls]);
+    minuteurs[cls] = setTimeout(() => H.classList.remove(cls), ms);
+  }
+  // Animations en pause quand la page n'est pas visible
+  document.addEventListener('visibilitychange', () => H.classList.toggle('q-pause', document.hidden));
+
+  // Notifications : vert après une validation, rouge après une erreur (le message reste affiché par l'application)
+  const toast = document.getElementById('toast');
+  if (toast) new MutationObserver(() => {
+    if (toast.hidden) return;
+    if (/\b(ok)\b/.test(toast.className)) temporaire('q-ok', 1600);
+    else if (/\b(ko|erreur)\b/.test(toast.className)) temporaire('q-erreur', 2600);
+  }).observe(toast, { attributes: true, attributeFilter: ['class', 'hidden'], childList: true });
+
+  // Chauffeur : réseau (pastille), envoi en cours (bouton désactivé / bandeau « Envoi en cours »)
+  const pastille = document.getElementById('pastille-reseau');
+  const bouton = document.getElementById('btn-pointer');
+  const envoi = document.getElementById('etat-envoi');
+  function lireEtats() {
+    H.classList.toggle('q-hors-ligne', !!(pastille && pastille.classList.contains('hors-ligne')));
+    H.classList.toggle('q-traitement', !!((bouton && bouton.disabled) || (envoi && /Envoi en cours/.test(envoi.textContent))));
+  }
+  const obs = new MutationObserver(lireEtats);
+  if (pastille) obs.observe(pastille, { attributes: true, attributeFilter: ['class'] });
+  if (bouton) obs.observe(bouton, { attributes: true, attributeFilter: ['disabled'] });
+  if (envoi) obs.observe(envoi, { childList: true, characterData: true, subtree: true });
+  lireEtats();
+
+})();
 </script>
 </body>
 </html>
