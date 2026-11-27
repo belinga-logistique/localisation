@@ -174,6 +174,26 @@ td.num, th.num { text-align: right; }
 @keyframes pulse { 70% { box-shadow: 0 0 0 18px rgba(185,28,28,0); } 100% { box-shadow: 0 0 0 0 rgba(185,28,28,0); } }
 tr.urgence-ouverte td { background: #FEF2F2; }
 
+/* --- Version 1.22 : bande horizontale des statuts --- */
+.titre-bande { display: flex; align-items: baseline; gap: 10px; margin: 0 0 6px; font-size: .9375rem; font-weight: 800; color: var(--texte); }
+.titre-bande .doux { font-weight: 600; }
+.bande-statuts { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 10px; margin-bottom: 8px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+.bande-statuts > * { flex: 0 0 auto; scroll-snap-align: start; }
+.bande-statuts .compteur { min-width: 128px; border-left: 0; border-top: 5px solid var(--c); text-align: center; }
+.bande-statuts .compteur b { font-size: 2rem; }
+.bande-statuts .compteur .pct { display: block; height: 5px; border-radius: 5px; background: #E5E7EB; margin-top: 6px; overflow: hidden; }
+.bande-statuts .compteur .pct i { display: block; height: 100%; background: var(--c); border-radius: 5px; }
+.bande-statuts .compteur[aria-pressed=true] .pct { background: rgba(255,255,255,.35); }
+.bande-statuts .compteur[aria-pressed=true] .pct i { background: #fff; }
+.stat-site { display: flex; align-items: stretch; gap: 0; border-radius: 14px; box-shadow: var(--ombre); background: #fff; border: 1px solid var(--bord); border-top: 5px solid #B45309; }
+.stat-site > .compteur { box-shadow: none; border: 0; border-radius: 14px 0 0 14px; }
+.sous-sites { display: flex; gap: 6px; align-items: center; padding: 8px 10px; border-left: 1px dashed var(--bord); }
+.puce-site { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 74px; border: 1px solid #FCD9A8; background: #FFF7ED; color: #92400E; border-radius: 12px; padding: 6px 8px; cursor: pointer; font-weight: 700; font-size: .75rem; line-height: 1.2; }
+.puce-site b { font-size: 1.25rem; color: #B45309; }
+.puce-site[aria-pressed=true] { background: #B45309; color: #fff; border-color: #B45309; }
+.puce-site[aria-pressed=true] b { color: #fff; }
+.puce-site.vide { opacity: .55; }
+.filtre-actif { display: inline-flex; align-items: center; gap: 8px; background: var(--vert-pale, #ECFDF5); border: 1px solid var(--bord); border-radius: 999px; padding: 4px 6px 4px 12px; font-weight: 700; }
 /* --- Compteurs cliquables (version 1.3) --- */
 .compteurs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
 .compteur { border: 1px solid var(--bord); border-left: 6px solid var(--c); background: #fff; border-radius: 14px; padding: 10px 12px; text-align: left; box-shadow: var(--ombre); }
@@ -360,6 +380,9 @@ tr.danger-ouvert td { background: #FFFBEB; }
 
   <!-- ===================== VUE CARTE ===================== -->
   <section class="vue" id="v-carte">
+    <div class="titre-bande">👥 Statuts des chauffeurs <span class="doux" id="bande-total"></span></div>
+    <div class="bande-statuts" id="bande-statuts" role="group" aria-label="Nombre de chauffeurs par statut (cliquer pour filtrer)"></div>
+    <div class="titre-bande">📋 Suivi</div>
     <div class="compteurs" id="compteurs" role="group" aria-label="Compteurs (cliquer pour filtrer la carte)"></div>
     <div class="split">
       <div class="panneau">
@@ -421,7 +444,10 @@ tr.danger-ouvert td { background: #FFFBEB; }
       </div>
       <div id="import-resultat"></div>
     </div>
+    <div class="titre-bande">👥 Statuts des chauffeurs <span class="doux" id="bande-total-ch"></span></div>
+    <div class="bande-statuts" id="bande-statuts-ch" role="group" aria-label="Nombre de chauffeurs par statut (cliquer pour filtrer)"></div>
     <div class="bloc">
+      <div id="ch-filtre" style="margin-bottom:8px" hidden></div>
       <table>
         <thead><tr><th>Photo</th><th>Matricule</th><th>Nom</th><th>Téléphone</th><th>Équipe</th><th>Binôme</th><th>Statut / zone</th><th>Dernier pointage</th><th>Compte</th><th>Actions</th></tr></thead>
         <tbody id="tab-chauffeurs"></tbody>
@@ -1440,7 +1466,7 @@ function chauffeursFiltres() {
     && (!zone || c._zoneNom === zone)
     && (!q || c._quartier === q)
     && (!etat.filtreStatuts.size || (c.dernier && etat.filtreStatuts.has(c.dernier.statut)))
-    && (!etat.filtreSpecial || COMPTEURS.find(k => k.cle === etat.filtreSpecial).test(c)));
+    && (!etat.filtreSpecial || testCompteur(etat.filtreSpecial)(c)));
 }
 
 /* ---------------------------------------------------------------------------
@@ -1449,14 +1475,43 @@ function chauffeursFiltres() {
 const COMPTEURS = [
   { cle: 'dispo', libelle: 'Disponibles', couleur: '#15803D', test: c => c._dispo && c._dispoEtat !== 'orange' },
   { cle: 'verifier', libelle: 'Dispo à vérifier', couleur: COULEUR_A_VERIFIER, test: c => c._dispoEtat === 'orange' },
-  { cle: 'en_mission', libelle: 'En mission', couleur: '#1D4ED8', test: c => !!c.dernier && c.dernier.statut === 'en_mission' },
-  { cle: 'en_course', libelle: 'En course', couleur: '#7C3AED', test: c => !!c.dernier && c.dernier.statut === 'en_course' },
-  { cle: 'sur_site', libelle: 'Sur site', couleur: '#B45309', test: c => !!c.dernier && c.dernier.statut === 'sur_site' },
   { cle: 'sans_nouvelles', libelle: 'Sans nouvelles', couleur: '#64748B', test: c => c._consent && (!c.dernier || (!c._prive && !c._recent)) },
 ];
+/* Version 1.22 : bande horizontale, un compteur par statut (dernier pointage), dans l'ordre des statuts */
+const COMPTEURS_STATUTS = [
+  ...Object.entries(STATUTS).map(([k, s]) => ({ cle: k, libelle: s.libelle, couleur: s.couleur, test: c => !!c.dernier && c.dernier.statut === k })),
+  { cle: 'aucun', libelle: 'Jamais pointé', couleur: '#94A3B8', test: c => !c.dernier },
+];
+/** Test d'un filtre de compteur : statut, « site:code » (Sur site d'un site donné) ou compteur de suivi. */
+function testCompteur(cle) {
+  if (cle.startsWith('site:')) { const code = cle.slice(5); return c => !!c.dernier && c.dernier.statut === 'sur_site' && (code === '?' ? !SITES[c.dernier.site] : c.dernier.site === code); }
+  const k = COMPTEURS.find(x => x.cle === cle) || COMPTEURS_STATUTS.find(x => x.cle === cle);
+  return k ? k.test : () => true;
+}
+const libelleFiltre = (cle) => cle.startsWith('site:') ? 'Sur site · ' + (SITES[cle.slice(5)] || 'site non précisé')
+  : ((COMPTEURS.find(x => x.cle === cle) || COMPTEURS_STATUTS.find(x => x.cle === cle) || {}).libelle || cle);
+function bandeStatutsHtml(actifs) {
+  const n = actifs.length || 1;
+  return COMPTEURS_STATUTS.map(k => {
+    const nb = actifs.filter(k.test).length;
+    const bouton = `<button type="button" class="compteur" data-compteur="${k.cle}" style="--c:${k.couleur}" aria-pressed="${etat.filtreSpecial === k.cle}">`
+      + `<b>${nb}</b><span>${esc(k.libelle)}</span><span class="pct" aria-hidden="true"><i style="width:${Math.round(100 * nb / n)}%"></i></span></button>`;
+    if (k.cle !== 'sur_site') return bouton;
+    const surSite = actifs.filter(k.test);
+    const puces = Object.entries(SITES).map(([code, nom]) => {
+      const x = surSite.filter(c => c.dernier.site === code).length;
+      return `<button type="button" class="puce-site${x ? '' : ' vide'}" data-compteur="site:${code}" aria-pressed="${etat.filtreSpecial === 'site:' + code}" title="Sur site : ${esc(nom)}"><b>${x}</b>${esc(nom)}</button>`;
+    });
+    const sansSite = surSite.filter(c => !SITES[c.dernier.site]).length;
+    if (sansSite) puces.push(`<button type="button" class="puce-site" data-compteur="site:?" aria-pressed="${etat.filtreSpecial === 'site:?'}"><b>${sansSite}</b>Site non précisé</button>`);
+    return `<div class="stat-site">${bouton}<div class="sous-sites">${puces.join('')}</div></div>`;
+  }).join('');
+}
 function rendreCompteurs() {
   const actifs = etat.chauffeurs.filter(c => c.actif);
   const nbUrgences = urgencesOuvertes().length;
+  const total = `${actifs.length} chauffeur(s) actif(s) · d'après le dernier pointage`;
+  $('#bande-statuts').innerHTML = bandeStatutsHtml(actifs); $('#bande-total').textContent = total;
   $('#compteurs').innerHTML = COMPTEURS.map(k => `<button type="button" class="compteur" data-compteur="${k.cle}" style="--c:${k.couleur}" aria-pressed="${etat.filtreSpecial === k.cle}">`
       + `<b>${actifs.filter(k.test).length}</b><span>${esc(k.libelle)}</span></button>`).join('')
     + `<button type="button" class="compteur${nbUrgences ? ' rouge-actif' : ''}" data-compteur="urgences" style="--c:#B91C1C" aria-pressed="false">`
@@ -1464,7 +1519,7 @@ function rendreCompteurs() {
     + `<button type="button" class="compteur" data-compteur="courses" style="--c:#1D4ED8" aria-pressed="false">`
     + `<b>${etat.courses.length}</b><span>🚗 Courses en direct</span></button>`;
 }
-$('#compteurs').addEventListener('click', (e) => {
+['#compteurs', '#bande-statuts', '#bande-statuts-ch'].forEach(sel => $(sel).addEventListener('click', (e) => {
   const b = e.target.closest('[data-compteur]');
   if (!b) return;
   const cle = b.dataset.compteur;
@@ -1474,9 +1529,10 @@ $('#compteurs').addEventListener('click', (e) => {
     return suivreCourse(etat.courses[0].id);
   }
   etat.filtreSpecial = etat.filtreSpecial === cle ? null : cle;
+  if (etat.vue === 'chauffeurs') { rendreChauffeurs(); return; }
   rendreCarte();
   animerChiffres($('#v-carte'));   // version 1.11
-});
+}));
 
 /* ---------------------------------------------------------------------------
    WhatsApp (version 1.3) : numéro international +241 sans le 0 de tête
@@ -1882,7 +1938,17 @@ $('#ch-inactifs').addEventListener('change', rendreChauffeurs);
 
 function rendreChauffeurs() {
   const tous = $('#ch-inactifs').checked;
-  const liste = etat.chauffeurs.filter(c => tous || c.actif);
+  // Version 1.22 : bande des statuts et filtre par statut / site
+  const actifs = etat.chauffeurs.filter(c => c.actif);
+  $('#bande-statuts-ch').innerHTML = bandeStatutsHtml(actifs);
+  $('#bande-total-ch').textContent = `${actifs.length} chauffeur(s) actif(s) · d'après le dernier pointage`;
+  const f = etat.filtreSpecial;
+  const liste = etat.chauffeurs.filter(c => (tous || c.actif) && (!f || testCompteur(f)(c)));
+  const zf = $('#ch-filtre');
+  zf.hidden = !f;
+  zf.innerHTML = f ? `<span class="filtre-actif">Filtre : ${esc(libelleFiltre(f))} — ${liste.length} chauffeur(s) <button type="button" class="btn sec petit" data-retirer-filtre>✕ Retirer</button></span>` : '';
+  const br = zf.querySelector('[data-retirer-filtre]');
+  if (br) br.onclick = () => { etat.filtreSpecial = null; rendreChauffeurs(); };
   $('#tab-chauffeurs').innerHTML = liste.map(c => {
     const d = c.dernier, s = d ? STATUTS[d.statut] : null;
     const compte = [
