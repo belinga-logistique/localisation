@@ -486,6 +486,34 @@ html.q-sombre #e-connexion { background: radial-gradient(circle at 20% 10%, rgba
 html.q-sombre .connexion { border-color: var(--bord-fort); box-shadow: 0 0 0 1px rgba(0, 229, 255, .12), 0 24px 60px rgba(0, 0, 0, .6); }
 html.q-sombre .connexion .btn.lien { color: #7DD3FC; }
 }
+
+/* =========================================================================
+   PEGASUS HOLOGRAPHIC ENGINE V1.0 (version 1.28) — habillage du noyau holographique.
+   Le dessin est fait par le script « Pegasus » (Canvas 2D). Fond toujours sombre,
+   même avec l'apparence claire. Désactivation : html.pegasus-off.
+   ========================================================================= */
+:root { --peg-noir: #020611; --peg-nuit: #07152D; --peg-cyan: #00D9FF; --peg-blanc: #E8F9FF; --peg-vert: #00E676; --peg-ambre: #FFB020; }
+.pegasus { position: relative; height: 150px; margin: 0 0 12px; border-radius: 16px; overflow: hidden; isolation: isolate; color: var(--peg-blanc);
+  background: radial-gradient(120% 160% at 10% 50%, var(--peg-nuit) 0%, var(--peg-noir) 72%); border: 1px solid rgba(0, 217, 255, .24);
+  box-shadow: 0 10px 28px rgba(2, 6, 17, .22); }
+.pegasus canvas, .pegasus-connexion canvas, .pegasus-apercu { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; }
+.pegasus-texte { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; justify-content: center; gap: 3px;
+  padding: 0 18px 0 var(--peg-gauche, 300px); pointer-events: none; min-width: 0; }
+.pegasus-nom { font-size: .6875rem; letter-spacing: .14em; text-transform: uppercase; color: #8FD8EA; font-weight: 700; }
+.pegasus-etat { font-size: 1.125rem; font-weight: 800; color: var(--peg-blanc); line-height: 1.25; overflow-wrap: anywhere; }
+.pegasus-detail { font-size: .8125rem; color: #A9BCD0; overflow-wrap: anywhere; }
+.pegasus[data-etat=reussite] .pegasus-etat { color: #5CF2A6; }
+.pegasus[data-etat=erreur] .pegasus-etat { color: #FF9C9C; }
+.pegasus[data-etat=alerte] .pegasus-etat, .pegasus[data-etat=horsligne] .pegasus-etat { color: #FFC966; }
+.pegasus-connexion { position: relative; height: 150px; margin: -6px 0 16px; border-radius: 16px; overflow: hidden;
+  background: radial-gradient(90% 120% at 50% 50%, var(--peg-nuit) 0%, var(--peg-noir) 75%); border: 1px solid rgba(0, 217, 255, .24); }
+.pegasus-boite-apercu { position: relative; height: 150px; border-radius: 14px; overflow: hidden; margin: 4px 0 12px;
+  background: radial-gradient(90% 120% at 50% 50%, var(--peg-nuit) 0%, var(--peg-noir) 75%); border: 1px solid rgba(0, 217, 255, .24); }
+.pegasus-reglages input[type=range] { width: 100%; accent-color: #0891B2; }
+.pegasus-reglages output { font-weight: 700; }
+html.pegasus-off .pegasus, html.pegasus-off .pegasus-connexion, html.pegasus-off .pegasus-boite-apercu { display: none; }
+@media (max-width: 600px) { .pegasus { height: 132px; } .pegasus-etat { font-size: 1rem; } .pegasus-detail { font-size: .75rem; } }
+@media print { .pegasus, .pegasus-connexion, .pegasus-boite-apercu { display: none !important; } }
 </style>
 </head>
 <body>
@@ -495,6 +523,7 @@ html.q-sombre .connexion .btn.lien { color: #7DD3FC; }
      ======================================================================= -->
 <section id="e-connexion" hidden>
   <div class="connexion">
+    <div class="pegasus-connexion" aria-hidden="true"><canvas id="pegasus-connexion-toile"></canvas></div>
     <div class="logo">
       <img src="icones/icone-192.png" alt="">
       <div><h1>Belinga Localisation</h1><p class="sous-titre">Espace logistique · accès réservé</p></div>
@@ -574,6 +603,15 @@ html.q-sombre .connexion .btn.lien { color: #7DD3FC; }
 
   <!-- ===================== VUE CARTE ===================== -->
   <section class="vue" id="v-carte">
+    <!-- Version 1.28 : noyau holographique Pegasus (présentation seulement : il reflète l'état réel de l'écran) -->
+    <div class="pegasus" id="pegasus-bande">
+      <canvas aria-hidden="true"></canvas>
+      <div class="pegasus-texte">
+        <span class="pegasus-nom">Pegasus · état du système</span>
+        <strong class="pegasus-etat" id="pegasus-etat">Veille — système opérationnel</strong>
+        <span class="pegasus-detail" id="pegasus-detail">—</span>
+      </div>
+    </div>
     <div class="titre-bande">👥 Statuts des chauffeurs <span class="doux" id="bande-total"></span></div>
     <div class="bande-statuts" id="bande-statuts" role="group" aria-label="Nombre de chauffeurs par statut (cliquer pour filtrer)"></div>
     <div class="titre-bande">📋 Suivi</div>
@@ -812,6 +850,25 @@ html.q-sombre .connexion .btn.lien { color: #7DD3FC; }
           <select id="pa-animations" class="champ-l"><option value="eco">ECO — minimum</option><option value="standard">STANDARD — équilibré</option><option value="quantum">QUANTUM — effets lumineux complets</option></select></div>
       </div>
       <p class="doux">Gardé sur cet ordinateur seulement. Si l'ordinateur demande « moins d'animations », le mode ECO est toujours appliqué.</p>
+    </div>
+    <!-- Version 1.28 : réglages du noyau holographique Pegasus (cet ordinateur ; rien n'est enregistré dans la base) -->
+    <div class="bloc pegasus-reglages" style="max-width:720px" id="bloc-pegasus">
+      <h2>Noyau holographique Pegasus (cet ordinateur)</h2>
+      <div class="pegasus-boite-apercu"><canvas class="pegasus-apercu" id="pegasus-apercu" aria-hidden="true"></canvas></div>
+      <div class="grille2">
+        <div><label class="ligne" style="font-weight:700"><input type="checkbox" id="pg-actif"> Afficher l'animation</label></div>
+        <div><label class="ligne" style="font-weight:700"><input type="checkbox" id="pg-eco"> Mode économique (400 particules, 30 images/s)</label></div>
+        <div><label class="champ" for="pg-qualite">Qualité graphique</label>
+          <select id="pg-qualite" class="champ-l"><option value="auto">Automatique (selon l'ordinateur)</option><option value="eco">Économique — 400 particules</option><option value="standard">Standard — 1 600 particules</option><option value="ultra">Ultra — 5 000 particules</option></select></div>
+        <div><label class="champ" for="pg-couleur">Couleur dominante</label>
+          <select id="pg-couleur" class="champ-l"><option value="cyan">Cyan holographique</option><option value="bleu">Bleu électrique</option><option value="violet">Violet numérique</option></select></div>
+        <div><label class="champ" for="pg-vitesse">Vitesse de rotation : <output id="pg-vitesse-v" for="pg-vitesse"></output></label><input id="pg-vitesse" type="range" min="25" max="200" step="5"></div>
+        <div><label class="champ" for="pg-densite">Densité des particules : <output id="pg-densite-v" for="pg-densite"></output></label><input id="pg-densite" type="range" min="25" max="150" step="5"></div>
+        <div><label class="champ" for="pg-intensite">Intensité lumineuse : <output id="pg-intensite-v" for="pg-intensite"></output></label><input id="pg-intensite" type="range" min="40" max="150" step="5"></div>
+        <div style="align-self:end"><button class="btn sec petit" id="pg-defaut" type="button">Valeurs d'origine</button></div>
+      </div>
+      <p class="doux" id="pg-info"></p>
+      <p class="doux">L'animation s'arrête quand l'onglet est caché ou hors de vue. Couleurs : cyan = veille, violet = connexion ou recherche, flux accéléré = actualisation, vert = terminé, ambre = alerte, rouge = erreur, gris = hors connexion. L'état est toujours écrit en clair à côté.</p>
     </div>
     <div class="bloc" style="max-width:720px">
       <h2>Alertes et rappels</h2>
@@ -3602,6 +3659,481 @@ document.addEventListener('pointerdown', (e) => {
     definir(t) { try { localStorage.setItem('loc.theme', t); } catch { /* indisponible */ } H.classList.toggle('q-sombre', t !== 'clair'); },
   };
 
+})();
+</script>
+<script>
+/* =========================================================================
+   PEGASUS HOLOGRAPHIC ENGINE V1.0 (version 1.28) — PRÉSENTATION UNIQUEMENT.
+   Noyau holographique dessiné en Canvas 2D : aucune bibliothèque, fonctionne hors ligne.
+   Il lit seulement l'état RÉEL de l'écran (connexion, actualisation, recherche, alertes,
+   réseau, messages) : aucun appel au serveur, aucune donnée lue ni modifiée.
+   API (console) :  const m = Pegasus.creer(canvas, { placement: 'gauche' | 'centre' })
+     m.demarrer() · m.arreter() · m.vitesse(25…200) · m.couleurs({ dominante: 'cyan'|'bleu'|'violet'|[r,g,b] })
+     m.etat('veille'|'reflexion'|'traitement'|'reussite'|'erreur'|'alerte'|'horsligne', { duree })
+     m.intensite(40…150) · m.qualite('auto'|'eco'|'standard'|'ultra') · m.liberer()
+   Réglages (cet ordinateur, clé « loc.pegasus ») : Pegasus.definir(cle, valeur) · Pegasus.reinitialiser()
+   Pour tout désactiver : Paramètres › Noyau holographique › décocher « Afficher l'animation ».
+   ========================================================================= */
+(function () {
+  'use strict';
+  const H = document.documentElement;
+  const CLE = 'loc.pegasus';
+  const DEFAUT = Object.freeze({ actif: true, vitesse: 100, densite: 100, intensite: 100, couleur: 'cyan', qualite: 'auto', economique: false });
+  const TEINTES = { cyan: [0, 217, 255], bleu: [0, 123, 255], violet: [139, 92, 246] };
+  const BLANC = [232, 249, 255], VERT = [0, 230, 118], AMBRE = [255, 176, 32], ROUGE = [239, 68, 68], GRIS = [120, 136, 160], VIOLET = [139, 92, 246];
+  const QUALITES = {
+    eco:      { nom: 'Économique', particules: 400,  anneaux: 2, ambiantes: 16, fragments: 0,  trainee: 0,  fps: 30, dpr: 1,   liens: false, lueur: false },
+    standard: { nom: 'Standard',   particules: 1600, anneaux: 4, ambiantes: 44, fragments: 8,  trainee: 9,  fps: 60, dpr: 1.5, liens: true,  lueur: false },
+    ultra:    { nom: 'Ultra',      particules: 5000, anneaux: 4, ambiantes: 80, fragments: 12, trainee: 20, fps: 60, dpr: 2,   liens: true,  lueur: true },
+  };
+  /* Cibles de chaque état (les valeurs affichées y glissent progressivement, sans à-coup). */
+  const ETATS = {
+    veille:     { rot: 1,    anneaux: 1,   flux: 1,   lum: 1,    halo: 1,    amp: .09, periode: 4.2, liens: .16, teinte: null,   force: 0 },
+    reflexion:  { rot: 1.25, anneaux: 2.3, flux: 1.5, lum: 1.3,  halo: 1.55, amp: .13, periode: 3.2, liens: .35, teinte: VIOLET, force: .22 },
+    traitement: { rot: 1.5,  anneaux: 1.9, flux: 3,   lum: 1.2,  halo: 1.35, amp: .2,  periode: 2.2, liens: 1,   teinte: null,   force: 0 },
+    reussite:   { rot: 1,    anneaux: 1.2, flux: 1.2, lum: 1.15, halo: 1.35, amp: .1,  periode: 3,   liens: .25, teinte: VERT,   force: .6 },
+    erreur:     { rot: .8,   anneaux: .8,  flux: .7,  lum: 1,    halo: 1.2,  amp: .14, periode: 3,   liens: .08, teinte: ROUGE,  force: .8 },
+    alerte:     { rot: 1,    anneaux: 1.1, flux: 1.1, lum: 1.05, halo: 1.25, amp: .14, periode: 3,   liens: .16, teinte: AMBRE,  force: .5 },
+    horsligne:  { rot: .45,  anneaux: .5,  flux: .35, lum: .7,   halo: .55,  amp: .04, periode: 5,   liens: 0,   teinte: GRIS,   force: .6 },
+  };
+  const ACTIVITES = ['reflexion', 'traitement', 'horsligne'];
+  const VIFS = ['reflexion', 'traitement', 'reussite', 'erreur'];
+  const NUM = ['rot', 'anneaux', 'flux', 'lum', 'halo', 'amp', 'periode', 'liens'];
+  const ANNEAUX = [   // inclinaison, nœud (orientation), rayon (× sphère), vitesse, points d'énergie
+    { inc: 1.22, noeud: 0,   r: 1.36, vit: .62,  pts: 2 },
+    { inc: -1.0, noeud: .9,  r: 1.56, vit: -.46, pts: 2 },
+    { inc: .38,  noeud: 1.9, r: 1.78, vit: .34,  pts: 3 },
+    { inc: 1.5,  noeud: -.6, r: 2.0,  vit: -.26, pts: 2 },
+  ];
+  const FRAGMENTS = ['GPS', 'LBV', 'BLG', 'MKK', 'POG', '0x3F', '1011', '24h', 'SYNC', 'RX', 'TX', '01'];
+  const TOUR = Math.PI * 2;
+  const borne = (v, a, b) => Math.min(b, Math.max(a, v));
+  const melange = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+  const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${borne(a, 0, 1).toFixed(3)})`;
+  const calme = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  function normaliser(r) {
+    const o = Object.assign({}, DEFAUT, r || {});
+    o.actif = o.actif !== false; o.economique = o.economique === true;
+    o.vitesse = borne(+o.vitesse || 100, 25, 200); o.densite = borne(+o.densite || 100, 25, 150); o.intensite = borne(+o.intensite || 100, 40, 150);
+    if (!TEINTES[o.couleur]) o.couleur = DEFAUT.couleur;
+    if (!['auto', 'eco', 'standard', 'ultra'].includes(o.qualite)) o.qualite = 'auto';
+    return o;
+  }
+  function lireReglages() { try { return normaliser(JSON.parse(localStorage.getItem(CLE) || '{}')); } catch { return normaliser({}); } }
+  /** Qualité automatique de départ : économique sur appareil modeste ou en économie de données. */
+  function qualiteMateriel() {
+    const c = navigator.connection || {};
+    if (c.saveData) return 'eco';
+    if ((navigator.deviceMemory && navigator.deviceMemory <= 2) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2)) return 'eco';
+    return 'standard';
+  }
+  let qualiteAuto = qualiteMateriel();   // abaissée en « eco » si l'animation n'est pas fluide (mode automatique)
+
+  class MoteurPegasus {
+    constructor(toile, options = {}) {
+      this.toile = toile; this.ctx = toile.getContext('2d');
+      this.opt = Object.assign({ placement: 'gauche', echelle: .3 }, options);
+      this.reg = Object.assign({}, reglages);
+      this.nomEtat = 'veille'; this.temp = null; this.finTemp = 0;
+      this.v = Object.assign({}, ETATS.veille); this.couleur = (TEINTES[this.reg.couleur] || TEINTES.cyan).slice();
+      this.angle = 0; this.t = 0; this.dernier = 0; this.raf = 0; this.enMarche = false; this.arrete = false;
+      this.visible = !('IntersectionObserver' in window); this.libere = false;
+      this.pointeur = null; this.par = [0, 0]; this.vagues = [];
+      this.mesure = { n: 0, t0: 0, fps: 0, lents: 0 };
+      this.W = 0; this.Ht = 0;
+      this._boucle = this._boucle.bind(this);
+      this._construire(); this._ecouter(); this._taille(); this.maj();
+    }
+    /** Qualité réellement appliquée : mode économique > choix de l'utilisateur > automatique. */
+    qualiteEffective() { return this.reg.economique ? 'eco' : (this.reg.qualite === 'auto' ? qualiteAuto : this.reg.qualite); }
+    /** Image figée (aucune animation continue) : préférence « moins d'animations » ou niveau ECO de l'application. */
+    fige() { return calme() || H.classList.contains('q-eco'); }
+    _construire() {
+      const q = this.qualiteEffective(), Q = this.Q = QUALITES[q]; this.nomQualite = q;
+      const n = this.n = Math.round(borne(Q.particules * this.reg.densite / 100, 150, 5000));
+      const p = this.pts = new Float32Array(n * 3), or = Math.PI * (3 - Math.sqrt(5));   // sphère de Fibonacci (répartition régulière)
+      for (let i = 0; i < n; i++) {
+        const y = 1 - (i + .5) * 2 / n, r = Math.sqrt(1 - y * y), a = i * or;
+        p[i * 3] = Math.cos(a) * r; p[i * 3 + 1] = y; p[i * 3 + 2] = Math.sin(a) * r;
+      }
+      let graine = 7; const alea = () => (graine = (graine * 16807) % 2147483647) / 2147483647;
+      this.anneaux = ANNEAUX.slice(0, Q.anneaux).map((a, i) => Object.assign({}, a, { phase: i * 1.7 }));
+      this.ambiantes = Array.from({ length: Q.ambiantes }, () => ({ x: alea(), y: alea(), vx: (alea() - .5) * .012, vy: (alea() - .5) * .01, ph: alea() * TOUR, w: .6 + alea() * 1.4, f: .6 + alea() * 1.2 }));
+      this.fragments = Array.from({ length: Q.fragments }, (_, i) => ({ txt: FRAGMENTS[i % FRAGMENTS.length], r: 1.2 + alea() * .85, a: alea() * TOUR, inc: (alea() - .5) * 1.4, vit: (.18 + alea() * .25) * (i % 2 ? 1 : -1) }));
+    }
+    _taille() {
+      if (this.libere) return false;
+      const r = this.toile.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) return false;
+      const dpr = Math.min(window.devicePixelRatio || 1, this.Q.dpr);
+      this.W = r.width; this.Ht = r.height; this.dpr = dpr;
+      const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+      if (this.toile.width !== w || this.toile.height !== h) { this.toile.width = w; this.toile.height = h; }
+      const R = this.R = Math.max(18, Math.min(this.Ht * this.opt.echelle, this.W * .16));
+      this.cx = this.opt.placement === 'centre' ? this.W / 2 : R * 2.15 + 6; this.cy = this.Ht / 2;
+      if (this.opt.surTaille) this.opt.surTaille(this.cx + R * 2.1 + 12);
+      return true;
+    }
+    _ecouter() {
+      const t = this.toile;
+      this._ev = {
+        pointermove: (e) => { const r = t.getBoundingClientRect(); this.pointeur = [e.clientX - r.left, e.clientY - r.top]; },
+        pointerleave: () => { this.pointeur = null; },
+        pointerup: (e) => { if (e.pointerType !== 'mouse') this.pointeur = null; },
+      };
+      this._ev.pointerdown = this._ev.pointermove; this._ev.pointercancel = this._ev.pointerleave;
+      for (const [k, f] of Object.entries(this._ev)) t.addEventListener(k, f, { passive: true });
+      // Hors écran (onglet ou vue cachés, défilé hors de vue) : animation suspendue
+      if ('IntersectionObserver' in window) {
+        this.io = new IntersectionObserver((l) => { this.visible = l[l.length - 1].isIntersecting; this.maj(); });
+        this.io.observe(t);
+      }
+      if ('ResizeObserver' in window) { this.ro = new ResizeObserver(() => { if (this._taille() && !this.enMarche) this.maj(); }); this.ro.observe(t); }
+    }
+    /** Démarre ou suspend la boucle selon les réglages, la visibilité et les préférences ; sinon image figée à jour. */
+    maj() {
+      if (this.libere) return;
+      const doit = this.reg.actif && !this.arrete && this.visible && !document.hidden && !this.fige();
+      if (doit && !this.enMarche) { this.enMarche = true; this.dernier = 0; this.mesure.t0 = 0; this.raf = requestAnimationFrame(this._boucle); }
+      else if (!doit && this.enMarche) { this.enMarche = false; cancelAnimationFrame(this.raf); }
+      if (!doit && this.visible && !document.hidden) { if (!this.W) this._taille(); this._lisser(10); this.vagues = []; this.dessiner(); }
+    }
+    _boucle(ts) {
+      if (!this.enMarche) return;
+      this.raf = requestAnimationFrame(this._boucle);
+      // Économie : 30 images/s en veille (60 pendant une activité réelle, sous le doigt ou en Ultra) ; 30 en économique
+      const vif = this.nomQualite === 'ultra' || this.pointeur || VIFS.includes(this.etatCourant());
+      const ips = vif ? this.Q.fps : Math.min(30, this.Q.fps);
+      if (this.dernier && ts - this.dernier < 1000 / ips - 1.5) return;
+      const dt = this.dernier ? Math.min(.1, (ts - this.dernier) / 1000) : 1 / 60;
+      this.dernier = ts;
+      this._avancer(dt); this.dessiner(); this._mesurer(ts);
+    }
+    _mesurer(ts) {
+      const m = this.mesure;
+      if (!m.t0) { m.t0 = ts; m.n = 0; return; }
+      m.n++;
+      if (ts - m.t0 < 3000) return;
+      m.fps = Math.round(m.n * 1000 / (ts - m.t0)); m.t0 = ts; m.n = 0;
+      // Mode automatique : deux mesures de suite sous 24 images/s → qualité économique
+      m.lents = m.fps < 24 ? m.lents + 1 : 0;
+      if (m.lents >= 2 && this.reg.qualite === 'auto' && !this.reg.economique && qualiteAuto !== 'eco') { qualiteAuto = 'eco'; m.lents = 0; window.Pegasus._reconstruire(); }
+    }
+    _lisser(dt) {
+      if (this.temp && performance.now() > this.finTemp) this.temp = null;
+      const c = ETATS[this.temp || this.nomEtat] || ETATS.veille, k = 1 - Math.exp(-dt * 2.4);
+      for (const x of NUM) this.v[x] += (c[x] - this.v[x]) * k;
+      const base = TEINTES[this.reg.couleur] || TEINTES.cyan;
+      this.couleur = melange(this.couleur, c.teinte ? melange(base, c.teinte, c.force) : base, k);
+    }
+    _avancer(dt) {
+      this._lisser(dt);
+      const v = this.v, vit = this.reg.vitesse / 100;
+      this.t += dt;
+      this.angle += dt * .26 * v.rot * vit;
+      for (const a of this.anneaux) a.phase += dt * a.vit * v.anneaux * vit * 1.2;
+      for (const f of this.fragments) f.a += dt * f.vit * v.flux * vit;
+      const fl = (.5 + v.flux * .5) * dt;
+      for (const p of this.ambiantes) { p.x = (p.x + p.vx * fl + 1) % 1; p.y = (p.y + p.vy * fl + 1) % 1; }
+      const cible = this.pointeur ? [borne((this.pointeur[0] - this.cx) / (this.R * 4), -1, 1) * .35, borne((this.pointeur[1] - this.cy) / (this.R * 3), -1, 1) * .28] : [0, 0];
+      const k = 1 - Math.exp(-dt * 3);
+      this.par[0] += (cible[0] - this.par[0]) * k; this.par[1] += (cible[1] - this.par[1]) * k;
+      if (this.vagues.length) this.vagues = this.vagues.filter(w => (w.age += dt) < w.duree);
+    }
+    dessiner() {
+      if (this.libere || !this.W) return;
+      const ctx = this.ctx, W = this.W, Ht = this.Ht, R = this.R, cx = this.cx, cy = this.cy, v = this.v, Q = this.Q;
+      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.clearRect(0, 0, W, Ht);
+      if (!this.reg.actif) return;
+      const souffle = 1 + v.amp * Math.sin(this.t * TOUR / v.periode);   // respiration lente, jamais de clignotement
+      const I = this.reg.intensite / 100 * v.lum * souffle;
+      const col = this.couleur, clair = melange(col, BLANC, .6);
+      // 1. Microparticules qui scintillent + connexions lumineuses temporaires
+      const amb = this.ambiantes, xs = new Float32Array(amb.length), ys = new Float32Array(amb.length);
+      for (let i = 0; i < amb.length; i++) {
+        const p = amb[i], x = xs[i] = p.x * W, y = ys[i] = p.y * Ht;
+        ctx.fillStyle = rgba(clair, .5 * (.35 + .65 * (.5 + .5 * Math.sin(this.t * p.f + p.ph))) * I);
+        ctx.fillRect(x - p.w / 2, y - p.w / 2, p.w, p.w);
+      }
+      if (Q.liens && v.liens > .02) {
+        const d0 = Math.min(90, W * .12), d02 = d0 * d0, plein = borne((v.liens - .3) / .7, 0, 1);
+        ctx.lineWidth = .6;
+        for (let i = 0; i < amb.length; i++) for (let j = i + 1; j < amb.length; j++) {
+          const dx = xs[i] - xs[j], dy = ys[i] - ys[j], d2 = dx * dx + dy * dy;
+          if (d2 > d02) continue;
+          const f = Math.max(0, Math.sin(this.t * .9 + (i * 7 + j * 13) * .37)), g = f * f + (1 - f * f) * plein;
+          const a = (1 - Math.sqrt(d2) / d0) * .45 * v.liens * g * I;
+          if (a < .01) continue;
+          ctx.strokeStyle = rgba(col, a); ctx.beginPath(); ctx.moveTo(xs[i], ys[i]); ctx.lineTo(xs[j], ys[j]); ctx.stroke();
+        }
+      }
+      ctx.globalCompositeOperation = 'lighter';
+      // 2. Halo diffus
+      const hr = R * (2.3 + .25 * (v.halo - 1));
+      const g = ctx.createRadialGradient(cx, cy, R * .15, cx, cy, hr);
+      g.addColorStop(0, rgba(col, .3 * v.halo * I)); g.addColorStop(.42, rgba(col, .12 * v.halo * I)); g.addColorStop(1, rgba(col, 0));
+      ctx.fillStyle = g; ctx.fillRect(cx - hr, cy - hr, hr * 2, hr * 2);
+      // Vue : inclinaison fixe + parallaxe (souris ou doigt)
+      const incl = .38 + this.par[1], dev = this.par[0];
+      const cT = Math.cos(incl), sT = Math.sin(incl), cD = Math.cos(dev), sD = Math.sin(dev);
+      const proj = (x, y, z) => {
+        const x1 = x * cD + z * sD, z1 = -x * sD + z * cD, y2 = y * cT - z1 * sT, z2 = y * sT + z1 * cT, s = 1 / (1 - z2 * .1);
+        return [cx + x1 * R * s, cy + y2 * R * s, z2];
+      };
+      const surAnneau = (a, th) => {
+        const c = Math.cos(th) * a.r, s = Math.sin(th) * a.r, x = c, y = s * Math.cos(a.inc), z = s * Math.sin(a.inc);
+        const cn = Math.cos(a.noeud), sn = Math.sin(a.noeud);
+        return proj(x * cn + z * sn, y, -x * sn + z * cn);
+      };
+      // 3. Anneaux orbitaux (moitié arrière avant la sphère, moitié avant après) + points d'énergie et traînées
+      const anneaux = (avant) => {
+        for (const a of this.anneaux) {
+          ctx.lineWidth = 1; ctx.strokeStyle = rgba(col, (avant ? .36 : .15) * I); ctx.beginPath();
+          let prec = null;
+          for (let k = 0; k <= 72; k++) {
+            const q = surAnneau(a, k / 72 * TOUR), cote = q[2] >= 0;
+            if (cote === avant) { if (prec && (prec[2] >= 0) === avant) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); }
+            prec = q;
+          }
+          ctx.stroke();
+          const sens = Math.sign(a.vit);
+          for (let j = 0; j < a.pts; j++) {
+            const th = a.phase + j * TOUR / a.pts, q = surAnneau(a, th);
+            if ((q[2] >= 0) !== avant) continue;
+            for (let s = Q.trainee; s >= 1; s--) {
+              const qs = surAnneau(a, th - sens * s * .05), k = 1 - s / (Q.trainee + 1), z = 1.6 * k + .4;
+              ctx.fillStyle = rgba(clair, k * .55 * I * (avant ? 1 : .5)); ctx.fillRect(qs[0] - z / 2, qs[1] - z / 2, z, z);
+            }
+            if (Q.lueur) { ctx.fillStyle = rgba(col, .16 * I); ctx.beginPath(); ctx.arc(q[0], q[1], 5.5, 0, TOUR); ctx.fill(); }
+            ctx.fillStyle = rgba(BLANC, (avant ? .95 : .5) * I); ctx.beginPath(); ctx.arc(q[0], q[1], avant ? 2.1 : 1.5, 0, TOUR); ctx.fill();
+          }
+        }
+      };
+      anneaux(false);
+      // 4. Sphère de particules : luminosité et taille selon la profondeur (7 lots dessinés d'un coup)
+      const n = this.n, p = this.pts, ca = Math.cos(this.angle), sa = Math.sin(this.angle);
+      const lots = [0, 1, 2, 3, 4, 5, 6].map(() => new Path2D());
+      const px = this.pointeur ? this.pointeur[0] : -1e9, py = this.pointeur ? this.pointeur[1] : -1e9, pr2 = (R * .55) ** 2;
+      for (let i = 0; i < n; i++) {
+        const x = p[i * 3], y = p[i * 3 + 1], z = p[i * 3 + 2];
+        const x0 = x * ca + z * sa, z0 = -x * sa + z * ca;
+        const x1 = x0 * cD + z0 * sD, z1 = -x0 * sD + z0 * cD;
+        const y2 = y * cT - z1 * sT, z2 = y * sT + z1 * cT, s = 1 / (1 - z2 * .1);
+        const sx = cx + x1 * R * s, sy = cy + y2 * R * s, d = (z2 + 1) * .5;
+        const dx = sx - px, dy = sy - py, b = dx * dx + dy * dy < pr2 ? 6 : (d * 5.999) | 0;   // 6 : lumière locale sous le doigt
+        const tl = .5 + d * 1.15;
+        lots[b].rect(sx - tl / 2, sy - tl / 2, tl, tl);
+      }
+      for (let b = 0; b < 7; b++) {
+        const k = b / 5;
+        ctx.fillStyle = b === 6 ? rgba(BLANC, .95 * I) : rgba(melange(col, BLANC, k * .55), (.1 + .8 * Math.pow(k, 1.5)) * I);
+        ctx.fill(lots[b]);
+      }
+      // 5. Noyau central et contour énergétique (avec un arc lumineux qui circule)
+      const gn = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * .55);
+      gn.addColorStop(0, rgba(clair, .28 * I)); gn.addColorStop(1, rgba(col, 0));
+      ctx.fillStyle = gn; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+      ctx.beginPath(); ctx.arc(cx, cy, R * 1.03, 0, TOUR);
+      ctx.lineWidth = 5; ctx.strokeStyle = rgba(col, .07 * I * v.halo); ctx.stroke();
+      ctx.lineWidth = 1.2; ctx.strokeStyle = rgba(col, .42 * I); ctx.stroke();
+      const a0 = this.t * .9 * (this.reg.vitesse / 100) * (.6 + v.flux * .4);
+      ctx.lineWidth = 1.8; ctx.strokeStyle = rgba(clair, .6 * I); ctx.beginPath(); ctx.arc(cx, cy, R * 1.03, a0, a0 + 1.1); ctx.stroke();
+      anneaux(true);
+      // 6. Onde verte de réussite
+      for (const w of this.vagues) {
+        const k = w.age / w.duree;
+        ctx.lineWidth = 2 * (1 - k) + .5; ctx.strokeStyle = rgba(w.c, .7 * (1 - k));
+        ctx.beginPath(); ctx.arc(cx, cy, R * (1.05 + 1.6 * k), 0, TOUR); ctx.stroke();
+      }
+      // 7. Fragments de données qui circulent autour du noyau
+      if (this.fragments.length) {
+        ctx.font = '600 9px ui-monospace, Consolas, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        for (const f of this.fragments) {
+          const c = Math.cos(f.a) * f.r, s = Math.sin(f.a) * f.r, q = proj(c, s * Math.sin(f.inc), s * Math.cos(f.inc));
+          ctx.fillStyle = rgba(clair, (q[2] >= 0 ? .55 : .2) * I); ctx.fillText(f.txt, q[0], q[1]);
+        }
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    /* --- Méthodes publiques --- */
+    demarrer() { this.arrete = false; this.maj(); return this; }
+    arreter() { this.arrete = true; this.maj(); return this; }
+    vitesse(pct) { this.reg.vitesse = borne(+pct || 100, 25, 200); return this; }
+    intensite(pct) { this.reg.intensite = borne(+pct || 100, 40, 150); if (!this.enMarche) this.maj(); return this; }
+    couleurs({ dominante } = {}) {
+      if (Array.isArray(dominante) && dominante.length === 3) { TEINTES.perso = dominante.map(x => borne(+x || 0, 0, 255)); this.reg.couleur = 'perso'; }
+      else if (TEINTES[dominante]) this.reg.couleur = dominante;
+      if (!this.enMarche) this.maj();
+      return this;
+    }
+    qualite(q) { if (q === 'auto' || QUALITES[q]) { this.reg.qualite = q; this._reconstruire(); } return this; }
+    /** Change l'état opérationnel. Avec { duree } : état temporaire (réussite, erreur), puis retour à l'état de fond. */
+    etat(nom, opts = {}) {
+      if (!ETATS[nom] || this.libere) return this;
+      if (opts.duree) {
+        this.temp = nom; this.finTemp = performance.now() + opts.duree;
+        if (nom === 'reussite' && this.enMarche) this.vagues.push({ age: 0, duree: 1.6, c: VERT });
+        clearTimeout(this._minuteur); this._minuteur = setTimeout(() => { if (!this.enMarche) this.maj(); }, opts.duree + 30);
+      } else {
+        // Une activité réelle qui commence remplace le message temporaire précédent (ex. nouvel essai après une erreur)
+        if (nom !== this.nomEtat && ACTIVITES.includes(nom)) this.temp = null;
+        this.nomEtat = nom;
+      }
+      if (!this.enMarche) this.maj();
+      return this;
+    }
+    etatCourant() { return this.temp && performance.now() < this.finTemp ? this.temp : this.nomEtat; }
+    fps() { return this.enMarche ? this.mesure.fps : 0; }
+    _reconstruire() { if (this.libere) return; this._construire(); this._taille(); if (!this.enMarche) this.maj(); }
+    appliquerReglages(r) {
+      const cle = (x) => (x.economique ? 'eco' : x.qualite) + '/' + x.densite;
+      const avant = cle(this.reg); this.reg = Object.assign({}, r);
+      if (cle(this.reg) !== avant) this._reconstruire(); else this.maj();
+    }
+    /** Libère les ressources graphiques (boucle, observateurs, mémoire du canvas). */
+    liberer() {
+      if (this.libere) return;
+      this.libere = true; this.enMarche = false; cancelAnimationFrame(this.raf); clearTimeout(this._minuteur);
+      if (this.io) this.io.disconnect(); if (this.ro) this.ro.disconnect();
+      for (const [k, f] of Object.entries(this._ev)) this.toile.removeEventListener(k, f);
+      this.pts = null; this.ambiantes = []; this.fragments = []; this.anneaux = [];
+      this.toile.width = 0; this.toile.height = 0;
+      instances.delete(this);
+    }
+  }
+
+  /* --- Gestionnaire : réglages partagés par toutes les animations de la page --- */
+  const instances = new Set();
+  let reglages = lireReglages();
+  let etatFond = 'veille';
+  function appliquer() { H.classList.toggle('pegasus-off', !reglages.actif); instances.forEach(m => m.appliquerReglages(reglages)); }
+  window.Pegasus = {
+    version: '1.0', Moteur: MoteurPegasus, instances, QUALITES,
+    creer(toile, options) { const m = new MoteurPegasus(toile, options); instances.add(m); m.etat(etatFond); return m; },
+    reglages: () => Object.assign({}, reglages),
+    definir(cle, valeur) {
+      reglages = normaliser(Object.assign({}, reglages, { [cle]: valeur }));
+      try { localStorage.setItem(CLE, JSON.stringify(reglages)); } catch { /* stockage indisponible : réglage gardé pour cette visite */ }
+      appliquer(); return Object.assign({}, reglages);
+    },
+    reinitialiser() { reglages = normaliser({}); try { localStorage.removeItem(CLE); } catch { /* indisponible */ } appliquer(); return Object.assign({}, reglages); },
+    qualiteAppliquee() { return reglages.economique ? 'eco' : (reglages.qualite === 'auto' ? qualiteAuto : reglages.qualite); },
+    _reconstruire() { instances.forEach(m => m._reconstruire()); },
+  };
+  H.classList.toggle('pegasus-off', !reglages.actif);
+
+  /* --- Branchement sur les états RÉELS de l'écran logistique --- */
+  const el = (id) => document.getElementById(id);
+  const bande = el('pegasus-bande');
+  let moteurBande = null, moteurConnexion = null, moteurApercu = null, texteTemp = null, minuteurTexte = null;
+  /** État de fond lu à l'écran (priorité : réseau > actualisation > connexion > recherche > alertes). */
+  function lireEtat() {
+    if (navigator.onLine === false) return ['horsligne', 'Hors connexion', "Les données affichées sont celles du dernier chargement."];
+    const bA = el('btn-actualiser'); if (bA && bA.disabled) return ['traitement', 'Actualisation des données…', 'Positions, séjours et paramètres en cours de réception.'];
+    const bL = el('l-btn'); if (bL && bL.disabled) return ['reflexion', "Vérification de l'accès…", ''];
+    const res = el('resultats'); if (res && !res.hidden) return ['reflexion', 'Recherche de chauffeur', 'Résultats affichés sous la barre de recherche.'];
+    const u = el('bandeau-urgence'); if (u && !u.hidden) return ['alerte', 'Alerte Panne / Urgence à prendre en charge', 'Voir le bandeau rouge et l\'onglet Alertes.'];
+    return ['veille', 'Veille — système opérationnel', null];
+  }
+  function afficherTexte() {
+    if (!bande) return;
+    const [nom, lib, det] = texteTemp || lireEtat();
+    bande.dataset.etat = nom;
+    el('pegasus-etat').textContent = lib;
+    el('pegasus-detail').textContent = det || (el('maj') ? el('maj').textContent : '');
+  }
+  function rafraichir() {
+    const nouveau = lireEtat()[0];
+    if (nouveau !== etatFond && ACTIVITES.includes(nouveau) && texteTemp) { texteTemp = null; clearTimeout(minuteurTexte); }
+    etatFond = nouveau;
+    instances.forEach(m => m.etat(etatFond));
+    afficherTexte();
+  }
+  function temporaire(nom, ms, lib) {
+    instances.forEach(m => m.etat(nom, { duree: ms }));
+    texteTemp = [nom, lib, null]; clearTimeout(minuteurTexte);
+    minuteurTexte = setTimeout(() => { texteTemp = null; afficherTexte(); }, ms);
+    afficherTexte();
+  }
+  if (bande) moteurBande = Pegasus.creer(bande.querySelector('canvas'), { placement: 'gauche', echelle: .3, surTaille: (x) => bande.style.setProperty('--peg-gauche', Math.round(x) + 'px') });
+  const apercu = el('pegasus-apercu');
+  if (apercu) moteurApercu = Pegasus.creer(apercu, { placement: 'centre', echelle: .28 });
+  // Écran de connexion : animation créée à l'affichage, libérée dès que l'application s'ouvre
+  const ecranCx = el('e-connexion'), toileCx = el('pegasus-connexion-toile');
+  function suivreConnexion() {
+    if (!ecranCx || !toileCx) return;
+    if (!ecranCx.hidden && !moteurConnexion) moteurConnexion = Pegasus.creer(toileCx, { placement: 'centre', echelle: .26 });
+    else if (ecranCx.hidden && moteurConnexion) { moteurConnexion.liberer(); moteurConnexion = null; }
+  }
+  if (ecranCx) new MutationObserver(suivreConnexion).observe(ecranCx, { attributes: true, attributeFilter: ['hidden'] });
+  suivreConnexion();
+
+  const observer = (id, attrs, f) => { const e = el(id); if (e) new MutationObserver(f).observe(e, { attributes: true, attributeFilter: attrs }); };
+  // Actualisation : traitement pendant le chargement, onde verte à la fin s'il n'y a pas eu d'erreur
+  const bA = el('btn-actualiser'); let chargeait = !!(bA && bA.disabled);
+  observer('btn-actualiser', ['disabled'], () => {
+    const maintenant = bA.disabled; rafraichir();
+    if (chargeait && !maintenant) {
+      const t = el('toast'), echec = t && !t.hidden && /\b(ko|erreur)\b/.test(t.className);
+      if (!echec) temporaire('reussite', 1800, 'Données à jour ✓');
+    }
+    chargeait = maintenant;
+  });
+  observer('l-btn', ['disabled'], rafraichir);
+  observer('resultats', ['hidden'], rafraichir);
+  observer('bandeau-urgence', ['hidden'], rafraichir);
+  // Messages : vert après une validation, rouge après une erreur (le message explicite reste affiché par l'application)
+  const toast = el('toast');
+  if (toast) new MutationObserver(() => {
+    if (toast.hidden) return;
+    if (/\b(ok)\b/.test(toast.className)) temporaire('reussite', 1800, 'Terminé ✓');
+    else if (/\b(ko|erreur)\b/.test(toast.className)) temporaire('erreur', 3000, 'Erreur — voir le message affiché');
+  }).observe(toast, { attributes: true, attributeFilter: ['class', 'hidden'], childList: true });
+  const lmsg = el('l-msg');
+  if (lmsg) new MutationObserver(() => { if (!lmsg.hidden && /\bko\b/.test(lmsg.className)) temporaire('erreur', 3000, 'Erreur — voir le message affiché'); })
+    .observe(lmsg, { attributes: true, attributeFilter: ['class', 'hidden'], childList: true });
+  const maj = el('maj'); if (maj) new MutationObserver(afficherTexte).observe(maj, { childList: true, characterData: true, subtree: true });
+  window.addEventListener('online', rafraichir); window.addEventListener('offline', rafraichir);
+  // Onglet caché, niveau ECO choisi, préférence « moins d'animations » : suspension / image figée
+  const majTous = () => instances.forEach(m => m.maj());
+  document.addEventListener('visibilitychange', majTous);
+  new MutationObserver(majTous).observe(H, { attributes: true, attributeFilter: ['class'] });
+  if (window.matchMedia) window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener?.('change', majTous);
+  rafraichir();
+
+  /* --- Paramètres › Noyau holographique Pegasus --- */
+  if (el('bloc-pegasus')) {
+    const curseurs = ['vitesse', 'densite', 'intensite'];
+    function remplir() {
+      const r = Pegasus.reglages();
+      el('pg-actif').checked = r.actif; el('pg-eco').checked = r.economique;
+      el('pg-qualite').value = r.qualite; el('pg-couleur').value = r.couleur;
+      curseurs.forEach(k => { el('pg-' + k).value = r[k]; el('pg-' + k + '-v').textContent = r[k] + ' %'; });
+      el('pg-qualite').disabled = r.economique;
+      info();
+    }
+    function info() {
+      const r = Pegasus.reglages(), q = Pegasus.qualiteAppliquee(), Q = QUALITES[q];
+      const n = Math.round(borne(Q.particules * r.densite / 100, 150, 5000));
+      const fps = moteurApercu ? moteurApercu.fps() : 0;
+      let t = !r.actif ? 'Animation désactivée sur cet ordinateur.'
+        : `Qualité appliquée : ${Q.nom}${r.qualite === 'auto' && !r.economique ? ' (automatique)' : ''} — ${n.toLocaleString('fr-FR')} particules, ${Q.anneaux} anneaux, ${Q.fps === 30 || q !== 'ultra' ? '30 images/s en veille' : '60 images/s'}${Q.fps === 60 && q !== 'ultra' ? ', 60 pendant une activité' : ''}.`;
+      if (r.actif && (calme() || H.classList.contains('q-eco'))) t += " Image figée : animations « ECO » ou « moins d'animations » demandé par l'ordinateur.";
+      else if (r.actif && fps) t += ` Mesuré sur l'aperçu : ${fps} images/s.`;
+      el('pg-info').textContent = t;
+    }
+    el('pg-actif').addEventListener('change', (e) => { Pegasus.definir('actif', e.target.checked); info(); });
+    el('pg-eco').addEventListener('change', (e) => { Pegasus.definir('economique', e.target.checked); el('pg-qualite').disabled = e.target.checked; info(); });
+    el('pg-qualite').addEventListener('change', (e) => { Pegasus.definir('qualite', e.target.value); info(); });
+    el('pg-couleur').addEventListener('change', (e) => { Pegasus.definir('couleur', e.target.value); });
+    curseurs.forEach(k => el('pg-' + k).addEventListener('input', (e) => { el('pg-' + k + '-v').textContent = e.target.value + ' %'; Pegasus.definir(k, +e.target.value); info(); }));
+    el('pg-defaut').addEventListener('click', () => { Pegasus.reinitialiser(); remplir(); });
+    setInterval(() => { if (el('bloc-pegasus').offsetParent) info(); }, 3000);
+    remplir();
+  }
 })();
 </script>
 </body>
