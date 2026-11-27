@@ -201,6 +201,24 @@ input:focus-visible, button:focus-visible { outline: 3px solid #F59E0B; outline-
 .cats-hse { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 10px; }
 .cat-hse { min-height: 48px; border-radius: 12px; border: 1.5px solid var(--bord-fort); background: #fff; font-weight: 700; font-size: .9375rem; color: var(--texte); }
 .cat-hse[aria-checked=true] { border-color: #1D4ED8; background: #EFF6FF; color: #1D4ED8; box-shadow: 0 0 0 3px rgba(29, 78, 216, .15); }
+/* --- Version 1.23 : titre centré, rubriques en couleur, message vocal --- */
+.barre { display: flex !important; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding-top: 8px; padding-bottom: 6px; }
+.barre h1 { font-size: 1.45rem !important; font-weight: 800 !important; letter-spacing: .2px; justify-content: center; text-align: center; width: 100%; }
+.barre .barre-cote { display: none; }
+.barre #pastille-reseau { font-size: .75rem; padding: 2px 10px; }
+.nav button[data-ecran=principal] { --c: #15803D; } .nav button[data-ecran=historique] { --c: #1D4ED8; } .nav button[data-ecran=reglages] { --c: #7C3AED; }
+.nav button .ico { display: inline-grid; place-items: center; width: 46px; height: 30px; border-radius: 999px; transition: background .2s, transform .2s; }
+.nav button[aria-current=page] { color: var(--c) !important; }
+.nav button[aria-current=page] .ico { background: color-mix(in srgb, var(--c) 16%, #fff); }
+.nav button[aria-current=page]::before { background: var(--c) !important; }
+.vocal { margin-top: 12px; border: 1.5px dashed var(--bord-fort); border-radius: 14px; padding: 10px 12px; background: #F8FAFC; }
+.vocal .ligne-vocal { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.vocal .btn { width: auto; min-height: 46px; margin: 0; padding: 8px 14px; }
+.vocal .rec { background: #DC2626; }
+.vocal .rec-en-cours { animation: rec 1s infinite; }
+@keyframes rec { 50% { opacity: .55; } }
+.vocal .chrono { font-weight: 800; font-variant-numeric: tabular-nums; color: #B91C1C; }
+.vocal audio { width: 100%; margin-top: 8px; }
 /* --- Version 1.21 : site détecté par le GPS --- */
 .bandeau.site-gps { margin: 4px 0 10px; display: block; line-height: 1.4; }
 .site-gps b { font-weight: 800; }
@@ -343,6 +361,7 @@ a.btn { text-decoration: none; }
 <body>
 
 <header class="barre">
+  <span class="barre-cote" aria-hidden="true"></span>
   <h1>Belinga Localisation</h1>
   <span id="pastille-reseau" class="pastille en-ligne" role="status">● En ligne</span>
 </header>
@@ -445,7 +464,7 @@ a.btn { text-decoration: none; }
       <button id="btn-pause" type="button" class="btn" style="margin-top:8px;width:100%">✅ J'ai fait ma pause</button>
     </div>
     <button id="btn-urgence" class="btn btn-urgence" type="button">🚨 PANNE / URGENCE</button>
-    <button id="btn-danger" class="btn btn-danger-route" type="button">⚠️ SIGNALER UN DANGER SUR LA ROUTE</button>
+    <button id="btn-danger" class="btn btn-danger-route" type="button">⚠️ SIGNALER UN DANGER (photo ou 🎤 voix)</button>
     <button id="btn-arret" class="btn btn-arret" type="button">✋ JE M'ARRÊTE : SITUATION DANGEREUSE</button>
     <input id="photo-danger" type="file" accept="image/*" capture="environment" hidden>
     <div class="carte" id="carte-dangers" hidden>
@@ -3002,10 +3021,12 @@ async function signalerDanger() {
           `<button type="button" class="type-danger" data-type="${code}" aria-pressed="${type === code}"><span class="ico" aria-hidden="true">${d.ico}</span>${esc(d.libelle)}</button>`).join('') + '</div>'
         + '<label for="d-message">Précisions (facultatif)</label>'
         + '<textarea id="d-message" maxlength="200" placeholder="Ex. pont du PK 45 après Ovan, une seule voie praticable"></textarea>'
+        + blocVocalHtml()
         + (erreur ? `<div class="bandeau erreur" style="margin-top:10px">${esc(erreur)}</div>` : ''),
       boutons: [{ libelle: '📷 Continuer avec une photo', valeur: 'photo' }, { libelle: 'Envoyer sans photo', valeur: 'sans', classe: 'secondaire' },
                 { libelle: 'Annuler', valeur: 'annuler', classe: 'lien' }],
     });
+    lierVocal();   // version 1.23 : enregistrement au micro
     $('#modale-corps').querySelector('.types-danger').addEventListener('click', (e) => {
       const b = e.target.closest('.type-danger'); if (!b) return;
       type = b.dataset.type;
@@ -3014,10 +3035,12 @@ async function signalerDanger() {
     const message = () => (($('#d-message') && $('#d-message').value) || '').trim().slice(0, 200) || null;
     const v = await attente;
     const msg = message();
-    if (v !== 'photo' && v !== 'sans') return;
+    arreterVocal();
+    if (v !== 'photo' && v !== 'sans') { vocal.son = null; return; }
     if (!type) { erreur = 'Touchez le type de danger.'; continue; }
     dangerEnCours = true;
-    try { await envoyerDanger(type, msg, v === 'photo'); } finally { dangerEnCours = false; }
+    const son = vocal.son; vocal.son = null;
+    try { await envoyerDanger(type, msg, v === 'photo', son); } finally { dangerEnCours = false; }
     return;
   }
 }
@@ -3044,7 +3067,83 @@ function photoDanger() {
   });
 }
 
-async function envoyerDanger(type, message, avecPhoto) {
+/* ---------------------------------------------------------------------------
+   Version 1.23 : message vocal (micro du téléphone), 60 secondes au plus, compressé (Opus).
+   Gardé dans la file d'attente comme la photo : part dès que le réseau revient.
+   --------------------------------------------------------------------------- */
+const vocal = { rec: null, flux: null, morceaux: [], son: null, debut: 0, minuterie: null };
+const VOCAL_MAX_S = 60;
+function blocVocalHtml() {
+  const ok = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+  return '<div class="vocal" id="vocal">'
+    + '<b>🎤 Message vocal</b> <span class="aide">(facultatif, 60 secondes au plus)</span>'
+    + (ok ? '<div class="ligne-vocal" style="margin-top:8px"><button type="button" class="btn rec" id="vocal-rec">🎤 Enregistrer</button>'
+        + '<button type="button" class="btn secondaire" id="vocal-stop" hidden>⏹ Arrêter</button>'
+        + '<span class="chrono" id="vocal-chrono" hidden>0:00</span>'
+        + '<button type="button" class="btn secondaire" id="vocal-suppr" hidden>🗑 Supprimer</button></div>'
+        + '<div id="vocal-lecture"></div>'
+      : '<p class="aide" style="margin:6px 0 0">Ce téléphone ne permet pas l’enregistrement vocal : écrivez les précisions.</p>')
+    + '</div>';
+}
+function majVocal() {
+  const en = !!vocal.rec, a = !!vocal.son;
+  const b = (id) => $('#' + id);
+  if (!b('vocal-rec')) return;
+  b('vocal-rec').hidden = en; b('vocal-rec').textContent = a ? '🎤 Refaire' : '🎤 Enregistrer';
+  b('vocal-stop').hidden = !en; b('vocal-chrono').hidden = !en; b('vocal-suppr').hidden = en || !a;
+  b('vocal-chrono').classList.toggle('rec-en-cours', en);
+  b('vocal-lecture').innerHTML = a ? `<audio controls src="${vocal.son}"></audio>` : '';
+}
+function lierVocal() {
+  const r = $('#vocal-rec'); if (!r) return;
+  majVocal();
+  r.onclick = demarrerVocal;
+  $('#vocal-stop').onclick = arreterVocal;
+  $('#vocal-suppr').onclick = () => { vocal.son = null; majVocal(); };
+}
+async function demarrerVocal() {
+  try {
+    vocal.flux = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  } catch (e) {
+    toast('Micro refusé ou indisponible : autorisez le micro pour Chrome, ou écrivez les précisions.', 'erreur', 7000);
+    return;
+  }
+  const types = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm'];
+  const mime = types.find(t => window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
+  vocal.morceaux = [];
+  vocal.rec = new MediaRecorder(vocal.flux, mime ? { mimeType: mime, audioBitsPerSecond: 24000 } : { audioBitsPerSecond: 24000 });
+  vocal.rec.ondataavailable = (e) => { if (e.data && e.data.size) vocal.morceaux.push(e.data); };
+  vocal.rec.onstop = () => {
+    const blob = new Blob(vocal.morceaux, { type: (vocal.rec && vocal.rec.mimeType) || mime || 'audio/webm' });
+    vocal.rec = null;
+    if (vocal.flux) { vocal.flux.getTracks().forEach(t => t.stop()); vocal.flux = null; }
+    clearInterval(vocal.minuterie);
+    const lecteur = new FileReader();
+    lecteur.onload = () => {
+      const url = String(lecteur.result || '').replace(/^data:audio\/([a-z0-9.+-]+)[^,]*?;base64,/i, (m) => m.toLowerCase().replace(/\s/g, ''));
+      if (!/^data:audio\//.test(url) || url.length > 640000) { vocal.son = null; toast('Message vocal trop long : 60 secondes au plus.', 'erreur'); }
+      else vocal.son = url;
+      majVocal();
+    };
+    lecteur.readAsDataURL(blob);
+  };
+  vocal.rec.start(1000);
+  vocal.debut = Date.now();
+  clearInterval(vocal.minuterie);
+  vocal.minuterie = setInterval(() => {
+    const s = Math.floor((Date.now() - vocal.debut) / 1000);
+    const c = $('#vocal-chrono'); if (c) c.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} / 1:00`;
+    if (s >= VOCAL_MAX_S) arreterVocal();
+  }, 250);
+  majVocal();
+}
+function arreterVocal() {
+  clearInterval(vocal.minuterie);
+  if (vocal.rec && vocal.rec.state !== 'inactive') { try { vocal.rec.stop(); } catch { /* déjà arrêté */ } }
+  else if (vocal.flux) { vocal.flux.getTracks().forEach(t => t.stop()); vocal.flux = null; }
+}
+
+async function envoyerDanger(type, message, avecPhoto, audio = null) {
   const photo = avecPhoto ? await photoDanger() : null;
   if (avecPhoto && !photo) toast('Pas de photo : le danger est envoyé sans photo.', 'attente');
   const pos = await positionUrgence();
@@ -3057,7 +3156,7 @@ async function envoyerDanger(type, message, avecPhoto) {
     return;
   }
   const c = etat.profil.chauffeur;
-  const item = { id: uuid(), chauffeur_id: c.id, type, message, photo,
+  const item = { id: uuid(), chauffeur_id: c.id, type, message, photo, audio,
     horodatage: new Date().toISOString(), cree_ms: Date.now(),
     latitude: pos.lat, longitude: pos.lon, precision_m: Math.round(pos.precision) };
   try { await DB.put('kv', [...(await fileSecurite('dangersFile')), item], 'dangersFile'); } catch { /* envoi direct ci-dessous */ }
