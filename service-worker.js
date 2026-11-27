@@ -23,7 +23,7 @@
 
 importScripts('config.js');          // définit self.LOC_CONFIG (URL + clé publishable)
 
-const VERSION = 'v1.20.1';   // 1.20.1 : « Site Belinga », lieux de Libreville d'après OpenStreetMap ; 1.20.0 : habilitations, droit d'arrêt, message confidentiel au HSE ; 1.18.0 : « SITE BELINGA » et coordonnées des sites vérifiées ; 1.17.0 : lieu choisi dans une liste
+const VERSION = 'v1.21.0';   // 1.21.0 : « Sur site » : site proposé par le GPS, lieu à écrire vérifié par GPS ; 1.20.1 : « Site Belinga », lieux de Libreville d'après OpenStreetMap ; 1.20.0 : habilitations, droit d'arrêt, message confidentiel au HSE ; 1.18.0 : « SITE BELINGA » et coordonnées des sites vérifiées ; 1.17.0 : lieu choisi dans une liste
 const CACHE = 'belinga-loc-' + VERSION;
 const FICHIERS_APPLI = [
   './chauffeur.html',

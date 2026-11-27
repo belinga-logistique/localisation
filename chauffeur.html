@@ -201,6 +201,9 @@ input:focus-visible, button:focus-visible { outline: 3px solid #F59E0B; outline-
 .cats-hse { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 10px; }
 .cat-hse { min-height: 48px; border-radius: 12px; border: 1.5px solid var(--bord-fort); background: #fff; font-weight: 700; font-size: .9375rem; color: var(--texte); }
 .cat-hse[aria-checked=true] { border-color: #1D4ED8; background: #EFF6FF; color: #1D4ED8; box-shadow: 0 0 0 3px rgba(29, 78, 216, .15); }
+/* --- Version 1.21 : site détecté par le GPS --- */
+.bandeau.site-gps { margin: 4px 0 10px; display: block; line-height: 1.4; }
+.site-gps b { font-weight: 800; }
 /* --- Version 1.15 : sécurité routière (trajet, aptitude, pause, dangers) --- */
 .btn-danger-route { min-height: 52px; margin: -4px 0 14px; font-size: 1rem; background: #fff; color: #B45309;
   border: 2px solid #F59E0B; box-shadow: 0 4px 12px rgba(245, 158, 11, .18); }
@@ -484,7 +487,13 @@ a.btn { text-decoration: none; }
       </div>
       <div id="bloc-site" hidden>
         <label id="site-titre">Sur quel site ? *</label>
+        <div id="site-gps" class="bandeau neutre site-gps" role="status" aria-live="polite" hidden></div>
         <div id="grille-sites" class="lieux-dispo" role="radiogroup" aria-labelledby="site-titre"></div>
+        <div id="bloc-site-autre" hidden>
+          <label for="site-lieu">Où êtes-vous sur le site ? *</label>
+          <input id="site-lieu" type="text" maxlength="60" placeholder="Ex. Camp, carrière nord, base vie, atelier…">
+          <p class="aide" style="margin:4px 0 0">Votre GPS vérifiera que vous êtes bien dans la zone d'un site avant l'envoi.</p>
+        </div>
       </div>
       <div id="bloc-trajet" hidden>
         <label for="trajet-destination">Destination du trajet *</label>
@@ -1270,7 +1279,7 @@ function dansLibreville(lat, lon) {
 function zoneDuPoint(lat, lon) {
   const zones = ((etat.ref && etat.ref.zones) || []);
   const z = zones.find(x => haversine(lat, lon, x.lat, x.lon) <= x.rayon_m);
-  if (z) return z.nom;
+  if (z) return z.code && SITES[z.code] ? SITES[z.code] : z.nom;
   const lbv = zones.find(x => x.type === 'libreville');
   return lbv ? `hors des zones connues, à ${Math.round(haversine(lat, lon, lbv.lat, lbv.lon) / 1000)} km de Libreville` : 'hors de Libreville';
 }
@@ -1422,6 +1431,8 @@ function choisirStatut(code, mettreFocus = true) {
   if (code === 'autre_province' && mettreFocus && !$('#province').value) setTimeout(() => $('#province').focus(), 50);
   // Version 1.9.1 : à chaque « Sur site », le chauffeur DOIT choisir lui-même son site (rien de pré-coché)
   if (code === 'sur_site' && mettreFocus) {
+    etat.siteManuel = false;
+    detecterSite();   // version 1.21 : le GPS propose le site
     choisirSite(null);
     setTimeout(() => $('#bloc-site').scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
   }
@@ -1435,14 +1446,64 @@ function construireSites() {
     b.type = 'button'; b.className = 'lieu-dispo'; b.dataset.site = code;
     b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', 'false');
     b.innerHTML = `<span aria-hidden="true">⛏️</span><span>${esc(nom)}</span>`;
-    b.addEventListener('click', () => choisirSite(code));
+    b.addEventListener('click', () => { etat.siteManuel = true; choisirSite(code); });
     zone.appendChild(b);
   });
+  // Version 1.21 : lieu écrit par le chauffeur (vérifié par GPS avant l'envoi)
+  const a = document.createElement('button');
+  a.type = 'button'; a.className = 'lieu-dispo'; a.dataset.site = 'autre';
+  a.setAttribute('role', 'radio'); a.setAttribute('aria-checked', 'false');
+  a.innerHTML = '<span aria-hidden="true">✏️</span><span>Autre lieu (à écrire)</span>';
+  a.addEventListener('click', () => { etat.siteManuel = true; choisirSite('autre'); setTimeout(() => $('#site-lieu').focus(), 50); });
+  zone.appendChild(a);
 }
 function choisirSite(code) {
-  etat.site = SITES[code] ? code : null;
+  etat.site = SITES[code] || code === 'autre' ? code : null;
   document.querySelectorAll('[data-site]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.site === etat.site)));
   $('#grille-sites').classList.remove('a-remplir');
+  $('#bloc-site-autre').hidden = etat.site !== 'autre';
+}
+
+/**
+ * Version 1.21 : dès que « Sur site » est choisi, le GPS repère le site où se trouve le chauffeur
+ * et le présélectionne (le chauffeur peut changer). Rien n'est envoyé ici : le contrôle définitif
+ * a lieu au moment de « Pointer ma position ».
+ */
+function siteDuGps(pos) {
+  const zones = ((etat.ref && etat.ref.zones) || []).filter(z => z.type === 'site' && z.code && SITES[z.code]);
+  const prec = Math.min(Number(pos.precision) || 0, 500);
+  const avec = zones.map(z => ({ z, d: haversine(pos.lat, pos.lon, z.lat, z.lon) }));
+  const dedans = avec.filter(x => x.d <= x.z.rayon_m + prec).sort((a, b) => a.d - b.d);
+  const proche = avec.sort((a, b) => (a.d - a.z.rayon_m) - (b.d - b.z.rayon_m))[0] || null;
+  return { site: dedans.length ? dedans[0].z : null, proche };
+}
+let detectionSite = 0;
+function detecterSite() {
+  const b = $('#site-gps');
+  if (!('geolocation' in navigator) || !etat.ref) { b.hidden = true; return; }
+  const n = ++detectionSite;
+  b.hidden = false; b.className = 'bandeau neutre site-gps';
+  b.textContent = '📡 Recherche de votre position pour trouver votre site…';
+  navigator.geolocation.getCurrentPosition((p) => {
+    if (n !== detectionSite || etat.statut !== 'sur_site') return;
+    const pos = { lat: p.coords.latitude, lon: p.coords.longitude, precision: p.coords.accuracy };
+    const r = siteDuGps(pos);
+    if (r.site) {
+      if (!etat.siteManuel) choisirSite(r.site.code);
+      b.className = 'bandeau ok site-gps';
+      b.innerHTML = `📍 Votre GPS vous situe sur <b>${esc(SITES[r.site.code])}</b> (± ${Math.round(pos.precision)} m).`
+        + (etat.siteManuel ? '' : ' Site présélectionné : vérifiez, puis appuyez sur « Pointer ma position ».');
+    } else {
+      b.className = 'bandeau attente site-gps';
+      b.innerHTML = '📍 Votre GPS ne vous situe sur aucun site de travail'
+        + (r.proche ? ` (le plus proche : <b>${esc(SITES[r.proche.z.code])}</b>, à ${esc(distanceTexte(Math.max(0, r.proche.d - r.proche.z.rayon_m)))} de sa zone).` : '.')
+        + ' Si vous êtes bien sur un site, mettez-vous à découvert et touchez de nouveau « Sur site ».';
+    }
+  }, () => {
+    if (n !== detectionSite) return;
+    b.className = 'bandeau neutre site-gps';
+    b.textContent = '📡 Position introuvable pour le moment : choisissez votre site. Le GPS le vérifiera à l’envoi.';
+  }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
 }
 
 /** Version 1.17 : boutons du lieu pour le statut choisi (rien de pré-coché) + « Autre lieu ». */
@@ -2044,10 +2105,14 @@ async function pointer() {
       return;
     }
   }
-  let site = null;
+  let site = null, lieuSite = null;
   if (statut === 'sur_site') {
     site = etat.site;
-    if (!SITES[site]) {
+    if (site === 'autre') {   // version 1.21 : lieu écrit, rattaché au site trouvé par le GPS
+      lieuSite = $('#site-lieu').value.trim().slice(0, 60);
+      if (lieuSite.length < 2) { signalerChamp('#site-lieu'); toast('Écrivez le lieu où vous êtes sur le site.', 'erreur'); return; }
+      site = null;
+    } else if (!SITES[site]) {
       const grille = $('#grille-sites');
       grille.classList.add('a-remplir');
       grille.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2076,6 +2141,7 @@ async function pointer() {
     if (CONDUITE.includes(statut) && !(await verifierAptitude())) return;
     if (statut === 'en_mission') arriveePrevue = new Date(Date.now() + etat.dureeTrajet * 60000).toISOString();
     // Véhicule : seulement pour les statuts avec position (jamais en repos / congé / maladie)
+    if (lieuSite) lieuStatut = lieuSite;
     const p = { statut, destination, province, ville, lieu_dispo: lieuDispo, site, passagers, lieu_statut: lieuStatut,
                 jours_maladie: joursMaladie, vehicule_id: def.position ? vehiculeChoisi() : null,
                 arrivee_prevue: arriveePrevue };
@@ -2084,6 +2150,24 @@ async function pointer() {
     if (def.position) {
       const pos = await localiser();
       if (pos === undefined) return; // annulé par le chauffeur
+      if (lieuSite && !pos) {   // version 1.21 : un lieu écrit doit être vérifié par le GPS
+        toast('Lieu écrit : le GPS doit vérifier votre position. Réessayez à découvert ou choisissez un site de la liste.', 'erreur', 8000);
+        return;
+      }
+      if (pos && lieuSite) {
+        const r = siteDuGps(pos);
+        if (r.site) p.site = r.site.code;
+        else {
+          const motif = await signalerIncoherence({ declare: `Sur site : ${lieuSite}`, constate: zoneDuPoint(pos.lat, pos.lon),
+            conseil: r.proche ? `« Sur site » seulement une fois arrivé sur ${SITES[r.proche.z.code]}` : '« En mission » ou « Autre province »' }, pos);
+          if (!motif) {
+            $('#grille-statuts').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            toast('Choisis la bonne localisation, puis pointe de nouveau.', 'attente', 6000);
+            return;
+          }
+          p.contestation = motif;
+        }
+      }
       if (pos) {
         p.latitude = pos.lat; p.longitude = pos.lon; p.precision_m = Math.round(pos.precision);
         lsSet('loc.dernierePos', { cid: etat.profil.chauffeur.id, lat: pos.lat, lon: pos.lon, t: Date.now() });
