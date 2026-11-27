@@ -219,6 +219,38 @@ input:focus-visible, button:focus-visible { outline: 3px solid #1D4ED8; outline-
 @keyframes rec { 50% { opacity: .55; } }
 .vocal .chrono { font-weight: 800; font-variant-numeric: tabular-nums; color: #B91C1C; }
 .vocal audio { width: 100%; margin-top: 8px; }
+/* --- Version 1.24 : rubrique « Séjour » (dates d'entrée / sortie, décompte, barre en %) --- */
+.nav button[data-ecran=sejour] { --c: #B45309; }
+input[type=date] { width: 100%; min-height: 48px; padding: 10px 12px; border: 1.5px solid var(--bord-fort); border-radius: 12px; background: #fff; font-size: 1rem; font-family: inherit; color: var(--texte); }
+input[type=date]:focus { outline: none; border-color: var(--primaire); box-shadow: 0 0 0 4px rgba(34, 197, 94, .18); }
+.sj-dates { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.sj-dates > div { min-width: 0; }
+.sj-dates input[type=date] { min-width: 0; max-width: 100%; padding: 10px 8px; }
+.sj-raccourcis { display: flex; gap: 8px; }
+.sj-raccourcis .btn { flex: 1; min-height: 44px; margin-top: 10px; padding: 8px 10px; font-size: .9375rem; }
+.sejour-actuel { border-left: 6px solid var(--sc); }
+.sejour-actuel h3 { color: var(--sc) !important; }
+.sejour-actuel .sj-site { font-size: 1.3rem; font-weight: 800; margin: 2px 0 2px; color: var(--texte); }
+.sj-chiffres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0 12px; }
+.sj-chiffres div { text-align: center; background: var(--fond); border: 1px solid var(--bord); border-radius: 12px; padding: 8px 4px; }
+.sj-chiffres b { display: block; font-size: 1.65rem; font-weight: 800; line-height: 1.15; color: var(--texte); font-variant-numeric: tabular-nums; }
+.sj-chiffres div.fort b { color: var(--sc); }
+.sj-chiffres span { font-size: .78rem; font-weight: 600; color: var(--texte-doux); }
+.sj-pct { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; font-weight: 600; color: var(--texte-doux); }
+.sj-pct b { font-size: 2rem; font-weight: 800; color: var(--sc); font-variant-numeric: tabular-nums; }
+.sj-barre { height: 22px; background: #E5E7EB; border: 1px solid var(--bord); border-radius: 999px; overflow: hidden; }
+.sj-barre > span { display: block; height: 100%; width: 0; background-color: var(--sc); border-radius: 999px;
+  background-image: linear-gradient(45deg, rgba(255,255,255,.25) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.25) 50%, rgba(255,255,255,.25) 75%, transparent 75%);
+  background-size: 26px 26px; animation: sj-rayures 1s linear infinite; transition: width 1.4s cubic-bezier(.2, .8, .2, 1); }
+@keyframes sj-rayures { to { background-position: 26px 0; } }
+.sj-legende { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: .8125rem; font-weight: 600; color: var(--texte-doux); }
+.sj-item { align-items: center !important; }
+.sj-item .sj-txt { flex: 1; min-width: 0; }
+.sj-item .mini { display: block; height: 6px; background: #E5E7EB; border-radius: 6px; overflow: hidden; margin-top: 6px; }
+.sj-item .mini > span { display: block; height: 100%; border-radius: 6px; }
+.sj-actions { display: flex; flex-direction: column; gap: 6px; }
+.sj-actions .btn { width: auto; min-height: 40px; margin: 0; padding: 6px 12px; font-size: .875rem; }
+@media (prefers-reduced-motion: reduce) { .sj-barre > span { animation: none; transition: none; } }
 /* --- Version 1.21 : site détecté par le GPS --- */
 .bandeau.site-gps { margin: 4px 0 10px; display: block; line-height: 1.4; }
 .site-gps b { font-weight: 800; }
@@ -621,6 +653,46 @@ a.btn { text-decoration: none; }
   </section>
 
   <!-- =====================================================================
+       ÉCRAN : SÉJOUR (version 1.24) — dates d'entrée et de sortie, décompte des jours
+       ===================================================================== -->
+  <section id="e-sejour" class="ecran" hidden>
+    <h2>Mon séjour sur site</h2>
+    <div id="sj-actuel"></div>
+
+    <div class="carte" id="sj-carte-form">
+      <h3 id="sj-titre">Saisir un séjour</h3>
+      <form id="f-sejour" novalidate>
+        <label for="sj-site">Site</label>
+        <select id="sj-site"><option value="">— Choisir le site —</option><option value="belinga_village">Site Belinga</option><option value="batouala">BATOUALA</option><option value="makokou">MAKOKOU</option><option value="ikei_boka_boka">IKEI BOKA BOKA</option><option value="kobe_kobe">KOBE-KOBE</option><option value="kango">KANGO</option><option value="autre">Autre lieu (à écrire)</option></select>
+        <div id="sj-bloc-lieu" hidden>
+          <label for="sj-lieu">Nom du lieu</label>
+          <input id="sj-lieu" type="text" maxlength="60" autocomplete="off" placeholder="Ex. : Carrière de Mékambo">
+        </div>
+        <div class="sj-dates">
+          <div><label for="sj-entree">Date d'entrée</label><input id="sj-entree" type="date"></div>
+          <div><label for="sj-sortie">Date de sortie</label><input id="sj-sortie" type="date"></div>
+        </div>
+        <div class="sj-raccourcis">
+          <button type="button" class="btn secondaire" data-sj-duree="14">Sortie : +14 jours</button>
+          <button type="button" class="btn secondaire" data-sj-duree="21">Sortie : +21 jours</button>
+        </div>
+        <p id="sj-apercu" class="aide" aria-live="polite"></p>
+        <p id="sj-msg" class="bandeau erreur message" hidden></p>
+        <div class="rangee">
+          <button id="sj-annuler" type="button" class="btn secondaire" hidden>Annuler</button>
+          <button id="sj-btn" type="submit" class="btn">📅 Enregistrer le séjour</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="carte">
+      <h3>Mes séjours</h3>
+      <p id="sj-info" class="petit"></p>
+      <ul id="sj-liste" class="liste"></ul>
+    </div>
+  </section>
+
+  <!-- =====================================================================
        ÉCRAN : RÉGLAGES
        ===================================================================== -->
   <section id="e-reglages" class="ecran" hidden>
@@ -686,6 +758,7 @@ a.btn { text-decoration: none; }
 <nav class="nav" id="nav" hidden aria-label="Navigation principale">
   <button type="button" data-ecran="principal"><span class="ico" aria-hidden="true">📍</span>Pointer</button>
   <button type="button" data-ecran="historique"><span class="ico" aria-hidden="true">🕘</span>Historique</button>
+  <button type="button" data-ecran="sejour"><span class="ico" aria-hidden="true">📅</span>Séjour</button>
   <button type="button" data-ecran="reglages"><span class="ico" aria-hidden="true">⚙️</span>Réglages</button>
 </nav>
 
@@ -1101,20 +1174,21 @@ function router() {
   if (!etat.jeton || !etat.profil) return afficher('connexion');
   if (etat.profil.pin_a_changer) return ouvrirChangementPin(true);
   if (!etat.profil.consentement) return afficher('consentement');
-  if (!['principal', 'historique', 'reglages'].includes(etat.ecran)) afficher('principal');
+  if (!['principal', 'historique', 'sejour', 'reglages'].includes(etat.ecran)) afficher('principal');
   else afficher(etat.ecran);
 }
 
 function afficher(nom) {
   document.querySelectorAll('.ecran').forEach(e => { e.hidden = e.id !== 'e-' + nom; });
   etat.ecran = nom;
-  const avecNav = ['principal', 'historique', 'reglages'].includes(nom);
+  const avecNav = ['principal', 'historique', 'sejour', 'reglages'].includes(nom);
   $('#nav').hidden = !avecNav;
   document.querySelectorAll('#nav button').forEach(b => {
     if (b.dataset.ecran === nom) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
   if (nom === 'principal') rendrePrincipal();
   if (nom === 'historique') chargerHistorique();
+  if (nom === 'sejour') ouvrirSejour();
   if (nom === 'reglages') { rendreReglages(); chargerMaPhoto(); }
   if (nom === 'consentement') { $('#cs-lu').checked = false; $('#cs-accepter').disabled = true; $('#cs-msg').hidden = true; }
   window.scrollTo(0, 0);
@@ -3727,6 +3801,188 @@ async function chargerHistorique() {
       : 'Erreur : ' + e.message;
   }
 }
+
+/* Version 1.24 : décompte d'un séjour déclaré (dates au format AAAA-MM-JJ, jour du Gabon).
+   total = jours entre l'entrée et la sortie ; restants = jours jusqu'à la sortie. */
+function aujourdhuiGabon(d = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Libreville', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}
+const jourNum = (iso) => { const [a, m, j] = String(iso).slice(0, 10).split('-').map(Number); return Math.round(Date.UTC(a, m - 1, j) / 86400000); };
+function calculSejour(s, auj = aujourdhuiGabon()) {
+  const e = jourNum(s.date_entree), f = jourNum(s.date_sortie), t = jourNum(auj);
+  const total = Math.max(0, f - e);
+  const ecoules = Math.min(Math.max(t - e, 0), total);
+  const restants = total - ecoules;
+  const etat = t < e ? 'avenir' : t > f ? 'fini' : 'encours';
+  const pctReste = etat === 'avenir' ? 100 : etat === 'fini' || !total ? 0 : Math.round(restants * 100 / total);
+  const couleur = etat === 'avenir' ? '#1D4ED8' : etat === 'fini' ? '#475569' : pctReste > 30 ? '#15803D' : pctReste > 10 ? '#B45309' : '#B91C1C';
+  return { total, ecoules, restants, etat, pctReste, pct: 100 - pctReste, dans: Math.max(0, e - t), couleur };
+}
+const nomSiteSejour = (s) => s.site === 'autre' ? (s.lieu || 'Autre lieu') : (SITES[s.site] || s.site);
+
+const dateFr = (iso) => new Intl.DateTimeFormat('fr-FR', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+  .format(new Date(jourNum(iso) * 86400000));
+const ajouterJours = (iso, n) => new Date((jourNum(iso) + n) * 86400000).toISOString().slice(0, 10);
+const cleSejours = () => 'loc.sejours.' + ((etat.profil && etat.profil.chauffeur.id) || '');
+
+/** Séjour à mettre en avant : en cours, sinon le prochain, sinon le dernier terminé (30 jours au plus). */
+function sejourActuel(liste, auj = aujourdhuiGabon()) {
+  const k = liste.map(s => ({ s, c: calculSejour(s, auj) }));
+  const enCours = k.filter(x => x.c.etat === 'encours').sort((a, b) => jourNum(b.s.date_entree) - jourNum(a.s.date_entree))[0];
+  if (enCours) return enCours.s;
+  const avenir = k.filter(x => x.c.etat === 'avenir').sort((a, b) => jourNum(a.s.date_entree) - jourNum(b.s.date_entree))[0];
+  if (avenir) return avenir.s;
+  const fini = k.filter(x => x.c.etat === 'fini' && jourNum(auj) - jourNum(x.s.date_sortie) <= 30)
+    .sort((a, b) => jourNum(b.s.date_sortie) - jourNum(a.s.date_sortie))[0];
+  return fini ? fini.s : null;
+}
+
+function rendreSejours(liste) {
+  const auj = aujourdhuiGabon();
+  const s = sejourActuel(liste, auj);
+  const zone = $('#sj-actuel');
+  if (!s) {
+    zone.innerHTML = '<div class="carte"><p class="petit">Aucun séjour en cours. Saisissez vos dates d\'entrée et de sortie ci-dessous : le décompte des jours s\'affichera ici.</p></div>';
+  } else {
+    const k = calculSejour(s, auj);
+    const titre = { encours: 'Séjour en cours', avenir: 'Séjour à venir', fini: 'Séjour terminé' }[k.etat];
+    const fin = k.etat === 'avenir' ? `Commence ${k.dans === 1 ? 'demain' : `dans ${k.dans} jours`}`
+      : k.etat === 'fini' ? 'Terminé ✓'
+      : k.restants === 0 ? 'Sortie aujourd\'hui' : k.restants === 1 ? 'Sortie demain' : `Sortie dans ${k.restants} jours`;
+    zone.innerHTML = `<div class="carte sejour-actuel" id="sj-carte" data-etat="${k.etat}" style="--sc:${k.couleur}">
+      <h3>${titre}</h3>
+      <p class="sj-site">⛏️ ${esc(nomSiteSejour(s))}</p>
+      <p class="petit">Du <b>${esc(dateFr(s.date_entree))}</b> au <b>${esc(dateFr(s.date_sortie))}</b></p>
+      <div class="sj-chiffres">
+        <div><b id="sj-faits">${k.ecoules}</b><span>jours faits</span></div>
+        <div class="fort"><b id="sj-restants">${k.restants}</b><span>jours restants</span></div>
+        <div><b id="sj-total">${k.total}</b><span>jours au total</span></div>
+      </div>
+      <div class="sj-pct"><b id="sj-pct">${k.pctReste} %</b> des jours restants</div>
+      <div class="sj-barre" role="progressbar" aria-label="Jours restants" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${k.pctReste}"><span id="sj-remplissage"></span></div>
+      <div class="sj-legende"><span>${k.pct} % accompli</span><span>${fin}</span></div>
+    </div>`;
+    // Animation « téléchargement » : la barre et le pourcentage montent jusqu'à la valeur
+    const barre = $('#sj-remplissage'), pct = $('#sj-pct');
+    const calme = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (calme) { barre.style.width = k.pctReste + '%'; }
+    else {
+      requestAnimationFrame(() => requestAnimationFrame(() => { barre.style.width = k.pctReste + '%'; }));
+      const t0 = performance.now();
+      const pas = (t) => { const p = Math.min(1, (t - t0) / 1400); pct.textContent = Math.round(k.pctReste * (1 - Math.pow(1 - p, 3))) + ' %'; if (p < 1) requestAnimationFrame(pas); };
+      requestAnimationFrame(pas);
+    }
+  }
+  $('#sj-liste').innerHTML = liste.map(x => {
+    const k = calculSejour(x, auj);
+    const etq = { encours: `en cours · ${k.restants} j restants`, avenir: 'à venir', fini: 'terminé' }[k.etat];
+    return `<li class="sj-item" data-sejour="${esc(x.id)}"><div class="sj-txt"><b>${esc(nomSiteSejour(x))}</b><br>
+      <span class="petit">${esc(dateFr(x.date_entree))} → ${esc(dateFr(x.date_sortie))}<br>${k.total} jours · ${etq} (${k.pctReste} %)</span>
+      <span class="mini"><span style="width:${k.pctReste}%;background:${k.couleur}"></span></span></div>
+      <div class="sj-actions"><button type="button" class="btn secondaire" data-sj-modifier="${esc(x.id)}">Modifier</button>
+      <button type="button" class="btn danger-contour" data-sj-supprimer="${esc(x.id)}">Supprimer</button></div></li>`;
+  }).join('');
+}
+
+async function chargerSejours() {
+  const info = $('#sj-info');
+  let liste = (lsGet(cleSejours(), null) || {}).liste || [];
+  etat.sejours = liste; rendreSejours(liste);
+  info.textContent = liste.length ? '' : 'Chargement…';
+  try {
+    const r = await rpc('loc_mes_sejours', { p_jeton: etat.jeton });
+    if (!r.ok) { if (r.erreur === 'session_invalide') return finSession(r.message); info.textContent = r.message; return; }
+    liste = r.sejours; etat.sejours = liste;
+    lsSet(cleSejours(), { liste, le: Date.now() });
+    info.textContent = liste.length ? '' : 'Aucun séjour enregistré.';
+    rendreSejours(liste);
+  } catch (e) {
+    info.textContent = e instanceof ErreurReseau
+      ? (liste.length ? 'Hors ligne : décompte calculé avec les séjours gardés sur le téléphone.' : 'Pas de réseau : vos séjours s\'afficheront au retour du réseau.')
+      : 'Erreur : ' + e.message;
+  }
+}
+
+function viderFormSejour() {
+  etat.sejourEdition = null;
+  $('#f-sejour').reset();
+  $('#sj-bloc-lieu').hidden = true; $('#sj-msg').hidden = true; $('#sj-apercu').textContent = '';
+  $('#sj-titre').textContent = 'Saisir un séjour'; $('#sj-annuler').hidden = true;
+  $('#sj-btn').textContent = '📅 Enregistrer le séjour';
+}
+function ouvrirSejour() { viderFormSejour(); chargerSejours(); }
+
+/** Contrôle des champs ; renvoie le séjour ou un message d'erreur. */
+function lireFormSejour() {
+  const site = $('#sj-site').value, lieu = $('#sj-lieu').value.trim(), e = $('#sj-entree').value, f = $('#sj-sortie').value;
+  if (!site) return { erreur: 'Choisissez le site du séjour.' };
+  if (site === 'autre' && (lieu.length < 2 || lieu.length > 60)) return { erreur: 'Écrivez le nom du lieu (2 à 60 caractères).' };
+  if (!e || !f) return { erreur: 'Indiquez la date d\'entrée et la date de sortie.' };
+  if (f < e) return { erreur: 'La date de sortie doit être après la date d\'entrée.' };
+  if (jourNum(f) - jourNum(e) > 120) return { erreur: 'Un séjour ne peut pas dépasser 120 jours.' };
+  const auj = jourNum(aujourdhuiGabon());
+  if (jourNum(e) < auj - 365 || jourNum(e) > auj + 90) return { erreur: 'Date d\'entrée trop éloignée d\'aujourd\'hui.' };
+  return { sejour: { id: etat.sejourEdition || uuid(), site, lieu: site === 'autre' ? lieu : null, date_entree: e, date_sortie: f } };
+}
+function apercuSejour() {
+  const e = $('#sj-entree').value, f = $('#sj-sortie').value, ap = $('#sj-apercu');
+  if (!e || !f) { ap.textContent = ''; return; }
+  if (f < e) { ap.textContent = '⚠️ La date de sortie est avant la date d\'entrée.'; return; }
+  const k = calculSejour({ date_entree: e, date_sortie: f });
+  ap.textContent = `Durée : ${k.total} jours · ` + (k.etat === 'encours' ? `${k.restants} jours restants (${k.pctReste} %)` : k.etat === 'avenir' ? 'séjour à venir' : 'séjour terminé');
+}
+$('#sj-site').addEventListener('change', () => { $('#sj-bloc-lieu').hidden = $('#sj-site').value !== 'autre'; if (!$('#sj-bloc-lieu').hidden) $('#sj-lieu').focus(); });
+$('#sj-entree').addEventListener('input', apercuSejour);
+$('#sj-sortie').addEventListener('input', apercuSejour);
+document.querySelectorAll('[data-sj-duree]').forEach(b => b.addEventListener('click', () => {
+  if (!$('#sj-entree').value) $('#sj-entree').value = aujourdhuiGabon();
+  $('#sj-sortie').value = ajouterJours($('#sj-entree').value, Number(b.dataset.sjDuree));
+  apercuSejour();
+}));
+$('#sj-annuler').addEventListener('click', viderFormSejour);
+$('#f-sejour').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const msg = $('#sj-msg'), btn = $('#sj-btn');
+  msg.hidden = true;
+  const l = lireFormSejour();
+  if (l.erreur) { msg.textContent = l.erreur; msg.hidden = false; return; }
+  btn.disabled = true;
+  try {
+    const r = await rpc('loc_sejour_enregistrer', { p_jeton: etat.jeton, p_sejour: l.sejour });
+    if (!r.ok) {
+      if (r.erreur === 'session_invalide') return finSession(r.message);
+      msg.textContent = r.message; msg.hidden = false; return;
+    }
+    toast(etat.sejourEdition ? 'Séjour modifié ✓' : 'Séjour enregistré ✓ La logistique le voit.', 'ok');
+    viderFormSejour();
+    await chargerSejours();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (e) {
+    msg.textContent = e instanceof ErreurReseau ? 'Pas de réseau : le séjour n\'est pas enregistré. Réessayez quand le réseau revient.' : 'Erreur : ' + e.message;
+    msg.hidden = false;
+  } finally { btn.disabled = false; }
+});
+$('#sj-liste').addEventListener('click', async (ev) => {
+  const m = ev.target.closest('[data-sj-modifier]'), s = ev.target.closest('[data-sj-supprimer]');
+  if (m) {
+    const x = (etat.sejours || []).find(y => y.id === m.dataset.sjModifier); if (!x) return;
+    etat.sejourEdition = x.id;
+    $('#sj-site').value = x.site; $('#sj-bloc-lieu').hidden = x.site !== 'autre'; $('#sj-lieu').value = x.lieu || '';
+    $('#sj-entree').value = String(x.date_entree).slice(0, 10); $('#sj-sortie').value = String(x.date_sortie).slice(0, 10);
+    $('#sj-titre').textContent = 'Modifier le séjour'; $('#sj-annuler').hidden = false; $('#sj-btn').textContent = '✓ Enregistrer les modifications';
+    $('#sj-msg').hidden = true; apercuSejour();
+    $('#sj-carte-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  if (s) {
+    if (!confirm('Supprimer ce séjour ?')) return;
+    try {
+      const r = await rpc('loc_sejour_supprimer', { p_jeton: etat.jeton, p_id: s.dataset.sjSupprimer });
+      if (!r.ok) { if (r.erreur === 'session_invalide') return finSession(r.message); toast(r.message, 'erreur'); return; }
+      if (etat.sejourEdition === s.dataset.sjSupprimer) viderFormSejour();
+      toast('Séjour supprimé.', 'ok'); chargerSejours();
+    } catch (e) { toast(e instanceof ErreurReseau ? 'Pas de réseau : réessayez plus tard.' : 'Erreur : ' + e.message, 'erreur'); }
+  }
+});
 
 /* ===========================================================================
    RAPPELS DE POINTAGE (pendant les heures de service)

@@ -219,6 +219,10 @@ tr.urgence-ouverte td { background: #FEF2F2; }
 .puce-site[aria-pressed=true] b { color: #fff; }
 .puce-site.vide { background: #F5F5F4; border-color: #E7E5E4; color: #57534E; }
 .puce-site.vide b { color: #78716C; }
+/* Version 1.24 : séjour déclaré par le chauffeur (mini-barre des jours restants) */
+.sejour-mini { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 3px; font-size: .8rem; font-weight: 600; color: #334155; }
+.sejour-mini .mini-barre { display: inline-block; width: 64px; height: 7px; background: #E5E7EB; border-radius: 6px; overflow: hidden; vertical-align: middle; }
+.sejour-mini .mini-barre > span { display: block; height: 100%; border-radius: 6px; }
 .filtre-actif { display: inline-flex; align-items: center; gap: 8px; background: var(--vert-pale, #ECFDF5); border: 1px solid var(--bord); border-radius: 999px; padding: 4px 6px 4px 12px; font-weight: 700; }
 /* --- Compteurs cliquables (version 1.3) --- */
 .compteurs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
@@ -824,6 +828,7 @@ const etat = {
   vehicules: [],    // version 1.3 : liste des véhicules
   urgences: [],     // version 1.3 : alertes Panne / Urgence (en cours + traitées récentes)
   dangers: [],      // version 1.15 : dangers sur la route signalés par les chauffeurs
+  sejours: new Map(),   // version 1.24 : séjours déclarés par les chauffeurs (chauffeur_id → séjour)
   urgencesEtat: { ouvertes: 0, derniere: null },
   filtreSpecial: null,  // compteurs : 'dispo' | 'verifier' | 'sans_nouvelles'
   courses: [],          // version 1.5 : courses suivies en direct (avec leur trajet)
@@ -1093,14 +1098,16 @@ async function chargerTout() {
   etat.rechargerApres = false;
   $('#btn-actualiser').disabled = true;
   try {
-    const [positions, lieux, zones, params, vehicules, habil] = await Promise.all([
+    const [positions, lieux, zones, params, vehicules, habil, sejours] = await Promise.all([
       rpc('loc_positions_actuelles'),           // consultation AUDITÉE
       api(sb.from('loc_lieux').select('id,nom,type,ville,latitude,longitude,rayon_m,approximatif,actif,code').order('nom')),
       api(sb.from('loc_zones').select('id,nom,type,latitude,longitude,rayon_m,ordre,couleur,approximatif,actif,code').order('ordre')),
       api(sb.from('loc_parametres').select('cle,valeur')),
       api(sb.from('loc_vehicules').select('id,immatriculation,modele,actif').order('immatriculation')),
       api(sb.from('loc_chauffeurs').select('id,' + CHAMPS_HABIL.join(','))).catch(() => []),   // version 1.20
+      rpc('loc_sejours_liste').catch(() => null),   // version 1.24 : séjours déclarés (null : base antérieure)
     ]);
+    if (Array.isArray(sejours)) etat.sejours = new Map(sejours.map(s => [s.chauffeur_id, s]));
     etat.lieux = lieux; etat.zones = zones; etat.vehicules = vehicules;
     etat.params = Object.fromEntries(params.map(p => [p.cle, p.valeur]));
     etat.chauffeurs = positions.map(enrichir);
@@ -1371,6 +1378,7 @@ function afficherVue(vue) {
   if (vue === 'lieux') { initCarte('lieux', 'map-lieux', [0.41, 9.47], 12); chargerStatsLieux(); }
   if (vue === 'journal') chargerJournal();
   if (vue === 'alertes' && etat.user) { chargerUrgences(); chargerDangers(); }
+  if (vue === 'chauffeurs' && etat.user) chargerSejours();   // version 1.24
   if (vue === 'hse' && etat.hse) chargerHse();
   rendreVue(vue);
   Object.values(etat.cartes).forEach(m => setTimeout(() => m.invalidateSize(), 50));
@@ -1486,6 +1494,7 @@ function popupChauffeur(c) {
     + (d && d.arrivee_prevue ? `🕒 Arrivée prévue : <b>${esc(heure(d.arrivee_prevue))}</b><br>` : '')
     + (c.aptitude_jour && c.aptitude_jour.resultat !== 'apte' ? `<span class="etiq ${c.aptitude_jour.resultat === 'inapte' ? 'ko' : 'att'}">🩺 ${c.aptitude_jour.resultat === 'inapte' ? 'Inapte' : 'Vigilance'}</span> ${esc(motifsAptitude(c.aptitude_jour))}<br>` : '')
     + (c._decompte ? etiquetteDecompte(c) + (c.periode ? ` <span class="doux">depuis le ${esc(dateCourte(c.periode.debut))}</span>` : '') + '<br>' : '')
+    + (etat.sejours.has(c.id) ? etiquetteSejour(c) + '<br>' : '')
     + (c._dispoEtat ? `<span class="etiq ${c._dispoEtat === 'vert' ? 'ok' : 'att'}">${c._dispoEtat === 'vert' ? '✓' : '⚠ à vérifier'}</span> ${esc(c._dispoMotif)}<br>` : '')
     + (d ? `<span class="doux">${esc(dateHeure(d.horodatage))} · <b>${esc(ilYa(d.horodatage))}</b></span><br>` : '')
     + `Zone : ${esc(c._zoneNom)}<br>`
@@ -2039,7 +2048,7 @@ function rendreChauffeurs() {
     return `<tr class="${c.actif ? '' : 'inactif'}"><td>${vignette(c.id, c._nom)}</td><td>${esc(c.matricule)}</td><td><b>${esc(c._nom)}</b></td>`
       + `<td><a href="tel:${esc(c.telephone)}">${esc(c.telephone)}</a></td><td>${c.equipe === 'libreville' ? 'Libreville' : 'Site'}<br><span class="doux">séjour ${c.duree_site || 14} j</span></td>`
       + `<td>${c.binome ? esc(nomComplet(c.binome)) + `<br><a class="doux" href="tel:${esc(c.binome.telephone)}">${esc(c.binome.telephone)}</a>` : '<span class="doux">—</span>'}</td>`
-      + `<td>${s ? `<span class="point" style="background:${couleurChauffeur(c)}"></span>${esc(libelleStatut(d))}${c._decompte ? '<br>' + etiquetteDecompte(c) : ''}<br><span class="doux">${esc(c._zoneNom)}${c._quartier ? ' · ' + esc(c._quartier) : ''}${c._vehicule ? '<br>🚙 ' + esc(c._vehicule) : ''}</span>` : '<span class="doux">—</span>'}</td>`
+      + `<td>${s ? `<span class="point" style="background:${couleurChauffeur(c)}"></span>${esc(libelleStatut(d))}${c._decompte ? '<br>' + etiquetteDecompte(c) : ''}${etat.sejours.has(c.id) ? '<br>' + etiquetteSejour(c) : ''}<br><span class="doux">${esc(c._zoneNom)}${c._quartier ? ' · ' + esc(c._quartier) : ''}${c._vehicule ? '<br>🚙 ' + esc(c._vehicule) : ''}</span>` : '<span class="doux">—</span>'}</td>`
       + `<td>${d ? esc(dateHeure(d.horodatage)) + '<br><span class="doux">' + esc(ilYa(d.horodatage)) + '</span>' : '<span class="doux">jamais</span>'}</td>`
       + `<td>${compte}</td>`
       + `<td><div class="ligne"><button class="btn sec petit" data-action="modifier" data-id="${esc(c.id)}">Modifier</button>`
@@ -2556,6 +2565,46 @@ function voirUrgence(id) {
    Rechargés toutes les 2 minutes ; « Pris en charge » / « Réglé » avec un message
    que les chauffeurs voient sur leur téléphone.
    =========================================================================== */
+/* Version 1.24 : décompte d'un séjour déclaré (dates au format AAAA-MM-JJ, jour du Gabon).
+   total = jours entre l'entrée et la sortie ; restants = jours jusqu'à la sortie. */
+function aujourdhuiGabon(d = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Libreville', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}
+const jourNum = (iso) => { const [a, m, j] = String(iso).slice(0, 10).split('-').map(Number); return Math.round(Date.UTC(a, m - 1, j) / 86400000); };
+function calculSejour(s, auj = aujourdhuiGabon()) {
+  const e = jourNum(s.date_entree), f = jourNum(s.date_sortie), t = jourNum(auj);
+  const total = Math.max(0, f - e);
+  const ecoules = Math.min(Math.max(t - e, 0), total);
+  const restants = total - ecoules;
+  const etat = t < e ? 'avenir' : t > f ? 'fini' : 'encours';
+  const pctReste = etat === 'avenir' ? 100 : etat === 'fini' || !total ? 0 : Math.round(restants * 100 / total);
+  const couleur = etat === 'avenir' ? '#1D4ED8' : etat === 'fini' ? '#475569' : pctReste > 30 ? '#15803D' : pctReste > 10 ? '#B45309' : '#B91C1C';
+  return { total, ecoules, restants, etat, pctReste, pct: 100 - pctReste, dans: Math.max(0, e - t), couleur };
+}
+const nomSiteSejour = (s) => s.site === 'autre' ? (s.lieu || 'Autre lieu') : (SITES[s.site] || s.site);
+const dateCourteIso = (iso) => String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7) + '/' + String(iso).slice(0, 4);
+async function chargerSejours() {
+  if (!etat.user) return;
+  try {
+    const l = await rpc('loc_sejours_liste') || [];
+    const avant = JSON.stringify([...etat.sejours.values()]);
+    etat.sejours = new Map(l.map(s => [s.chauffeur_id, s]));
+    if (JSON.stringify(l) !== avant) rendreTout();   // redessiner seulement si quelque chose a changé
+  } catch (e) { /* base sans séjours (version antérieure) : rien à afficher */ }
+}
+setInterval(() => chargerSejours(), 5 * 60 * 1000);
+/** Séjour déclaré par le chauffeur : site, jours restants et mini-barre en % (version 1.24). */
+function etiquetteSejour(c) {
+  const s = etat.sejours.get(c.id);
+  if (!s) return '';
+  const k = calculSejour(s);
+  const txt = k.etat === 'avenir' ? `entrée le ${dateCourteIso(s.date_entree)}`
+    : k.etat === 'fini' ? `sorti le ${dateCourteIso(s.date_sortie)}`
+    : `${k.restants} j restants sur ${k.total}`;
+  return `<span class="sejour-mini" data-sejour="${esc(c.id)}" title="Séjour déclaré par le chauffeur : du ${esc(dateCourteIso(s.date_entree))} au ${esc(dateCourteIso(s.date_sortie))}">`
+    + `📅 ${esc(nomSiteSejour(s))} · ${esc(txt)} <span class="mini-barre"><span style="width:${k.pctReste}%;background:${k.couleur}"></span></span> <b style="color:${k.couleur}">${k.pctReste} %</b></span>`;
+}
+
 async function chargerDangers() {
   if (!etat.user) return;
   try {
