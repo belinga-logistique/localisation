@@ -1107,7 +1107,7 @@ const MOTIFS = {
 
 /* Valeurs par défaut si la liste des paramètres n'a pas encore été chargée */
 const PARAMS_DEFAUT = {
-  precision_max_m: 200, rappel_minutes: 240, rappel_libreville_minutes: 120,
+  precision_max_m: 100, rappel_minutes: 240, rappel_libreville_minutes: 120,
   heure_debut_service: '06:00', heure_fin_service: '18:00', jours_service: [1, 2, 3, 4, 5, 6],
   version_consentement: 'v1', telephone_logistique: '',
 };
@@ -1773,7 +1773,8 @@ function siteDuGps(pos) {
    Le téléphone vérifie la position sur place ; seule la ville est envoyée (aucune position en repos). */
 const VILLES_REPOS = { ville_libreville: 'Libreville', ville_makokou: 'Makokou', ville_port_gentil: 'Port-Gentil' };
 const JOURS_MAX = { repos: 13, conge: 60 };
-const PRECISION_MAX_REPOS = 2000;   // au-delà, la position n'est pas assez sûre pour valider le repos
+/** Version 1.29.1 : rayon de pointage GPS STRICT (paramètre « precision_max_m », 100 m) — pour tous les statuts, repos compris. */
+const precisionMax = () => Number(param('precision_max_m')) || 100;
 function villeReposDuGps(pos) {
   const zones = ((etat.ref && etat.ref.zones) || []).filter(z => VILLES_REPOS[z.code]);
   const prec = Math.min(Number(pos.precision) || 0, 500);
@@ -1792,9 +1793,9 @@ function detecterVilleRepos() {
   navigator.geolocation.getCurrentPosition((p) => {
     if (n !== detectionRepos || etat.statut !== 'repos') return;
     const pos = { lat: p.coords.latitude, lon: p.coords.longitude, precision: p.coords.accuracy };
-    const ville = pos.precision <= PRECISION_MAX_REPOS ? villeReposDuGps(pos) : null;
+    const ville = pos.precision <= precisionMax() ? villeReposDuGps(pos) : null;
     if (ville) { b.className = 'bandeau ok site-gps'; b.innerHTML = `✅ Votre GPS vous situe à <b>${esc(ville)}</b> : repos autorisé.`; }
-    else if (pos.precision > PRECISION_MAX_REPOS) { b.className = 'bandeau attente site-gps'; b.textContent = '📡 Position trop imprécise : mettez-vous à découvert. Elle sera vérifiée de nouveau à l’envoi.'; }
+    else if (pos.precision > precisionMax()) { b.className = 'bandeau attente site-gps'; b.textContent = '📡 Position trop imprécise : mettez-vous à découvert. Elle sera vérifiée de nouveau à l’envoi.'; }
     else { b.className = 'bandeau erreur site-gps'; b.innerHTML = `⛔ Votre GPS vous situe : <b>${esc(zoneDuPoint(pos.lat, pos.lon))}</b>. Le repos n'est validé qu'à Libreville, Makokou ou Port-Gentil.`; }
   }, () => {
     if (n !== detectionRepos) return;
@@ -1819,9 +1820,9 @@ async function verifierVilleRepos() {
       html: '<p>Le repos n\'est validé qu\'après vérification de votre position GPS.</p><p>Activez la localisation, mettez-vous à découvert, puis pointez de nouveau.</p>' });
     return null;
   }
-  if (pos.precision > PRECISION_MAX_REPOS) {
+  if (pos.precision > precisionMax()) {   // position d'une course suivie (localiser() refuse déjà au-delà)
     await dialogue({ titre: '📡 Position trop imprécise', boutons: ok,
-      html: `<p>Précision actuelle : <b>± ${Math.round(pos.precision)} m</b>. Il faut moins de ${PRECISION_MAX_REPOS} m pour valider le repos.</p><p>Mettez-vous à découvert et réessayez.</p>` });
+      html: `<p>Précision actuelle : <b>± ${Math.round(pos.precision)} m</b>. Il faut ± ${precisionMax()} m au plus pour pointer.</p><p>Mettez-vous à découvert et réessayez.</p>` });
     return null;
   }
   const ville = villeReposDuGps(pos);
@@ -2611,7 +2612,8 @@ async function pointer() {
 
 /**
  * Obtient la position GPS en gérant tous les cas d'erreur.
- * Renvoie { lat, lon, precision }, null (= envoyer sans position) ou undefined (= annulé).
+ * Version 1.29.1 : rayon de pointage STRICT — renvoie { lat, lon, precision } avec une précision
+ * de ± precision_max_m (100 m) au plus, ou undefined (= annulé). Plus d'envoi sans position ni « quand même ».
  */
 async function localiser() {
   for (;;) {
@@ -2622,23 +2624,21 @@ async function localiser() {
       if (err && err.code === 'annule') return undefined;
       const choix = await dialogue(messageErreurGps(err));
       if (choix === 'reessayer') continue;
-      if (choix === 'sans') return null;
       return undefined;
     }
-    const max = Number(param('precision_max_m')) || 200;
+    const max = precisionMax();
     if (pos.precision > max) {
       const choix = await dialogue({
-        titre: '⚠️ Position imprécise',
-        html: `<p>Précision actuelle : <b>± ${Math.round(pos.precision)} m</b> (le maximum conseillé est ${max} m).</p>`
-            + '<p>Pour améliorer : sortez à découvert, éloignez-vous des bâtiments et attendez quelques secondes.</p>',
+        titre: '⛔ Position trop imprécise',
+        html: `<p>Précision actuelle : <b>± ${Math.round(pos.precision)} m</b>. Pour pointer, il faut <b>± ${max} m au plus</b>.</p>`
+            + '<p>Pour améliorer : sortez à découvert, éloignez-vous des bâtiments et des arbres, attendez quelques secondes, puis réessayez.</p>',
         boutons: [
           { libelle: 'Réessayer', valeur: 'reessayer' },
-          { libelle: 'Envoyer quand même', valeur: 'garder', classe: 'secondaire' },
           { libelle: 'Annuler', valeur: 'annuler', classe: 'lien' },
         ],
       });
       if (choix === 'reessayer') continue;
-      if (choix !== 'garder') return undefined;
+      return undefined;
     }
     return pos;
   }
@@ -2646,7 +2646,6 @@ async function localiser() {
 
 /** Messages clairs selon le type d'erreur GPS. */
 function messageErreurGps(err) {
-  const sans = { libelle: 'Envoyer mon statut sans position', valeur: 'sans', classe: 'secondaire' };
   const annuler = { libelle: 'Annuler', valeur: 'annuler', classe: 'lien' };
   const reessayer = { libelle: 'Réessayer', valeur: 'reessayer' };
   if (err && err.code === 1) {
@@ -2655,27 +2654,27 @@ function messageErreurGps(err) {
       html: "<p>L'application n'a pas le droit d'utiliser la position.</p>"
           + '<p><b>Pour autoriser :</b> touchez le cadenas 🔒 à gauche de l\'adresse en haut, puis <b>Autorisations › Position › Autoriser</b>.<br>'
           + 'Ou : Paramètres du téléphone › Applications › Chrome › Autorisations › Position.</p>',
-      boutons: [reessayer, sans, annuler],
+      boutons: [reessayer, annuler],
     };
   }
   if (err && err.code === 2) {
     return {
       titre: '📡 GPS indisponible',
       html: '<p>Le téléphone ne trouve pas sa position. Vérifiez que la <b>localisation est activée</b> (menu rapide en haut de l\'écran, icône « Position »).</p>',
-      boutons: [reessayer, sans, annuler],
+      boutons: [reessayer, annuler],
     };
   }
   if (err && err.code === 'absent') {
     return {
       titre: 'GPS non disponible',
       html: '<p>Ce navigateur ne permet pas la localisation. Utilisez Chrome sur Android, à jour.</p>',
-      boutons: [sans, annuler],
+      boutons: [annuler],
     };
   }
   return {
     titre: '⏱️ Signal GPS introuvable',
     html: '<p>Aucune position trouvée en 45 secondes. Sortez à découvert, loin des bâtiments et des arbres, puis réessayez.</p>',
-    boutons: [reessayer, sans, annuler],
+    boutons: [reessayer, annuler],
   };
 }
 
@@ -4205,16 +4204,12 @@ function rendreSejours(liste) {
       <div class="sj-barre" role="progressbar" aria-label="Jours restants" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${k.pctReste}"><span id="sj-remplissage"></span></div>
       <div class="sj-legende"><span>${k.pct} % accompli</span><span>${fin}</span></div>
     </div>`;
-    // Animation « téléchargement » : la barre et le pourcentage montent jusqu'à la valeur
-    const barre = $('#sj-remplissage'), pct = $('#sj-pct');
+    // Animation « téléchargement » : seule la barre se remplit. Version 1.29.1 : le pourcentage affiche tout de suite
+    // sa vraie valeur (avant, il défilait de 0 à la valeur et montrait un instant des chiffres faux, ex. « 95 % » au lieu de 100 %).
+    const barre = $('#sj-remplissage');
     const calme = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (calme || etat.ecran !== 'sejour') { barre.style.width = k.pctReste + '%'; }
-    else {
-      requestAnimationFrame(() => requestAnimationFrame(() => { barre.style.width = k.pctReste + '%'; }));
-      const t0 = performance.now();
-      const pas = (t) => { const p = Math.min(1, (t - t0) / 1400); pct.textContent = Math.round(k.pctReste * (1 - Math.pow(1 - p, 3))) + ' %'; if (p < 1) requestAnimationFrame(pas); };
-      requestAnimationFrame(pas);
-    }
+    else requestAnimationFrame(() => requestAnimationFrame(() => { barre.style.width = k.pctReste + '%'; }));
   }
   $('#sj-liste').innerHTML = liste.map(x => {
     const k = calculSejour(x, auj);
