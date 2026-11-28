@@ -42,10 +42,12 @@
    Interface PC, utilisable aussi sur tablette.
    ========================================================================= */
 :root {
-  --fond: #EEF2EF; --fond-2: #E2E9E4; --carte: #fff; --texte: #0F1F17; --doux: #46584D; --bord: #CBD6CF; --bord-fort: #9DB3A5;
-  --primaire: #15803D; --primaire-fonce: #166534; --primaire-vif: #22C55E; --primaire-clair: #ECFDF3;
-  --succes: #166534; --succes-fond: #DCFCE7;
-  --alerte: #92400E; --alerte-fond: #FEF3C7; --danger: #B91C1C; --danger-fond: #FEE2E2;
+  /* Version 1.29 : palette « Latérite et forêt » (thème clair) */
+  --fond: #F3F5F1; --fond-2: #ECEFE9; --carte: #FFFFFF; --texte: #141A16; --doux: #475049; --texte-3: #5F6962; --bord: #DCE0D8; --bord-moyen: #C9CFC6; --bord-fort: #838B84;
+  --primaire: #15803D; --primaire-texte: #FFFFFF; --primaire-fonce: #166534; --primaire-vif: #22C55E; --primaire-clair: #E7F4EA; --focus: #2563EB;
+  --succes: #166534; --succes-fond: #E7F4EA; --info: #1D4ED8; --info-fond: #EAF0FD;
+  --alerte: #92400E; --alerte-fond: #FCF1DC; --danger: #B91C1C; --danger-fond: #FCEBEA; --danger-plein: #B91C1C;
+  --ombre-flottant: 0 8px 24px rgba(20, 26, 22, .14); --rayon-s: 6px; --rayon-m: 8px; --rayon-l: 12px;
   --ombre: 0 1px 2px rgba(15, 31, 23, .06), 0 4px 14px rgba(15, 31, 23, .06);
   --transition: 160ms cubic-bezier(.2, .8, .2, 1);
 }
@@ -349,9 +351,8 @@ tr.danger-ouvert td { background: #FFFBEB; }
 @keyframes q-impulsion { 0% { transform: scale(1); opacity: .8; } 100% { transform: scale(3.6); opacity: 0; } }
 
 /* --- Neon Border Flow : anneau lumineux (bordure 1,5 px) --- */
-:is(.onglets button[aria-selected=true], .compteur[aria-pressed=true], .puce-site[aria-pressed=true], .carte-course[aria-current=true], .bande-statuts > .compteur, .stat-site, #l-btn, #btn-actualiser:disabled) { position: relative; }
-html.q-standard :is(.onglets button[aria-selected=true], .compteur[aria-pressed=true], .puce-site[aria-pressed=true], .carte-course[aria-current=true])::before,
-html.q-quantum :is(.onglets button[aria-selected=true], .compteur[aria-pressed=true], .puce-site[aria-pressed=true], .carte-course[aria-current=true], .bande-statuts > .compteur, .stat-site, #l-btn)::before,
+:is(.onglets button[aria-selected=true], .compteur[aria-pressed=true], .puce-site[aria-pressed=true], .carte-course[aria-current=true], #compteurs > .compteur, #l-btn, #btn-actualiser:disabled) { position: relative; }
+html.q-quantum :is(.onglets button[aria-selected=true], .compteur[aria-pressed=true], .puce-site[aria-pressed=true], .carte-course[aria-current=true], #compteurs > .compteur, #l-btn)::before,
 html.q-traitement:not(.q-eco) :is(#btn-actualiser:disabled)::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit; padding: var(--q-bord-ep); pointer-events: none; z-index: 3;
   background: conic-gradient(from var(--q-angle), transparent 0deg 200deg, var(--q-c2) 262deg, var(--q-c1) 318deg, var(--q-c3) 346deg, transparent 360deg);
@@ -388,103 +389,40 @@ html.q-hors-ligne .q-noyau i { opacity: 0; }
 
 /* Le téléphone demande moins d'animations : tout est figé, quel que soit le niveau */
 @media (prefers-reduced-motion: reduce) {
-  :is(.onglets button[aria-selected=true], .compteur[aria-pressed=true], .puce-site[aria-pressed=true], .carte-course[aria-current=true], .bande-statuts > .compteur, .stat-site, #l-btn, #btn-actualiser:disabled)::before { animation: none !important; }
+  :is(.onglets button[aria-selected=true], .compteur[aria-pressed=true], .puce-site[aria-pressed=true], .carte-course[aria-current=true], #compteurs > .compteur, #l-btn, #btn-actualiser:disabled)::before { animation: none !important; }
   .q-noyau, .q-noyau i { animation: none !important; }
 }
 
 .barre h1.q-avec-noyau::before { display: none; }
 
-/* ---------- Thème sombre « Quantum » (écran uniquement ; l'impression reste claire) ---------- */
+/* ---------- Thème sombre (version 1.29 « Latérite et forêt » ; écran uniquement, l'impression reste claire) ---------- */
 @media screen {
 html.q-sombre {
   color-scheme: dark;
-  --fond: #050914; --fond-2: #0B1222; --carte: #101827; --texte: #F1F5F9; --doux: #94A3B8; --bord: #1E2A3F; --bord-fort: #2B3B57;
-  --primaire: #2563EB; --primaire-fonce: #93C5FD; --primaire-vif: #10B981; --primaire-clair: #0F1B33;
-  --succes: #6EE7B7; --succes-fond: rgba(16, 185, 129, .16);
-  --alerte: #FCD34D; --alerte-fond: rgba(245, 158, 11, .16); --danger: #DC2626; --danger-fond: rgba(239, 68, 68, .16);
-  --ombre: 0 1px 2px rgba(0, 0, 0, .45), 0 8px 24px rgba(0, 0, 0, .35);
+  --fond: #0F1211; --fond-2: #1F2421; --carte: #171B19; --texte: #E9EDEA; --doux: #A7B0AA; --texte-3: #8A948D; --bord: #2A302D; --bord-moyen: #3A423E; --bord-fort: #646E67;
+  --primaire: #3DBE6E; --primaire-texte: #05160B; --primaire-fonce: #5FD38A; --primaire-vif: #3DBE6E; --primaire-clair: #15291D; --focus: #7AA7FF;
+  --succes: #5FD38A; --succes-fond: #15291D; --info: #7AA7FF; --info-fond: #16213A;
+  --alerte: #F2B552; --alerte-fond: #35260F; --danger: #FF8A80; --danger-fond: #3A1716; --danger-plein: #C62828;
+  --ombre: none; --ombre-flottant: 0 8px 24px rgba(0, 0, 0, .45);
 }
-html.q-sombre body { background: radial-gradient(1100px 560px at 8% -12%, rgba(41, 121, 255, .12), transparent 60%),
-  radial-gradient(900px 520px at 100% 0%, rgba(139, 92, 246, .09), transparent 60%), var(--fond) fixed; }
-html.q-sombre a { color: #7DD3FC; }
-html.q-sombre h3 { color: #7DD3FC; }
-html.q-sombre :focus-visible { outline-color: #00E5FF !important; }
-html.q-sombre .barre, html.q-sombre .onglets { background: rgba(10, 16, 30, .94); border-bottom-color: var(--bord); box-shadow: 0 1px 0 rgba(0, 229, 255, .08), 0 8px 24px rgba(0, 0, 0, .35); }
-html.q-sombre .barre { color: var(--texte); }
-html.q-sombre .barre h1 { color: #F8FAFC; text-shadow: 0 0 18px rgba(41, 121, 255, .35); }
-html.q-sombre .barre h1 .sous-titre { background: linear-gradient(90deg, #1D4ED8, #6D28D9); color: #fff; text-shadow: none; }
-html.q-sombre :is(input[type=text], input[type=email], input[type=password], input[type=number], input[type=time], input[type=search], input[type=date], select, textarea),
-html.q-sombre .barre .rech input { background: #0B1222; color: var(--texte); border-color: var(--bord-fort); }
-html.q-sombre .barre .rech input:focus { background: #0E172B; }
-html.q-sombre ::placeholder { color: #8291A8; }
-html.q-sombre input:focus, html.q-sombre select:focus, html.q-sombre textarea:focus { border-color: var(--q-energie); box-shadow: 0 0 0 4px rgba(41, 121, 255, .28); }
-/* Onglets : même couleur par rubrique, éclaircie pour rester lisible sur fond sombre */
-html.q-sombre .onglets button { border-color: color-mix(in srgb, var(--c) 50%, #101827); color: color-mix(in srgb, var(--c) 40%, #fff); background: color-mix(in srgb, var(--c) 14%, #0B1222); }
-html.q-sombre .onglets button:hover { background: color-mix(in srgb, var(--c) 26%, #0B1222); color: #fff; }
-html.q-sombre .onglets button[aria-selected=true] { background: var(--c); color: #fff; border-color: color-mix(in srgb, var(--c) 60%, #fff);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 40%, transparent), 0 0 22px color-mix(in srgb, var(--c) 45%, transparent); }
-html.q-sombre .badge.zero { background: #475569; }
-/* Surfaces */
-html.q-sombre :is(.panneau, .bloc, .fenetre, .connexion, .resultats, .fonds-carte) { background: var(--carte); border-color: var(--bord); }
-html.q-sombre :is(.panneau, .bloc) { background-image: linear-gradient(180deg, rgba(255, 255, 255, .03), transparent 120px); }
-html.q-sombre :is(.bloc h2, .fenetre h2, .connexion h1, .titre-bande) { color: #F8FAFC; }
-html.q-sombre :is(.compteur, .carte-ch, .stat-site) { background: #0F1726; border-color: var(--bord); }
-html.q-sombre .compteur b { color: color-mix(in srgb, var(--c) 45%, #fff); }
-html.q-sombre .compteur[aria-pressed=true] b, html.q-sombre .compteur[aria-pressed=true] span { color: #fff; }
-html.q-sombre .compteur span { color: var(--doux); }
-html.q-sombre .bande-statuts .compteur .pct, html.q-sombre .sejour-mini .mini-barre { background: #1E293B; }
-html.q-sombre :is(.compteur, .carte-ch, .panneau, .bloc):hover { border-color: rgba(0, 229, 255, .35); }
-html:is(.q-standard, .q-quantum).q-sombre :is(.compteur, .carte-ch):hover { box-shadow: 0 0 0 1px rgba(0, 229, 255, .25), 0 0 20px rgba(0, 229, 255, .14); }
-html.q-sombre .puce { background: #0B1222; color: #E2E8F0; }
-html.q-sombre .puce-site { background: rgba(180, 83, 9, .16); border-color: rgba(251, 146, 60, .38); color: #FDBA74; }
-html.q-sombre .puce-site b { color: #FB923C; }
-html.q-sombre .puce-site[aria-pressed=true] { background: #B45309; color: #fff; }
-html.q-sombre .puce-site[aria-pressed=true] b { color: #fff; }
-html.q-sombre .puce-site.vide { background: #111827; border-color: #1F2937; color: #94A3B8; }
-html.q-sombre .puce-site.vide b { color: #94A3B8; }
-html.q-sombre .sejour-mini { color: #CBD5E1; }
-html.q-sombre .filtre-actif { background: #0F1B33; }
-/* Tableaux */
-html.q-sombre th { background: #0F1B33; color: #93C5FD; }
-html.q-sombre tbody tr:hover td { background: #13203A; }
-html.q-sombre tr.urgence-ouverte td { background: rgba(239, 68, 68, .14); }
-html.q-sombre tr.danger-ouvert td { background: rgba(245, 158, 11, .10); }
-/* Étiquettes et messages */
-html.q-sombre .etiq { background: #1E293B; color: #CBD5E1; }
-html.q-sombre :is(.etiq, .message).ok { background: var(--succes-fond); color: #6EE7B7; }
-html.q-sombre :is(.etiq, .message).att { background: var(--alerte-fond); color: #FCD34D; }
-html.q-sombre :is(.etiq, .message).ko { background: var(--danger-fond); color: #FCA5A5; }
-html.q-sombre [style*="color:#1D4ED8"]:not([style*="background"]) { color: #93C5FD !important; }
-html.q-sombre [style*="color:#B45309"]:not([style*="background"]) { color: #FDBA74 !important; }
-html.q-sombre [style*="color:#B91C1C"]:not([style*="background"]) { color: #FCA5A5 !important; }
-/* Boutons */
-html.q-sombre .btn:hover:not(:disabled) { background: #1D4ED8; border-color: #1D4ED8; }
-html.q-sombre .btn.sec { background: #0F1B33; color: #BFDBFE; border-color: var(--bord-fort); }
-html.q-sombre .btn.sec:hover:not(:disabled) { background: #15264A; border-color: var(--q-energie); }
-html.q-sombre .btn.danger:hover:not(:disabled) { background: #991B1B; border-color: #991B1B; }
-html.q-sombre .btn.appel { background: #047857; border-color: #047857; }
-html:is(.q-standard, .q-quantum).q-sombre .btn:not(.sec):not(:disabled):hover { box-shadow: 0 0 0 1px rgba(41, 121, 255, .5), 0 0 18px rgba(41, 121, 255, .35); }
-/* Fenêtres, notifications, carte */
-html.q-sombre .voile { background: rgba(2, 6, 16, .72); }
-html.q-sombre .fenetre { border: 1px solid var(--bord-fort); box-shadow: 0 0 0 1px rgba(0, 229, 255, .14), 0 24px 60px rgba(0, 0, 0, .6); }
-html.q-sombre .toast { background: #111A2E; border: 1px solid rgba(0, 229, 255, .35); }
-html.q-sombre .toast.ok { background: #065F46; border-color: var(--q-succes); }
-html.q-sombre .toast.ko { background: #991B1B; border-color: var(--q-erreur); }
-html.q-sombre .carte-course { background: rgba(37, 99, 235, .12); border-color: #3B82F6; }
-html.q-sombre .carte-course[aria-current=true] { background: rgba(37, 99, 235, .24); }
-html.q-sombre :is(.leaflet-popup-content-wrapper, .leaflet-popup-tip) { background: #101827; color: var(--texte); box-shadow: 0 10px 30px rgba(0, 0, 0, .55); }
-html.q-sombre .leaflet-container a.leaflet-popup-close-button { color: #94A3B8; }
-html.q-sombre .leaflet-container a.btn.sec { color: #BFDBFE; }
-html.q-sombre .carte-map { border-color: var(--bord); }
-html.q-sombre .fonds-carte button { color: #E2E8F0; }
-html.q-sombre .fonds-carte button:hover { background: #15264A; }
-html.q-sombre .vignette { background: #0F1B33; }
-html.q-sombre .groupe-carte { background: rgba(37, 99, 235, .92); }
-/* Connexion */
-html.q-sombre #e-connexion { background: radial-gradient(circle at 20% 10%, rgba(41, 121, 255, .25) 0, transparent 45%),
-  radial-gradient(circle at 85% 90%, rgba(139, 92, 246, .22) 0, transparent 42%), var(--q-nuit); }
-html.q-sombre .connexion { border-color: var(--bord-fort); box-shadow: 0 0 0 1px rgba(0, 229, 255, .12), 0 24px 60px rgba(0, 0, 0, .6); }
-html.q-sombre .connexion .btn.lien { color: #7DD3FC; }
+html.q-sombre a { color: #7AA7FF; }
+html.q-sombre ::placeholder { color: #8A948D; }
+html.q-sombre :is(.leaflet-popup-content-wrapper, .leaflet-popup-tip) { background: var(--carte); color: var(--texte); box-shadow: var(--ombre-flottant); }
+html.q-sombre .leaflet-container a.leaflet-popup-close-button { color: var(--doux); }
+html.q-sombre [style*="color:#1D4ED8"]:not([style*="background"]) { color: #7AA7FF !important; }
+html.q-sombre [style*="color:#B45309"]:not([style*="background"]) { color: #F0A35A !important; }
+html.q-sombre [style*="color:#B91C1C"]:not([style*="background"]) { color: #FF8A80 !important; }
+html.q-sombre .voile { background: rgba(0, 0, 0, .6); }
+/* Couleurs de statut éclaircies pour rester lisibles sur fond sombre */
+html.q-sombre [data-compteur=sur_site], html.q-sombre [data-st=sur_site], html.q-sombre [data-compteur^="site:"] { --c: #F0A35A !important; }
+html.q-sombre [data-compteur=en_mission], html.q-sombre [data-st=en_mission] { --c: #7AA7FF !important; }
+html.q-sombre [data-compteur=dispo_libreville], html.q-sombre [data-st=dispo_libreville] { --c: #5FD38A !important; }
+html.q-sombre [data-compteur=en_course], html.q-sombre [data-st=en_course] { --c: #B79CFF !important; }
+html.q-sombre [data-compteur=autre_province], html.q-sombre [data-st=autre_province] { --c: #4FC3D9 !important; }
+html.q-sombre [data-compteur=repos], html.q-sombre [data-st=repos] { --c: #A3ABB5 !important; }
+html.q-sombre [data-compteur=conge], html.q-sombre [data-st=conge] { --c: #C2C8CF !important; }
+html.q-sombre [data-compteur=malade], html.q-sombre [data-st=malade] { --c: #FF8A80 !important; }
+html.q-sombre [data-compteur=aucun], html.q-sombre [data-st=aucun] { --c: #8A948D !important; }
 }
 
 /* =========================================================================
@@ -514,9 +452,217 @@ html.q-sombre .connexion .btn.lien { color: #7DD3FC; }
 html.pegasus-off .pegasus, html.pegasus-off .pegasus-connexion, html.pegasus-off .pegasus-boite-apercu { display: none; }
 @media (max-width: 600px) { .pegasus { height: 132px; } .pegasus-etat { font-size: 1rem; } .pegasus-detail { font-size: .75rem; } }
 @media print { .pegasus, .pegasus-connexion, .pegasus-boite-apercu { display: none !important; } }
+
+/* =========================================================================
+   REFONTE « LATÉRITE ET FORÊT » (version 1.29) — présentation uniquement.
+   Navigation latérale (ordinateur) ou en bas (téléphone), barre haute unique,
+   surfaces calmes, une seule couleur d'action, statuts en pastilles.
+   Variables : voir :root (clair) et html.q-sombre (sombre).
+   ========================================================================= */
+body { background: var(--fond); color: var(--texte); }
+a { color: var(--primaire-fonce); }
+:focus-visible, input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--focus) !important; outline-offset: 2px; }
+.ico-nav { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.vue { border-top: 0; }
+.vue:not([hidden]) { animation-duration: 160ms; }
+.vide { font-style: normal; }
+
+/* --- Barre haute unique --- */
+.barre { flex-wrap: nowrap; min-height: 52px; padding: 8px 16px; gap: 12px; background: var(--carte); color: var(--texte); border-bottom: 1px solid var(--bord); box-shadow: none; }
+.barre h1 { order: 0; flex: none; flex-basis: auto; justify-content: flex-start; font-size: .9375rem !important; font-weight: 700; letter-spacing: 0; padding: 0; color: var(--texte); text-shadow: none; }
+.barre h1 .sous-titre { font-size: .6875rem; letter-spacing: .04em; background: var(--fond-2); color: var(--doux); padding: 2px 8px; }
+.barre .rech { max-width: 420px; min-width: 160px; }
+.barre .rech input { border-radius: var(--rayon-s); border: 1px solid var(--bord-moyen); background: var(--fond); min-height: 34px; padding: 6px 12px; color: var(--texte); }
+.barre .rech input:focus { background: var(--carte); }
+.barre .infos { flex-wrap: nowrap; gap: 8px; white-space: nowrap; color: var(--doux); }
+.barre .btn { min-height: 34px; padding: 4px 12px; font-size: .8125rem; }
+.barre #btn-mdp, .barre #btn-deconnexion { background: transparent; border-color: transparent; color: var(--doux); }
+.barre #btn-mdp:hover, .barre #btn-deconnexion:hover { background: var(--fond-2); color: var(--texte); }
+.resultats { top: 40px; background: var(--carte); border-radius: var(--rayon-m); box-shadow: var(--ombre-flottant); }
+@media (max-width: 1499px) { #utilisateur { display: none; } }
+
+/* --- Navigation --- */
+.onglets { background: var(--fond); border-bottom: 1px solid var(--bord); gap: 2px; padding: 6px 10px; box-shadow: none; }
+.onglets button { border: 1px solid transparent; background: transparent; color: var(--doux); font-weight: 500; font-size: .875rem; padding: 6px 10px; border-radius: var(--rayon-s); gap: 10px; box-shadow: none; }
+.onglets button:hover { background: var(--fond-2); color: var(--texte); }
+.onglets button[aria-selected=true] { background: var(--fond-2); color: var(--texte); font-weight: 600; border-color: transparent; box-shadow: none; }
+.onglets .badge, .onglets button[aria-selected=true] .badge { background: var(--danger-fond); color: var(--danger); }
+.onglets .badge.zero, .onglets button[aria-selected=true] .badge.zero { background: var(--fond-2); color: var(--texte-3); }
+.plus-nav { display: none !important; }
+@media screen and (min-width: 1100px) {
+  #app:not([hidden]) { display: grid; grid-template-columns: 212px minmax(0, 1fr); align-items: start; }
+  #app > * { grid-column: 2; min-width: 0; }
+  #app > .onglets { grid-column: 1; grid-row: 1 / span 30; position: sticky; top: 0; height: 100vh; flex-direction: column; overflow-x: hidden; overflow-y: auto;
+    padding: 12px 10px; border-bottom: 0; border-right: 1px solid var(--bord); }
+  #app > .onglets button { width: 100%; justify-content: flex-start; flex: none; }
+  #app > .onglets .badge { margin-left: auto; }
+  #app > .onglets [data-vue=parametres] { margin-top: auto; }
+  .split { height: calc(100vh - 250px); }
+}
+@media screen and (max-width: 899px) {
+  body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  #app > .onglets { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1500; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0;
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); background: var(--carte); border-top: 1px solid var(--bord); border-bottom: 0; overflow: visible; box-shadow: 0 -2px 10px rgba(0, 0, 0, .08); }
+  #app > .onglets button { flex-direction: column; justify-content: center; gap: 2px; font-size: .6875rem; padding: 6px 2px; min-height: 52px; min-width: 0; }
+  #app > .onglets button .lib { overflow: hidden; text-overflow: ellipsis; max-width: 100%; white-space: nowrap; }
+  #app > .onglets button:not(.nav-principal):not(.plus-nav) { display: none; }
+  html.nav-plus #app > .onglets button:not(.nav-principal):not(.plus-nav):not([hidden]) { display: flex; order: -1; }
+  #app > .onglets .plus-nav { display: flex !important; }
+  #app > .onglets .badge { position: absolute; top: 3px; left: 54%; min-width: 18px; font-size: .625rem; padding: 0 4px; }
+  #app > .onglets button[aria-selected=true] { color: var(--primaire-fonce); background: transparent; }
+  #app > .onglets:has(button:not(.nav-principal):not(.plus-nav)[aria-selected=true]) .plus-nav { color: var(--primaire-fonce); font-weight: 600; }
+  .toast { bottom: calc(76px + env(safe-area-inset-bottom)); }
+  .barre { flex-wrap: wrap; }
+  .barre .rech { order: 3; flex-basis: 100%; max-width: none; }
+  .barre .infos { margin-left: auto; }
+  #maj { display: none; }
+  .split > .carte-map { order: -1; height: 45vh; min-height: 300px; }
+}
+
+/* --- Boutons et champs --- */
+.btn { border-radius: var(--rayon-s); border: 1px solid var(--primaire); background: var(--primaire); color: var(--primaire-texte); box-shadow: none; font-size: .875rem; min-height: 36px; padding: 6px 14px; }
+.btn:hover:not(:disabled) { background: color-mix(in srgb, var(--primaire) 86%, var(--texte)); border-color: color-mix(in srgb, var(--primaire) 86%, var(--texte)); }
+.btn:is(.sec, .appel, .wa) { background: var(--carte); color: var(--texte); border-color: var(--bord-moyen); box-shadow: none; }
+.btn:is(.sec, .appel, .wa):hover:not(:disabled) { background: var(--fond-2); border-color: var(--bord-fort); color: var(--texte); }
+.btn.danger, .btn.danger:hover:not(:disabled) { background: var(--danger-plein); border-color: var(--danger-plein); color: #fff; }
+.btn.petit { min-height: 30px; padding: 3px 10px; font-size: .8125rem; border-radius: var(--rayon-s); }
+.leaflet-container a.btn { color: var(--primaire-texte); }
+.leaflet-container a.btn:is(.sec, .appel, .wa) { color: var(--texte); }
+input[type=text], input[type=email], input[type=password], input[type=number], input[type=time], input[type=search], input[type=date], select, textarea {
+  border: 1px solid var(--bord-fort); border-radius: var(--rayon-s); background: var(--carte); color: var(--texte); min-height: 36px; }
+input:focus, select:focus, textarea:focus { border-color: var(--focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 25%, transparent); }
+label.champ { font-size: .875rem; }
+.grille2 > div > label.ligne { flex-wrap: nowrap; align-items: flex-start; }
+.puce { background: var(--carte); color: var(--texte); border: 1px solid var(--c, var(--bord-fort)); }
+
+/* --- Surfaces --- */
+.panneau, .bloc, .carte-map { border-radius: var(--rayon-m); box-shadow: none; background-color: var(--carte); background-image: none; border-color: var(--bord); }
+.bloc h2 { color: var(--texte); font-size: 1rem; font-weight: 600; }
+h3 { text-transform: none; letter-spacing: 0; color: var(--doux); font-size: .8125rem; font-weight: 600; }
+.titre-bande { font-size: .875rem; font-weight: 600; color: var(--texte); }
+.titre-bande .doux { font-weight: 400; color: var(--texte-3); }
+.carte-ch { border-radius: var(--rayon-m); background: var(--carte); border-color: var(--bord); }
+.carte-ch:hover { border-color: var(--bord-fort); box-shadow: none; }
+.carte-course { background: var(--info-fond); border: 1px solid var(--info); border-radius: var(--rayon-m); }
+.carte-course[aria-current=true] { background: color-mix(in srgb, var(--info) 18%, var(--carte)); }
+.fonds-carte { background: var(--carte); border-radius: var(--rayon-m); box-shadow: var(--ombre-flottant); }
+.fonds-carte button { color: var(--texte); }
+.fonds-carte button:hover { background: var(--fond-2); }
+.fonds-carte button[aria-pressed=true] { background: var(--primaire); color: var(--primaire-texte); }
+.fenetre { background: var(--carte); color: var(--texte); border: 1px solid var(--bord); border-radius: var(--rayon-l); box-shadow: var(--ombre-flottant); }
+.fenetre h2 { color: var(--texte); }
+.voile { background: rgba(15, 18, 17, .5); }
+.toast { background: #1F2421; color: #fff; border: 0; border-radius: var(--rayon-m); box-shadow: var(--ombre-flottant); }
+.toast.ok { background: #166534; } .toast.ko { background: #B91C1C; }
+.urgence { background: var(--danger-plein); }
+.urgence .btn { background: #fff; color: #B91C1C; border-color: #fff; }
+.vignette { background: var(--fond-2); border-color: var(--bord); }
+.filtre-actif { background: var(--fond-2); border-color: var(--bord); }
+.sejour-mini { color: var(--doux); }
+.sejour-mini .mini-barre { background: var(--fond-2); }
+#e-connexion { background: var(--fond); }
+.connexion { background: var(--carte); border: 1px solid var(--bord); border-radius: var(--rayon-l); box-shadow: var(--ombre-flottant); }
+.connexion h1 { color: var(--texte); }
+.connexion .logo img { box-shadow: none; border-radius: 12px; }
+.connexion .btn.lien { color: var(--primaire-fonce); background: none; border: 0; }
+
+/* --- Tableaux --- */
+table { font-size: .875rem; }
+th { background: var(--carte); color: var(--doux); font-weight: 600; font-size: .75rem; border-bottom: 1px solid var(--bord); }
+tbody tr:hover td { background: var(--fond-2); }
+tr.urgence-ouverte td { background: var(--danger-fond); }
+tr.danger-ouvert td { background: var(--alerte-fond); }
+.etiq { background: var(--fond-2); color: var(--doux); border-radius: 4px; }
+td.num, th.num, .compteur b, .anim-chiffre { font-variant-numeric: tabular-nums; }
+
+/* --- Compteurs de suivi --- */
+.compteurs { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.compteur { border: 1px solid var(--bord); border-left: 1px solid var(--bord); border-radius: var(--rayon-m); background: var(--carte); box-shadow: none; padding: 8px 12px; }
+.compteur:hover { transform: none; box-shadow: none; border-color: var(--bord-fort); }
+.compteur b { color: var(--texte); font-size: 1.375rem; }
+.compteur span { color: var(--doux); font-weight: 500; }
+.compteur.zero b { color: var(--texte-3); }
+#compteurs :is([data-compteur=verifier], [data-compteur=sans_nouvelles]):not(.zero) b { color: var(--alerte); }
+#compteurs [data-compteur=urgences]:not(.zero) b { color: var(--danger); }
+.compteur[aria-pressed=true] { background: var(--fond-2); border-color: var(--texte); box-shadow: none; }
+.compteur[aria-pressed=true] span { color: var(--texte); }
+.compteur[aria-pressed=true] b { color: var(--texte); }
+
+/* --- Statuts : barre de répartition et pastilles --- */
+.repartition { display: flex; gap: 2px; height: 8px; border-radius: 999px; overflow: hidden; margin: 2px 0 8px; background: var(--fond-2); }
+.repartition span { background: var(--c); min-width: 3px; }
+.bande-statuts { flex-wrap: wrap; overflow: visible; gap: 6px; padding: 0; margin-bottom: 14px; }
+.bande-statuts .compteur { display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 3px 10px 3px 8px; border-radius: 999px;
+  border: 1px solid var(--bord); border-top: 1px solid var(--bord); text-align: left; background: var(--carte); }
+.bande-statuts .compteur b { order: 2; display: inline; font-size: .8125rem; color: var(--texte); }
+.bande-statuts .compteur > span:not(.pct) { order: 1; font-size: .8125rem; font-weight: 500; color: var(--texte); }
+.bande-statuts .compteur .pct { order: 0; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c) !important; margin: 0; flex: none; }
+.bande-statuts .compteur .pct i { display: none; }
+.bande-statuts .compteur.zero :is(b, span:not(.pct)) { color: var(--texte-3); }
+.bande-statuts .compteur.zero .pct { background: var(--bord-fort) !important; }
+.bande-statuts .compteur[aria-pressed=true] { background: var(--fond-2); border-color: var(--texte); }
+.bande-statuts .compteur[aria-pressed=true] :is(b, span:not(.pct)) { color: var(--texte); }
+.stat-site, .sous-sites { display: contents; }
+.puce-site { flex-direction: row; gap: 5px; min-width: 0; border: 1px dashed var(--bord-fort); background: transparent; color: var(--doux); border-radius: 999px; padding: 3px 9px; font-weight: 500; font-size: .75rem; }
+.puce-site b { order: 2; font-size: .75rem; color: var(--texte); }
+.puce-site.vide { background: transparent; border-color: var(--bord); color: var(--texte-3); }
+.puce-site.vide b { color: var(--texte-3); }
+.puce-site[aria-pressed=true] { background: var(--fond-2); border: 1px solid var(--texte); color: var(--texte); }
+.puce-site[aria-pressed=true] b { color: var(--texte); }
+
+/* --- Chauffeurs (tableau) --- */
+#tab-chauffeurs td { vertical-align: middle; }
+#tab-chauffeurs td:nth-child(2) { white-space: nowrap; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .8125rem; color: var(--doux); }
+#tab-chauffeurs a[href^="tel:"] { color: var(--doux); text-decoration: none; white-space: nowrap; }
+#tab-chauffeurs td:last-child .ligne { flex-wrap: nowrap; gap: 4px; }
+#tab-chauffeurs td:nth-child(5) { white-space: nowrap; }
+#tab-chauffeurs td:nth-child(7) { min-width: 230px; }
+#tab-chauffeurs td:nth-child(9) { min-width: 140px; }
+#tab-chauffeurs td:nth-child(9) .etiq { margin: 1px 0; }
+@media (max-width: 1199px) { #v-chauffeurs table :is(th, td):is(:nth-child(5), :nth-child(6)) { display: none; } }
+@media (max-width: 719px) {
+  #v-chauffeurs .bloc:has(#tab-chauffeurs) { padding: 0; background: none; border: 0; overflow: visible; }
+  #v-chauffeurs table, #tab-chauffeurs { display: block; }
+  #v-chauffeurs thead { display: none; }
+  #tab-chauffeurs tr { display: grid; grid-template-columns: 40px auto minmax(0, 1fr); grid-template-areas: "ph nom nom" "ph mat tel" "st st st" "dp dp dp" "ac ac ac";
+    column-gap: 10px; row-gap: 2px; padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--bord); border-radius: var(--rayon-m); background: var(--carte); }
+  #tab-chauffeurs td { display: block; padding: 0; border: 0; min-width: 0; background: none !important; }
+  #tab-chauffeurs td:nth-child(1) { grid-area: ph; }
+  #tab-chauffeurs td:nth-child(2) { grid-area: mat; }
+  #tab-chauffeurs td:nth-child(3) { grid-area: nom; }
+  #tab-chauffeurs td:nth-child(4) { grid-area: tel; font-size: .8125rem; }
+  #tab-chauffeurs td:is(:nth-child(5), :nth-child(6), :nth-child(9)) { display: none; }
+  #tab-chauffeurs td:nth-child(7) { grid-area: st; margin-top: 6px; font-size: .8125rem; }
+  #tab-chauffeurs td:nth-child(8) { grid-area: dp; font-size: .8125rem; color: var(--doux); }
+  #tab-chauffeurs td:nth-child(8) br { display: none; }
+  #tab-chauffeurs td:nth-child(8) .doux::before { content: " · "; }
+  #tab-chauffeurs td:nth-child(10) { grid-area: ac; margin-top: 8px; }
+  #tab-chauffeurs td[colspan] { grid-column: 1 / -1; }
+  #tab-chauffeurs .vignette { width: 36px; height: 44px; }
+}
+
+/* --- Alertes : une seule action pleine par ligne --- */
+#v-alertes tr:not(:has(.btn:not(.sec):not(.appel):not(.wa))) .btn.appel { background: var(--primaire); color: var(--primaire-texte); border-color: var(--primaire); }
+
+/* --- Pegasus (option) : mêmes rayons que le reste --- */
+.pegasus { border-radius: var(--rayon-m); box-shadow: none; }
 </style>
 </head>
 <body>
+<!-- Version 1.29 : icônes de navigation (trait 1,7 px), intégrées pour fonctionner hors ligne -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="ni-carte" viewBox="0 0 24 24"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14M15 6v14"/></symbol>
+  <symbol id="ni-ville" viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l5-3v15M14 21V4l5 3v14"/></symbol>
+  <symbol id="ni-gens" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.8c1.5.8 2.6 2.6 3 5.2"/></symbol>
+  <symbol id="ni-alerte" viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17.5v.01"/></symbol>
+  <symbol id="ni-vehicule" viewBox="0 0 24 24"><path d="M3 16v-5l2-5h11l3 5h2v5"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></symbol>
+  <symbol id="ni-synthese" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+  <symbol id="ni-lieu" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/></symbol>
+  <symbol id="ni-journal" viewBox="0 0 24 24"><path d="M6 3h10l3 3v15H6z"/><path d="M9 9h7M9 13h7M9 17h4"/></symbol>
+  <symbol id="ni-hse" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3Z"/></symbol>
+  <symbol id="ni-reglages" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9 7 7M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/></symbol>
+  <symbol id="ni-plus" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+</svg>
 
 <!-- =======================================================================
      ÉCRAN DE CONNEXION
@@ -577,7 +723,7 @@ html.pegasus-off .pegasus, html.pegasus-off .pegasus-connexion, html.pegasus-off
       <span id="maj">—</span>
       <button class="btn sec" id="btn-actualiser" type="button">⟳ Actualiser</button>
       <span id="utilisateur"></span>
-      <button class="btn sec" id="btn-mdp" type="button" title="Changer mon mot de passe">🔑 Mot de passe</button>
+      <button class="btn sec" id="btn-mdp" type="button" title="Changer mon mot de passe">Mot de passe</button>
       <button class="btn sec" id="btn-deconnexion" type="button">Déconnexion</button>
     </div>
   </header>
@@ -589,16 +735,17 @@ html.pegasus-off .pegasus, html.pegasus-off .pegasus-connexion, html.pegasus-off
   </div>
 
   <nav class="onglets" role="tablist" aria-label="Sections">
-    <button role="tab" data-vue="carte" aria-selected="true">🗺️ Carte</button>
-    <button role="tab" data-vue="libreville">🏙️ Libreville</button>
-    <button role="tab" data-vue="chauffeurs">👥 Chauffeurs</button>
-    <button role="tab" data-vue="alertes">⚠️ Alertes <span id="badge-alertes" class="badge zero">0</span></button>
-    <button role="tab" data-vue="vehicules">🚙 Véhicules</button>
-    <button role="tab" data-vue="synthese">📊 Synthèse</button>
-    <button role="tab" data-vue="lieux">📍 Lieux et zones</button>
-    <button role="tab" data-vue="journal">📜 Journal</button>
-    <button role="tab" data-vue="hse" id="onglet-hse" hidden>🔒 HSE <span id="badge-hse" class="badge zero">0</span></button>
-    <button role="tab" data-vue="parametres">⚙️ Paramètres</button>
+    <button role="tab" data-vue="carte" class="nav-principal" aria-selected="true"><svg class="ico-nav" aria-hidden="true"><use href="#ni-carte"/></svg><span class="lib">Carte</span></button>
+    <button role="tab" data-vue="libreville"><svg class="ico-nav" aria-hidden="true"><use href="#ni-ville"/></svg><span class="lib">Libreville</span></button>
+    <button role="tab" data-vue="chauffeurs" class="nav-principal"><svg class="ico-nav" aria-hidden="true"><use href="#ni-gens"/></svg><span class="lib">Chauffeurs</span></button>
+    <button role="tab" data-vue="alertes" class="nav-principal"><svg class="ico-nav" aria-hidden="true"><use href="#ni-alerte"/></svg><span class="lib">Alertes</span> <span id="badge-alertes" class="badge zero">0</span></button>
+    <button role="tab" data-vue="vehicules"><svg class="ico-nav" aria-hidden="true"><use href="#ni-vehicule"/></svg><span class="lib">Véhicules</span></button>
+    <button role="tab" data-vue="synthese" class="nav-principal"><svg class="ico-nav" aria-hidden="true"><use href="#ni-synthese"/></svg><span class="lib">Synthèse</span></button>
+    <button role="tab" data-vue="lieux"><svg class="ico-nav" aria-hidden="true"><use href="#ni-lieu"/></svg><span class="lib">Lieux et zones</span></button>
+    <button role="tab" data-vue="journal"><svg class="ico-nav" aria-hidden="true"><use href="#ni-journal"/></svg><span class="lib">Journal</span></button>
+    <button role="tab" data-vue="hse" id="onglet-hse" hidden><svg class="ico-nav" aria-hidden="true"><use href="#ni-hse"/></svg><span class="lib">HSE</span> <span id="badge-hse" class="badge zero">0</span></button>
+    <button role="tab" data-vue="parametres"><svg class="ico-nav" aria-hidden="true"><use href="#ni-reglages"/></svg><span class="lib">Paramètres</span></button>
+    <button type="button" class="plus-nav" id="btn-plus-nav" aria-expanded="false" aria-controls="app"><svg class="ico-nav" aria-hidden="true"><use href="#ni-plus"/></svg><span class="lib">Plus</span></button>
   </nav>
 
   <!-- ===================== VUE CARTE ===================== -->
@@ -612,10 +759,11 @@ html.pegasus-off .pegasus, html.pegasus-off .pegasus-connexion, html.pegasus-off
         <span class="pegasus-detail" id="pegasus-detail">—</span>
       </div>
     </div>
-    <div class="titre-bande">👥 Statuts des chauffeurs <span class="doux" id="bande-total"></span></div>
-    <div class="bande-statuts" id="bande-statuts" role="group" aria-label="Nombre de chauffeurs par statut (cliquer pour filtrer)"></div>
-    <div class="titre-bande">📋 Suivi</div>
+    <div class="titre-bande">Suivi</div>
     <div class="compteurs" id="compteurs" role="group" aria-label="Compteurs (cliquer pour filtrer la carte)"></div>
+    <div class="titre-bande">Statuts des chauffeurs <span class="doux" id="bande-total"></span></div>
+    <div class="repartition" id="repartition-statuts" aria-hidden="true"></div>
+    <div class="bande-statuts" id="bande-statuts" role="group" aria-label="Nombre de chauffeurs par statut (cliquer pour filtrer)"></div>
     <div class="split">
       <div class="panneau">
         <div class="ligne">
@@ -676,7 +824,7 @@ html.pegasus-off .pegasus, html.pegasus-off .pegasus-connexion, html.pegasus-off
       </div>
       <div id="import-resultat"></div>
     </div>
-    <div class="titre-bande">👥 Statuts des chauffeurs <span class="doux" id="bande-total-ch"></span></div>
+    <div class="titre-bande">Statuts des chauffeurs <span class="doux" id="bande-total-ch"></span></div>
     <div class="bande-statuts" id="bande-statuts-ch" role="group" aria-label="Nombre de chauffeurs par statut (cliquer pour filtrer)"></div>
     <div class="bloc">
       <div id="ch-filtre" style="margin-bottom:8px" hidden></div>
@@ -845,7 +993,7 @@ html.pegasus-off .pegasus, html.pegasus-off .pegasus-connexion, html.pegasus-off
       <h2>Affichage (cet ordinateur)</h2>
       <div class="grille2">
         <div><label class="champ" for="pa-theme">Apparence</label>
-          <select id="pa-theme" class="champ-l"><option value="quantum">Quantum — sombre</option><option value="clair">Classique — clair</option></select></div>
+          <select id="pa-theme" class="champ-l"><option value="quantum">Sombre</option><option value="clair">Clair</option></select></div>
         <div><label class="champ" for="pa-animations">Animations</label>
           <select id="pa-animations" class="champ-l"><option value="eco">ECO — minimum</option><option value="standard">STANDARD — équilibré</option><option value="quantum">QUANTUM — effets lumineux complets</option></select></div>
       </div>
@@ -1603,7 +1751,7 @@ function animerChiffres(racine, selecteur = '.compteur b, td.num, .chiffre, .bad
 
 function afficherVue(vue) {
   etat.vue = vue;
-  document.querySelectorAll('.onglets button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.vue === vue)));
+  document.querySelectorAll('.onglets button[data-vue]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.vue === vue)));
   const ong = document.querySelector(`.onglets [data-vue="${vue}"]`);   // version 1.23 : couleur de la rubrique
   if (ong) document.documentElement.style.setProperty('--c-vue', getComputedStyle(ong).getPropertyValue('--c').trim());
   document.querySelectorAll('.vue').forEach(v => { v.hidden = v.id !== 'v-' + vue; });
@@ -1620,7 +1768,7 @@ function afficherVue(vue) {
   animerChiffres($('#v-' + vue));                       // version 1.11 : les chiffres de la rubrique défilent
   if (vue === 'alertes') animerChiffres($('.onglets'), '#badge-alertes');
 }
-document.querySelectorAll('.onglets button').forEach(b => b.addEventListener('click', () => afficherVue(b.dataset.vue)));
+document.querySelectorAll('.onglets button[data-vue]').forEach(b => b.addEventListener('click', () => afficherVue(b.dataset.vue)));
 
 function rendreTout() {
   rendreFiltresOptions();
@@ -1813,7 +1961,7 @@ function bandeStatutsHtml(actifs) {
   const n = actifs.length || 1;
   return COMPTEURS_STATUTS.map(k => {
     const nb = actifs.filter(k.test).length;
-    const bouton = `<button type="button" class="compteur" data-compteur="${k.cle}" style="--c:${k.couleur}" aria-pressed="${etat.filtreSpecial === k.cle}">`
+    const bouton = `<button type="button" class="compteur${nb ? '' : ' zero'}" data-compteur="${k.cle}" style="--c:${k.couleur}" aria-pressed="${etat.filtreSpecial === k.cle}">`
       + `<b>${nb}</b><span>${esc(k.libelle)}</span><span class="pct" aria-hidden="true"><i style="width:${Math.round(100 * nb / n)}%"></i></span></button>`;
     if (k.cle !== 'sur_site') return bouton;
     const surSite = actifs.filter(k.test);
@@ -1831,12 +1979,17 @@ function rendreCompteurs() {
   const nbUrgences = urgencesOuvertes().length;
   const total = `${actifs.length} chauffeur(s) actif(s) · d'après le dernier pointage`;
   $('#bande-statuts').innerHTML = bandeStatutsHtml(actifs); $('#bande-total').textContent = total;
-  $('#compteurs').innerHTML = COMPTEURS.map(k => `<button type="button" class="compteur" data-compteur="${k.cle}" style="--c:${k.couleur}" aria-pressed="${etat.filtreSpecial === k.cle}">`
-      + `<b>${actifs.filter(k.test).length}</b><span>${esc(k.libelle)}</span></button>`).join('')
-    + `<button type="button" class="compteur${nbUrgences ? ' rouge-actif' : ''}" data-compteur="urgences" style="--c:#B91C1C" aria-pressed="false">`
-    + `<b>${nbUrgences}</b><span>🚨 Urgences en cours</span></button>`
-    + `<button type="button" class="compteur" data-compteur="courses" style="--c:#1D4ED8" aria-pressed="false">`
-    + `<b>${etat.courses.length}</b><span>🚗 Courses en direct</span></button>`;
+  // Version 1.29 : barre de répartition des statuts (proportionnelle ; le détail chiffré est dans les pastilles)
+  const rep = $('#repartition-statuts');
+  if (rep) rep.innerHTML = COMPTEURS_STATUTS.map(k => [k, actifs.filter(k.test).length]).filter(([, nb]) => nb)
+    .map(([k, nb]) => `<span data-st="${k.cle}" style="--c:${k.couleur};flex:${nb}"></span>`).join('');
+  $('#compteurs').innerHTML = COMPTEURS.map(k => { const nb = actifs.filter(k.test).length;
+      return `<button type="button" class="compteur${nb ? '' : ' zero'}" data-compteur="${k.cle}" style="--c:${k.couleur}" aria-pressed="${etat.filtreSpecial === k.cle}">`
+      + `<b>${nb}</b><span>${esc(k.libelle)}</span></button>`; }).join('')
+    + `<button type="button" class="compteur${nbUrgences ? ' rouge-actif' : ' zero'}" data-compteur="urgences" style="--c:#B91C1C" aria-pressed="false">`
+    + `<b>${nbUrgences}</b><span>Urgences en cours</span></button>`
+    + `<button type="button" class="compteur${etat.courses.length ? '' : ' zero'}" data-compteur="courses" style="--c:#1D4ED8" aria-pressed="false">`
+    + `<b>${etat.courses.length}</b><span>Courses en direct</span></button>`;
 }
 ['#compteurs', '#bande-statuts', '#bande-statuts-ch'].forEach(sel => $(sel).addEventListener('click', (e) => {
   const b = e.target.closest('[data-compteur]');
@@ -3067,7 +3220,7 @@ function tableauSynthese(titre, entetes, lignes) {
 function contenuSynthese() {
   const actifs = etat.chauffeurs.filter(c => c.actif);
   const parStatut = compter(c => c.dernier ? STATUTS[c.dernier.statut].libelle : 'Aucun pointage');
-  const parZone = compter(c => c._zoneNom);
+  const parZone = compter(c => c._zoneNom === '—' ? 'Jamais pointé' : c._zoneNom);   // v1.29 : aucun libellé vide
   const lbv = actifs.filter(c => c._zone && c._zone.type === 'libreville');
   const mq = new Map();
   lbv.forEach(c => { const k = c._quartier || 'Non précisé'; const v = mq.get(k) || [0, 0]; v[0]++; if (c._dispo) v[1]++; mq.set(k, v); });
@@ -3678,7 +3831,7 @@ document.addEventListener('pointerdown', (e) => {
   'use strict';
   const H = document.documentElement;
   const CLE = 'loc.pegasus';
-  const DEFAUT = Object.freeze({ actif: true, vitesse: 100, densite: 100, intensite: 100, couleur: 'cyan', qualite: 'auto', economique: false });
+  const DEFAUT = Object.freeze({ actif: false, vitesse: 100, densite: 100, intensite: 100, couleur: 'cyan', qualite: 'auto', economique: false });
   const TEINTES = { cyan: [0, 217, 255], bleu: [0, 123, 255], violet: [139, 92, 246] };
   const BLANC = [232, 249, 255], VERT = [0, 230, 118], AMBRE = [255, 176, 32], ROUGE = [239, 68, 68], GRIS = [120, 136, 160], VIOLET = [139, 92, 246];
   const QUALITES = {
@@ -4134,6 +4287,19 @@ document.addEventListener('pointerdown', (e) => {
     setInterval(() => { if (el('bloc-pegasus').offsetParent) info(); }, 3000);
     remplir();
   }
+})();
+</script>
+
+<script>
+/* Version 1.29 : barre de navigation du bas (téléphone) — « Plus » montre les autres rubriques. Présentation seulement. */
+(function () {
+  const b = document.getElementById('btn-plus-nav'); if (!b) return;
+  const H = document.documentElement;
+  const fermer = () => { H.classList.remove('nav-plus'); b.setAttribute('aria-expanded', 'false'); };
+  b.addEventListener('click', (e) => { e.stopPropagation(); const o = !H.classList.contains('nav-plus'); H.classList.toggle('nav-plus', o); b.setAttribute('aria-expanded', String(o)); });
+  document.querySelectorAll('.onglets button[data-vue]').forEach(x => x.addEventListener('click', fermer));
+  document.addEventListener('click', (e) => { if (!e.target.closest('.onglets')) fermer(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fermer(); });
 })();
 </script>
 </body>

@@ -25,23 +25,23 @@
    Contrastes vérifiés (texte blanc sur vert #15803D : 5 : 1).
    ========================================================================= */
 :root {
-  --fond: #EEF2EF;
-  --fond-2: #E2E9E4;
+  --fond: #F3F5F1;
+  --fond-2: #ECEFE9;
   --carte: #FFFFFF;
-  --texte: #0F1F17;
-  --texte-doux: #46584D;
-  --bord: #CBD6CF;
-  --bord-fort: #9DB3A5;
+  --texte: #141A16;
+  --texte-doux: #475049;
+  --bord: #DCE0D8;
+  --bord-fort: #838B84;
   --primaire: #15803D;
   --primaire-fonce: #166534;
   --primaire-clair: #22C55E;
-  --vert-pale: #ECFDF3;
+  --vert-pale: #E7F4EA;
   --succes: #166534;
-  --succes-fond: #DCFCE7;
+  --succes-fond: #E7F4EA;
   --alerte: #92400E;
-  --alerte-fond: #FEF3C7;
+  --alerte-fond: #FCF1DC;
   --danger: #B91C1C;
-  --danger-fond: #FEE2E2;
+  --danger-fond: #FCEBEA;
   --rayon: 16px;
   --ombre: 0 1px 2px rgba(15, 31, 23, .06), 0 4px 14px rgba(15, 31, 23, .06);
   --ombre-forte: 0 6px 18px rgba(15, 31, 23, .16);
@@ -473,6 +473,57 @@ html.q-hors-ligne .q-noyau i { opacity: 0; }
 .statut[aria-pressed=true] { --q-c3: #fff; }
 html:not(.q-eco) #modale .fenetre { box-shadow: 0 0 0 1px rgba(41, 121, 255, .35), 0 -8px 30px rgba(0, 229, 255, .18); }
 html:not(.q-eco) .btn-pointer:not(:disabled):hover { box-shadow: var(--ombre-forte), 0 0 0 3px rgba(0, 229, 255, .25); }
+
+/* =========================================================================
+   REFONTE « LATÉRITE ET FORÊT » (version 1.29) — présentation uniquement.
+   Fond calme, titres en casse normale, urgences sur une ligne,
+   bouton « Pointer ma position » toujours visible au-dessus de la barre du bas.
+   ========================================================================= */
+:root { --bord-moyen: #C9CFC6; --focus: #2563EB; }
+body { background: var(--fond); }
+:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--focus) !important; outline-offset: 2px; }
+header.barre { flex-direction: row !important; justify-content: space-between !important; align-items: center !important; gap: 8px;
+  padding-top: calc(8px + env(safe-area-inset-top)); padding-bottom: 8px; background: var(--carte); box-shadow: none; }
+.barre h1 { font-size: 1.0625rem !important; font-weight: 700 !important; width: auto; justify-content: flex-start; text-align: left; color: var(--texte); letter-spacing: 0; }
+.ecran h2 { color: var(--texte); font-size: 1.25rem; }
+.carte { border-radius: 12px; box-shadow: none; }
+.carte h3 { text-transform: none; letter-spacing: 0; color: var(--texte-doux); font-size: .875rem; }
+.btn { border-radius: 12px; box-shadow: none; }
+.btn.secondaire { background: var(--carte); color: var(--texte); border: 1px solid var(--bord-moyen); }
+.bandeau { border-radius: 12px; }
+.bandeau.neutre { background: var(--carte); }
+.carte-photo-choix { background: var(--carte); color: var(--texte); border: 1px solid var(--bord-moyen); }
+input[type=tel], input[type=text], input[type=password], input[type=search], input[type=number], input[type=date], select, textarea { border: 1px solid var(--bord-fort); border-radius: 10px; }
+input:focus, select:focus, textarea:focus { border-color: var(--focus); box-shadow: 0 0 0 3px rgba(37, 99, 235, .22); }
+/* Urgences : une ligne de trois boutons */
+.urgences-rangee { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 8px; margin: 0 0 14px; }
+.urgences-rangee .btn { margin: 0; min-height: 64px; padding: 6px; font-size: .8125rem; line-height: 1.15; letter-spacing: 0; flex-direction: column; gap: 3px; box-shadow: none; }
+.urgences-rangee .btn small { display: block; font-size: .6875rem; font-weight: 600; }
+.urgences-rangee .btn-urgence { background: var(--danger); color: #fff; border: 1px solid var(--danger); }
+.urgences-rangee .btn-danger-route { background: var(--alerte-fond); color: var(--alerte); border: 1px solid #E9C98F; }
+.urgences-rangee .btn-arret { background: var(--danger-fond); color: var(--danger); border: 1px solid #F1B9B5; }
+/* Bouton de pointage : toujours visible, au-dessus de la barre du bas */
+#btn-pointer { position: sticky; bottom: calc(70px + env(safe-area-inset-bottom)); z-index: 15; min-height: 60px; font-size: 1.0625rem; border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(21, 128, 61, .28), 0 0 0 6px var(--fond); }
+#btn-pointer:not(.prive) { background: var(--primaire); }
+/* Statuts : tuile choisie = contour de sa couleur et fond teinté (le libellé reste écrit) */
+.statut { min-height: 92px; border-radius: 12px; border: 1px solid var(--bord); border-left: 5px solid var(--c); box-shadow: none; }
+.statut[aria-pressed=true] { background: color-mix(in srgb, var(--c) 10%, #fff); color: var(--texte); border: 2px solid var(--c); border-left-width: 5px; box-shadow: none; }
+.statut[aria-pressed=true]::after { color: var(--c); font-weight: 800; }
+.lieu-dispo, .duree, .apt-choix button, .cat-hse { border-width: 1px; }
+/* Séjour : barre pleine, sans rayures animées */
+.sj-barre { height: 12px; }
+.sj-barre > span { background-image: none; animation: none; }
+.sj-chiffres div { background: var(--fond); }
+#carte-notif { padding: 10px 14px; }
+#carte-notif .btn { min-height: 44px; margin-top: 8px; }
+/* Barre du bas : une seule couleur d'action */
+.nav { background: var(--carte); box-shadow: none; }
+.nav button[aria-current=page] { color: var(--primaire) !important; }
+.nav button[aria-current=page] .ico { background: var(--vert-pale) !important; }
+.nav button[aria-current=page]::before { background: var(--primaire) !important; }
+.fenetre { border-radius: 16px 16px 0 0; }
+@media (min-width: 600px) { .fenetre { border-radius: 16px; } }
 </style>
 </head>
 <body>
@@ -580,9 +631,12 @@ html:not(.q-eco) .btn-pointer:not(:disabled):hover { box-shadow: var(--ombre-for
       <span id="pause-texte">⏸️ 2 h de conduite : arrêtez-vous 15 minutes (boire, marcher, vous étirer).</span>
       <button id="btn-pause" type="button" class="btn" style="margin-top:8px;width:100%">✅ J'ai fait ma pause</button>
     </div>
-    <button id="btn-urgence" class="btn btn-urgence" type="button">🚨 PANNE / URGENCE</button>
-    <button id="btn-danger" class="btn btn-danger-route" type="button">⚠️ SIGNALER UN DANGER (photo ou 🎤 voix)</button>
-    <button id="btn-arret" class="btn btn-arret" type="button">✋ JE M'ARRÊTE : SITUATION DANGEREUSE</button>
+    <!-- Version 1.29 : les trois boutons de sécurité sur une seule ligne -->
+    <div class="urgences-rangee">
+      <button id="btn-urgence" class="btn btn-urgence" type="button">🚨 Panne / urgence</button>
+      <button id="btn-danger" class="btn btn-danger-route" type="button">⚠️ Signaler un danger<small>photo ou 🎤 voix</small></button>
+      <button id="btn-arret" class="btn btn-arret" type="button">✋ Je m'arrête<small>situation dangereuse</small></button>
+    </div>
     <input id="photo-danger" type="file" accept="image/*" capture="environment" hidden>
     <div class="carte" id="carte-dangers" hidden>
       <h3>⚠️ Dangers signalés sur la route</h3>
